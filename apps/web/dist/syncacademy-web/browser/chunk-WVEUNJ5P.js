@@ -1,0 +1,122 @@
+import {
+  eye,
+  eyeOff
+} from "./chunk-D4BGZ3LF.js";
+import {
+  createColorClasses
+} from "./chunk-X65TN4FR.js";
+import {
+  getIonMode
+} from "./chunk-I7IE3V4G.js";
+import {
+  Host,
+  getElement,
+  h,
+  printIonWarning,
+  registerInstance
+} from "./chunk-AAHNOQLM.js";
+import "./chunk-QHQP2P2Z.js";
+
+// node_modules/@ionic/core/dist/esm/ion-input-password-toggle.entry.js
+var iosInputPasswordToggleCss = () => ``;
+var mdInputPasswordToggleCss = () => ``;
+var InputPasswordToggle = class {
+  constructor(hostRef) {
+    registerInstance(this, hostRef);
+    this.type = "password";
+    this.togglePasswordVisibility = () => {
+      const {
+        inputElRef
+      } = this;
+      if (!inputElRef) {
+        return;
+      }
+      inputElRef.type = inputElRef.type === "text" ? "password" : "text";
+    };
+  }
+  /**
+   * Whenever the input type changes we need to re-run validation to ensure the password
+   * toggle is being used with the correct input type. If the application changes the type
+   * outside of this component we also need to re-render so the correct icon is shown.
+   */
+  onTypeChange(newValue) {
+    if (newValue !== "text" && newValue !== "password") {
+      printIonWarning(`[ion-input-password-toggle] - Only inputs of type "text" or "password" are supported. Input of type "${newValue}" is not compatible.`, this.el);
+      return;
+    }
+  }
+  connectedCallback() {
+    const {
+      el
+    } = this;
+    const inputElRef = this.inputElRef = el.closest("ion-input");
+    if (!inputElRef) {
+      printIonWarning("[ion-input-password-toggle] - No ancestor ion-input found. This component must be slotted inside of an ion-input.", el);
+      return;
+    }
+    this.type = inputElRef.type;
+  }
+  disconnectedCallback() {
+    this.inputElRef = null;
+  }
+  render() {
+    var _a, _b;
+    const {
+      color,
+      type
+    } = this;
+    const mode = getIonMode(this);
+    const showPasswordIcon = (_a = this.showIcon) !== null && _a !== void 0 ? _a : eye;
+    const hidePasswordIcon = (_b = this.hideIcon) !== null && _b !== void 0 ? _b : eyeOff;
+    const isPasswordVisible = type === "text";
+    return h(Host, {
+      key: "91bc55664d496fe457518bd112865dd7811d0c17",
+      class: createColorClasses(color, {
+        [mode]: true
+      })
+    }, h("ion-button", {
+      key: "6344d6838f5cdcba54c6bf4b592f036092044de0",
+      mode,
+      color,
+      fill: "clear",
+      shape: "round",
+      "aria-label": isPasswordVisible ? "Hide password" : "Show password",
+      "aria-pressed": isPasswordVisible ? "true" : "false",
+      type: "button",
+      onPointerDown: (ev) => {
+        ev.preventDefault();
+      },
+      onClick: this.togglePasswordVisibility
+    }, h("ion-icon", {
+      key: "a2bd9197c2635bf8cb155ff25ce022e7d7dc6d00",
+      slot: "icon-only",
+      "aria-hidden": "true",
+      icon: isPasswordVisible ? hidePasswordIcon : showPasswordIcon
+    })));
+  }
+  get el() {
+    return getElement(this);
+  }
+  static get watchers() {
+    return {
+      "type": [{
+        "onTypeChange": 0
+      }]
+    };
+  }
+};
+InputPasswordToggle.style = {
+  ios: iosInputPasswordToggleCss(),
+  md: mdInputPasswordToggleCss()
+};
+export {
+  InputPasswordToggle as ion_input_password_toggle
+};
+/*! Bundled license information:
+
+@ionic/core/dist/esm/ion-input-password-toggle.entry.js:
+  (*!
+   * (C) Ionic http://ionicframework.com - MIT License
+   *)
+*/
+//# sourceMappingURL=chunk-WVEUNJ5P.js.map

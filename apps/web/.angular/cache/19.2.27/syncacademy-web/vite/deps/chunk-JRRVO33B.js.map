@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../../../../node_modules/@ionic/core/components/p-ZjP4CjeZ.js"],
+  "sourcesContent": ["/*!\n * (C) Ionic http://ionicframework.com - MIT License\n */\nconst d = \"undefined\" != typeof window ? window : void 0,\n  o = \"undefined\" != typeof document ? document : void 0;\nexport { o as d, d as w };"],
+  "mappings": ";AAGA,IAAM,IAAI,eAAe,OAAO,SAAS,SAAS;AAAlD,IACE,IAAI,eAAe,OAAO,WAAW,WAAW;",
+  "names": []
+}

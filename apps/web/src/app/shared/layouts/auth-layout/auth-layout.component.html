@@ -1,0 +1,30 @@
+<div class="auth-layout">
+  <div class="auth-layout__hero" [style.background-image]="'url(' + bgImage + ')'">
+    <div class="auth-layout__hero-overlay"></div>
+    <div class="auth-layout__hero-content">
+      <app-logo variant="light" size="md"></app-logo>
+      <div class="auth-layout__hero-text">
+        <h1>A smarter way to manage your school</h1>
+        <p>Sync Academy coordinates administration, teachers, accounting, security, and parent communication into one seamless modern SaaS system.</p>
+      </div>
+      <div class="auth-layout__hero-stats">
+        <div class="auth-layout__stat">
+          <span class="auth-layout__stat-value">1,240+</span>
+          <span class="auth-layout__stat-label">Active Institutions</span>
+        </div>
+        <div class="auth-layout__stat">
+          <span class="auth-layout__stat-value">99.98%</span>
+          <span class="auth-layout__stat-label">Operational Uptime</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="auth-layout__form">
+    <div class="auth-layout__form-inner">
+      <ng-content></ng-content>
+    </div>
+    <footer class="auth-layout__footer">
+      © 2026 Sync Academy. All rights reserved.
+    </footer>
+  </div>
+</div>

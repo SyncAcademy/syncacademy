@@ -1,0 +1,231 @@
+.page-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 24px;
+  background-color: #f8fafc;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+.page-header {
+  margin-bottom: 24px;
+
+  .breadcrumb {
+    font-size: 14px;
+    color: #64748b;
+    margin-bottom: 8px;
+  }
+
+  .page-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0;
+  }
+}
+
+.tabs-nav {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 24px;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  scrollbar-width: none;
+
+  .tab-btn {
+    background: none;
+    border: none;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #64748b;
+    cursor: pointer;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+
+    &:hover {
+      color: #334155;
+    }
+
+    &.active {
+      color: #f97316;
+      border-bottom-color: #f97316;
+    }
+  }
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+
+    .filter-select {
+      padding: 8px 32px 8px 12px;
+      font-size: 14px;
+      color: #334155;
+      background-color: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      appearance: none;
+      background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px top 50%;
+      background-size: 10px auto;
+      outline: none;
+
+      &:focus {
+        border-color: #f97316;
+        box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.1);
+      }
+    }
+  }
+
+  .actions {
+    display: flex;
+    gap: 12px;
+
+    .action-btn {
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #475569;
+      background-color: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+
+      &:hover {
+        background-color: #f1f5f9;
+        color: #0f172a;
+      }
+    }
+  }
+}
+
+.table-scroll-wrapper {
+  overflow-x: auto;
+  background-color: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  box-shadow:
+    0 1px 3px 0 rgba(0, 0, 0, 0.1),
+    0 1px 2px 0 rgba(0, 0, 0, 0.06);
+
+  .gradebook-table {
+    width: 100%;
+    min-width: 800px;
+    border-collapse: collapse;
+    text-align: left;
+
+    th,
+    td {
+      padding: 16px;
+      border-bottom: 1px solid #e2e8f0;
+      white-space: nowrap;
+    }
+
+    th {
+      font-size: 13px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background-color: #f8fafc;
+    }
+
+    td {
+      font-size: 14px;
+      color: #334155;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    tbody tr:hover {
+      background-color: #f8fafc;
+    }
+
+    tfoot {
+      background-color: #f1f5f9;
+
+      td {
+        font-weight: 600;
+        color: #0f172a;
+        border-bottom: none;
+        border-top: 2px solid #cbd5e1;
+      }
+
+      .footer-label {
+        color: #475569;
+      }
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 9999px;
+
+      &.success {
+        background-color: #dcfce7;
+        color: #166534;
+      }
+
+      &.primary {
+        background-color: #dbeafe;
+        color: #1e40af;
+      }
+
+      &.warning {
+        background-color: #fef9c3;
+        color: #854d0e;
+      }
+
+      &.danger {
+        background-color: #fee2e2;
+        color: #991b1b;
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .page-container {
+    padding: 16px;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+
+    .filters,
+    .actions {
+      justify-content: stretch;
+
+      .filter-select,
+      .action-btn {
+        flex: 1;
+        min-width: calc(50% - 6px);
+      }
+    }
+  }
+}

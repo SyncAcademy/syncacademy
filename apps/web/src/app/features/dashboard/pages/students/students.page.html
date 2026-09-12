@@ -1,0 +1,91 @@
+<div class="page-container">
+  <header class="page-header">
+    <h1>All Students</h1>
+  </header>
+
+  <div class="toolbar">
+    <div class="filters">
+      <select class="filter-dropdown">
+        <option>Class: Grade 6</option>
+      </select>
+      <select class="filter-dropdown">
+        <option>Gender: All</option>
+      </select>
+      <select class="filter-dropdown">
+        <option>Status: Active</option>
+      </select>
+    </div>
+    
+    <div class="actions">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" placeholder="Search students..." />
+      </div>
+      <button class="btn-add">
+        <span class="plus-icon">+</span> Add Student
+      </button>
+    </div>
+  </div>
+
+  <div class="table-scroll-wrapper">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th class="col-checkbox"><input type="checkbox" /></th>
+          <th>Photo</th>
+          <th>Student ID</th>
+          <th>Full Name</th>
+          <th>Class</th>
+          <th>Gender</th>
+          <th>Parent/Guardian</th>
+          <th>Fee Status</th>
+          <th>Status</th>
+          <th class="col-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let student of students">
+          <td class="col-checkbox"><input type="checkbox" /></td>
+          <td>
+            <div class="avatar-container">
+              <!-- Fallback to a placeholder if avatar image doesn't exist -->
+              <img [src]="student.photo" alt="{{ student.fullName }}" onerror="this.src='https://ui-avatars.com/api/?name=' + student.fullName + '&background=random'" class="avatar" />
+            </div>
+          </td>
+          <td class="font-medium">{{ student.studentId }}</td>
+          <td class="font-medium">{{ student.fullName }}</td>
+          <td>{{ student.studentClass }}</td>
+          <td>{{ student.gender }}</td>
+          <td>{{ student.parent }}</td>
+          <td>
+            <div class="fee-status">
+              <span class="status-dot" [ngClass]="student.feeStatus.toLowerCase()"></span>
+              {{ student.feeStatus }}
+            </div>
+          </td>
+          <td>
+            <span class="badge" [ngClass]="student.status.toLowerCase()">
+              {{ student.status }}
+            </span>
+          </td>
+          <td class="col-actions">
+            <button class="action-btn edit-btn" title="Edit">✎</button>
+            <button class="action-btn delete-btn" title="Delete">🗑</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination">
+    <div class="pagination-info">
+      Showing 1-7 of 1,247 students
+    </div>
+    <div class="pagination-controls">
+      <button class="page-btn">Previous</button>
+      <button class="page-btn active">1</button>
+      <button class="page-btn">2</button>
+      <button class="page-btn">Next</button>
+    </div>
+  </div>
+</div>

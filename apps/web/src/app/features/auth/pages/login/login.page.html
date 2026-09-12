@@ -1,0 +1,81 @@
+
+<app-auth-layout>
+  <div class="login">
+    <app-logo variant="dark" size="md"></app-logo>
+    
+    <div class="login__header">
+      <h1>Welcome back</h1>
+      <p>Sign in to access your administrative dashboard.</p>
+    </div>
+
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="login__form">
+      <div class="form-group">
+        <label class="sa-label" for="email">Email Address</label>
+        <input 
+          id="email"
+          type="email" 
+          class="sa-input" 
+          formControlName="email"
+          placeholder="director@syncacademy.sc.tz">
+        <div class="sa-error" *ngIf="loginForm.get('email')?.invalid && loginForm.get('email')?.touched">
+          Please enter a valid email address.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="sa-label" for="password">Password</label>
+        <div class="input-with-toggle">
+          <input 
+            id="password"
+            [type]="showPassword() ? 'text' : 'password'" 
+            class="sa-input" 
+            formControlName="password"
+            placeholder="••••••••••••">
+          <button type="button" class="toggle-password" (click)="togglePassword()" aria-label="Toggle password visibility">
+            <svg *ngIf="!showPassword()" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg *ngIf="showPassword()" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="sa-error" *ngIf="loginForm.get('password')?.invalid && loginForm.get('password')?.touched">
+          Password must be at least 6 characters.
+        </div>
+      </div>
+
+      <div class="form-row form-row--between">
+        <label class="checkbox-label">
+          <input type="checkbox" formControlName="rememberMe">
+          <span class="checkmark"></span>
+          Remember me
+        </label>
+        <a routerLink="/auth/forgot-password" class="forgot-link">Forgot password?</a>
+      </div>
+
+      <button type="submit" class="sa-btn sa-btn--primary" [disabled]="loginForm.invalid">
+        Sign In
+      </button>
+    </form>
+
+    <div class="login__divider">
+      <span>OR</span>
+    </div>
+
+    <p class="login__switch">
+      Don't have an account? <a routerLink="/auth/register">Create Account</a>
+    </p>
+
+    <div class="login__ssl-badge">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+      </svg>
+      Secure SSL environment: All academic records are synchronized.
+    </div>
+  </div>
+</app-auth-layout>
+

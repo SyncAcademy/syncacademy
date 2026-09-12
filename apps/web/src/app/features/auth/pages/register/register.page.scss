@@ -1,0 +1,149 @@
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.register {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.register__header {
+  margin-top: 24px;
+
+  h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #111827;
+  }
+
+  p {
+    color: #6B7280;
+    margin-bottom: 32px;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+}
+
+.register__form {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-row--half {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+
+  @media (max-width: 767px) {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
+.input-with-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  .sa-input {
+    width: 100%;
+    padding-right: 48px;
+  }
+
+  .toggle-password {
+    position: absolute;
+    right: 12px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: #6B7280;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    transition: color 0.2s ease;
+
+    &:hover {
+      color: #111827;
+    }
+  }
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #111827;
+  position: relative;
+  user-select: none;
+  margin-top: 8px;
+
+  input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+
+    &:checked ~ .checkmark {
+      background-color: #E87E24;
+      border-color: #E87E24;
+    }
+
+    &:checked ~ .checkmark:after {
+      display: block;
+    }
+  }
+
+  .checkmark {
+    height: 16px;
+    width: 16px;
+    background-color: #fff;
+    border: 1px solid #D1D5DB;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    &:after {
+      content: "";
+      display: none;
+      width: 4px;
+      height: 8px;
+      border: solid white;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+      margin-bottom: 2px;
+    }
+  }
+}
+
+.btn-submit {
+  margin-top: 24px;
+}
+
+.register__switch {
+  text-align: center;
+  font-size: 0.9375rem;
+  color: #6B7280;
+  margin-top: 16px;
+
+  a {
+    color: #E87E24;
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover {
+      color: #D06E1A;
+      text-decoration: underline;
+    }
+  }
+}

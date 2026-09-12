@@ -1,0 +1,120 @@
+
+<app-auth-layout bgImage="/assets/register.png">
+  <div class="register">
+    <app-logo variant="dark" size="md"></app-logo>
+    
+    <div class="register__header">
+      <h1>Create your Sync Academy account</h1>
+      <p>Connect your campus to the leading unified educational workspace.</p>
+    </div>
+
+    <form [formGroup]="registerForm" (ngSubmit)="onSubmit()" class="register__form">
+      <div class="form-group">
+        <label class="sa-label">Full Name</label>
+        <input class="sa-input" formControlName="fullName" placeholder="e.g. David Mwangi">
+        <div class="sa-error" *ngIf="registerForm.get('fullName')?.invalid && registerForm.get('fullName')?.touched">
+          Full Name is required.
+        </div>
+      </div>
+
+      <div class="form-row form-row--half">
+        <div class="form-group">
+          <label class="sa-label">Email Address</label>
+          <input class="sa-input" formControlName="email" placeholder="e.g. david@school.ac.tz">
+          <div class="sa-error" *ngIf="registerForm.get('email')?.invalid && registerForm.get('email')?.touched">
+            Please enter a valid email address.
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="sa-label">Phone Number</label>
+          <input class="sa-input" formControlName="phone" placeholder="e.g. +255 712 345 678">
+          <div class="sa-error" *ngIf="registerForm.get('phone')?.invalid && registerForm.get('phone')?.touched">
+            Phone Number is required.
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row form-row--half">
+        <div class="form-group">
+          <label class="sa-label">Password</label>
+          <div class="input-with-toggle">
+            <input [type]="showPassword() ? 'text' : 'password'" class="sa-input" formControlName="password" placeholder="Create robust password">
+            <button type="button" class="toggle-password" (click)="togglePassword('password')" aria-label="Toggle password visibility">
+              <svg *ngIf="!showPassword()" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <svg *ngIf="showPassword()" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="sa-error" *ngIf="registerForm.get('password')?.invalid && registerForm.get('password')?.touched">
+            Password must be at least 8 characters.
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="sa-label">Confirm Password</label>
+          <div class="input-with-toggle">
+            <input [type]="showConfirmPassword() ? 'text' : 'password'" class="sa-input" formControlName="confirmPassword" placeholder="Repeat password">
+            <button type="button" class="toggle-password" (click)="togglePassword('confirm')" aria-label="Toggle confirm password visibility">
+              <svg *ngIf="!showConfirmPassword()" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <svg *ngIf="showConfirmPassword()" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="sa-error" *ngIf="registerForm.get('confirmPassword')?.errors?.['passwordMismatch'] && registerForm.get('confirmPassword')?.touched">
+            Passwords do not match.
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row form-row--half">
+        <div class="form-group">
+          <label class="sa-label">Select School</label>
+          <select class="sa-select" formControlName="school">
+            <option value="" disabled>e.g. Sync Academy Dar es Sala...</option>
+            <option *ngFor="let school of schoolOptions" [value]="school">{{ school }}</option>
+          </select>
+          <div class="sa-error" *ngIf="registerForm.get('school')?.invalid && registerForm.get('school')?.touched">
+            Please select a school.
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="sa-label">Your School Role</label>
+          <select class="sa-select" formControlName="role">
+            <option value="" disabled>Select role</option>
+            <option *ngFor="let role of roleOptions" [value]="role">{{ role }}</option>
+          </select>
+          <div class="sa-error" *ngIf="registerForm.get('role')?.invalid && registerForm.get('role')?.touched">
+            Please select a role.
+          </div>
+        </div>
+      </div>
+
+      <label class="checkbox-label">
+        <input type="checkbox" formControlName="terms">
+        <span class="checkmark"></span>
+        I agree to the Terms of Service and Privacy Policy
+      </label>
+      <div class="sa-error" *ngIf="registerForm.get('terms')?.invalid && registerForm.get('terms')?.touched" style="margin-top: 4px;">
+        You must agree to the terms to register.
+      </div>
+
+      <button type="submit" class="sa-btn sa-btn--primary btn-submit" [disabled]="registerForm.invalid">
+        Create Account
+      </button>
+    </form>
+
+    <p class="register__switch">
+      Already have an account? <a routerLink="/auth/login">Sign In</a>
+    </p>
+  </div>
+</app-auth-layout>
+

@@ -1,0 +1,237 @@
+@use 'styles/variables' as *;
+@use 'styles/typography';
+
+/* Ionic core CSS */
+@import '@ionic/angular/css/core.css';
+@import '@ionic/angular/css/normalize.css';
+@import '@ionic/angular/css/structure.css';
+@import '@ionic/angular/css/typography.css';
+@import '@ionic/angular/css/display.css';
+@import '@ionic/angular/css/padding.css';
+@import '@ionic/angular/css/float-elements.css';
+@import '@ionic/angular/css/text-alignment.css';
+@import '@ionic/angular/css/text-transformation.css';
+@import '@ionic/angular/css/flex-utils.css';
+
+/* Global resets */
+* {
+  box-sizing: border-box;
+}
+
+
+
+
+
+body {
+  margin: 0;
+  background-color: $body-bg;
+}
+
+body:has(.landing-page),
+body:has(.auth-layout) {
+  position: static;
+  width: auto;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  transform: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: auto;
+  overscroll-behavior-y: auto;
+}
+
+html,
+body,
+app-root,
+ion-app {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+}
+
+ion-app {
+  display: block;
+}
+
+ion-menu::part(container) {
+  height: 100%;
+}
+
+ion-menu app-sidebar {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+@media (min-width: 992px) {
+  ion-split-pane > ion-menu.split-pane-side {
+    display: block !important;
+    flex: 0 0 var(--side-width);
+    width: var(--side-width);
+    max-width: var(--side-max-width);
+    height: 100%;
+    position: relative;
+  }
+
+  ion-split-pane > ion-menu.split-pane-side::part(container) {
+    transform: translate3d(0, 0, 0) !important;
+  }
+
+  ion-split-pane > ion-menu.split-pane-side app-sidebar {
+    height: 100%;
+  }
+}
+
+/* Routed dashboard pages are created outside the layout component's style scope. */
+.dashboard-page ion-router-outlet {
+  display: block;
+  position: static !important;
+  width: 100%;
+  min-width: 0;
+  min-height: 0 !important;
+  height: auto !important;
+  contain: none !important;
+}
+
+.dashboard-page ion-router-outlet .ion-page {
+  display: block !important;
+  position: relative !important;
+  inset: auto !important;
+  width: 100%;
+  min-height: 0 !important;
+  height: auto !important;
+  contain: none !important;
+}
+
+/* Override Ionic CSS variables */
+:root {
+  --ion-font-family: #{$font-family};
+  --ion-color-primary: #{$primary-orange};
+  --ion-color-primary-shade: #{$primary-orange-hover};
+  --ion-background-color: #{$body-bg};
+}
+
+/* Form input styles */
+.sa-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid $input-border;
+  border-radius: $radius-md;
+  font-family: $font-family;
+  font-size: 0.9375rem;
+  color: $text-primary;
+  background: $form-bg;
+  outline: none;
+  transition: border-color 0.2s ease;
+
+  &::placeholder {
+    color: $text-muted;
+  }
+
+  &:focus {
+    border-color: $input-border-focus;
+    box-shadow: 0 0 0 3px $primary-orange-light;
+  }
+
+  &.ng-invalid.ng-touched {
+    border-color: $error-red;
+  }
+}
+
+.sa-select {
+  @extend .sa-input;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  padding-right: 40px;
+  cursor: pointer;
+}
+
+.sa-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: $text-primary;
+  margin-bottom: 6px;
+}
+
+.sa-btn {
+  width: 100%;
+  padding: 14px 24px;
+  border: none;
+  border-radius: $radius-md;
+  font-family: $font-family;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+
+  &--primary {
+    background-color: $primary-orange;
+    color: #FFFFFF;
+
+    &:hover:not(:disabled) {
+      background-color: $primary-orange-hover;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.sa-error {
+  font-size: 0.8125rem;
+  color: $error-red;
+  margin-top: 4px;
+}
+
+/* Scrollable table wrapper */
+.table-scroll-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Prevent flex/grid from blowing out horizontally */
+  min-width: 0;
+
+  table {
+    min-width: 800px;
+    width: 100%;
+  }
+}
+
+/* Make component headers span full width and merge visually with layout header */
+.page-header {
+  background-color: #FFFFFF !important;
+  margin: -24px -24px 24px -24px !important;
+  width: calc(100% + 48px) !important;
+  min-width: calc(100% + 48px) !important;
+  flex: 0 0 calc(100% + 48px) !important;
+  transform: translateX(-24px);
+  padding: 16px 24px !important;
+  border-bottom: 1px solid var(--sa-input-border) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  
+  @media (max-width: 768px) {
+    margin: -16px -16px 16px -16px !important;
+    width: calc(100% + 32px) !important;
+    min-width: calc(100% + 32px) !important;
+    flex-basis: calc(100% + 32px) !important;
+    transform: translateX(-16px);
+    padding: 16px !important;
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 12px;
+  }
+
+  h1 {
+    font-size: 1.25rem !important;
+    margin: 0 !important;
+  }
+}

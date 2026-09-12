@@ -1,0 +1,77 @@
+@use 'variables' as *;
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  
+  .logo-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: $primary-orange;
+    border-radius: 8px;
+    
+    svg {
+      width: 60%;
+      height: 60%;
+    }
+  }
+
+  .logo-text {
+    font-family: $font-family;
+    font-weight: 700;
+    line-height: 1;
+    
+    .text-academy {
+      color: $primary-orange;
+    }
+  }
+
+  // Variants
+  &.dark {
+    .text-sync {
+      color: #111827;
+    }
+  }
+
+  &.light {
+    .text-sync {
+      color: #FFFFFF;
+    }
+  }
+
+  // Sizes
+  &.sm {
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+    }
+    .logo-text {
+      font-size: 1rem;
+    }
+  }
+
+  &.md {
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+    }
+    .logo-text {
+      font-size: 1.25rem;
+    }
+  }
+
+  &.lg {
+    .logo-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+    }
+    .logo-text {
+      font-size: 1.5rem;
+    }
+  }
+}

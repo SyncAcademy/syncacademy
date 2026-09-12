@@ -1,0 +1,191 @@
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.settings-page {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+
+  .page-header {
+    margin-bottom: 24px;
+
+    .breadcrumb {
+      font-size: 14px;
+      color: $text-secondary;
+      margin-bottom: 8px;
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: $text-primary;
+      margin: 0;
+    }
+  }
+
+  .success-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: $success-green-bg;
+    color: darken($success-green, 15%);
+    padding: 16px;
+    border-radius: $radius-md;
+    margin-bottom: 24px;
+    border: 1px solid lighten($success-green, 30%);
+
+    .checkmark-icon {
+      color: $success-green;
+    }
+  }
+
+  .settings-layout {
+    display: flex;
+    gap: 32px;
+    flex-direction: column;
+
+    @include tablet-up {
+      flex-direction: row;
+    }
+  }
+
+  .settings-sidebar {
+    @include tablet-up {
+      flex: 0 0 240px;
+    }
+
+    .settings-tabs {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+
+      .tab-item {
+        padding: 12px 16px;
+        color: $text-secondary;
+        cursor: pointer;
+        border-radius: $radius-sm;
+        margin-bottom: 4px;
+        transition: background-color 0.2s, color 0.2s;
+        font-weight: 500;
+
+        &:hover {
+          background-color: #f3f4f6;
+        }
+
+        &.active {
+          background-color: $primary-orange-light;
+          color: $primary-orange;
+        }
+      }
+    }
+  }
+
+  .settings-main {
+    flex: 1;
+    background: $form-bg;
+    border-radius: $radius-lg;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+
+    .settings-section {
+      margin-bottom: 32px;
+
+      h2 {
+        font-size: 18px;
+        font-weight: 600;
+        margin-top: 0;
+        margin-bottom: 24px;
+        color: $text-primary;
+        padding-bottom: 8px;
+        border-bottom: 1px solid $input-border;
+      }
+    }
+
+    .branding-content {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+
+      .logo-placeholder {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background-color: #e5e7eb;
+        border: 2px dashed $text-muted;
+      }
+
+      .upload-btn {
+        padding: 8px 16px;
+        border: 1px solid $input-border;
+        background: transparent;
+        border-radius: $radius-sm;
+        font-weight: 500;
+        cursor: pointer;
+        color: $text-primary;
+        transition: background-color 0.2s;
+
+        &:hover {
+          background: #f9fafb;
+        }
+      }
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+
+      @include tablet-up {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .settings-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 16px;
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid $input-border;
+
+      .cancel-btn {
+        padding: 10px 20px;
+        background: transparent;
+        border: 1px solid $input-border;
+        border-radius: $radius-sm;
+        color: $text-primary;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+
+        &:hover {
+          background: #f9fafb;
+        }
+      }
+
+      .sa-btn {
+        width: auto;
+        min-width: 140px;
+        padding: 10px 20px;
+        font-size: 0.9375rem;
+      }
+    }
+  }
+}
+
+@media (max-width: 575px) {
+  .settings-page {
+    .settings-main {
+      .settings-footer {
+        flex-direction: column-reverse;
+
+        .cancel-btn,
+        .sa-btn {
+          width: 100%;
+        }
+      }
+    }
+  }
+}

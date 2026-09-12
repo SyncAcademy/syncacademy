@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../../../../node_modules/@ionic/core/dist/esm/dir-o8OKV5aD.js"],
+  "sourcesContent": ["/*!\n * (C) Ionic http://ionicframework.com - MIT License\n */\n/**\n * Returns `true` if the direction resolves to `rtl` for the given element.\n *\n * The direction comes from the nearest ancestor that declares one, starting\n * with `hostEl` itself, and falls back to the root document value. Setting\n * `dir=\"auto\"` or setting `dir` to an empty string are skipped rather than\n * treated as `ltr`. When nothing declares a direction, including the document,\n * the direction is `ltr`.\n *\n * @param hostEl the element to resolve the direction for.\n */\nconst isRTL = hostEl => {\n  var _a, _b;\n  for (let el = hostEl; el; el = el.parentElement) {\n    const dir = (_a = el.getAttribute('dir')) === null || _a === void 0 ? void 0 : _a.toLowerCase();\n    if (dir === 'rtl') {\n      return true;\n    }\n    if (dir === 'ltr') {\n      return false;\n    }\n  }\n  return ((_b = document === null || document === void 0 ? void 0 : document.dir) === null || _b === void 0 ? void 0 : _b.toLowerCase()) === 'rtl';\n};\nexport { isRTL as i };"],
+  "mappings": ";AAcA,IAAM,QAAQ,YAAU;AACtB,MAAI,IAAI;AACR,WAAS,KAAK,QAAQ,IAAI,KAAK,GAAG,eAAe;AAC/C,UAAM,OAAO,KAAK,GAAG,aAAa,KAAK,OAAO,QAAQ,OAAO,SAAS,SAAS,GAAG,YAAY;AAC9F,QAAI,QAAQ,OAAO;AACjB,aAAO;AAAA,IACT;AACA,QAAI,QAAQ,OAAO;AACjB,aAAO;AAAA,IACT;AAAA,EACF;AACA,WAAS,KAAK,aAAa,QAAQ,aAAa,SAAS,SAAS,SAAS,SAAS,QAAQ,OAAO,SAAS,SAAS,GAAG,YAAY,OAAO;AAC7I;",
+  "names": []
+}

@@ -1,0 +1,133 @@
+<div class="finance-page-container">
+  <header class="page-header">
+    <h1>Finance & Tuition Office</h1>
+  </header>
+
+  <section class="stat-cards">
+    <div class="card">
+      <div class="card-title">Total Projected Fees</div>
+      <div class="card-value">TZS 102,860,000</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Collected Tuition</div>
+      <div class="card-value">TZS 84,520,000</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Outstanding Balance</div>
+      <div class="card-value">TZS 18,340,000</div>
+    </div>
+    <div class="card critical">
+      <div class="card-title">Overdue & Critical</div>
+      <div class="card-value">TZS 5,200,000</div>
+    </div>
+  </section>
+
+  <section class="filters-toolbar">
+    <div class="filter-group">
+      <label for="academic-year">Academic Year</label>
+      <select id="academic-year">
+        <option>2023/2024</option>
+        <option>2024/2025</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="term">Term</label>
+      <select id="term">
+        <option>Term 1</option>
+        <option>Term 2</option>
+        <option>Term 3</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="class">Class</label>
+      <select id="class">
+        <option>All Classes</option>
+        <option>Form 1</option>
+        <option>Form 2</option>
+        <option>Form 3</option>
+        <option>Form 4</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="status">Status</label>
+      <select id="status">
+        <option>All Statuses</option>
+        <option>Paid</option>
+        <option>Partial</option>
+        <option>Unpaid</option>
+      </select>
+    </div>
+  </section>
+
+  <div class="main-content-grid">
+    <div class="left-column">
+      <div class="table-card">
+        <h2>Student Balances</h2>
+        <div class="table-scroll-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Student Name</th>
+                <th>Class</th>
+                <th>Amount Due (TZS)</th>
+                <th>Amount Paid (TZS)</th>
+                <th>Balance (TZS)</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let student of students">
+                <td>{{ student.name }}</td>
+                <td>{{ student.class }}</td>
+                <td>{{ student.amountDue | number }}</td>
+                <td>{{ student.amountPaid | number }}</td>
+                <td>{{ student.balance | number }}</td>
+                <td>
+                  <span class="badge" [ngClass]="student.status.toLowerCase()">
+                    {{ student.status }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="right-column">
+      <div class="progress-card">
+        <h2>Fee Collection vs Target</h2>
+        
+        <div class="progress-item">
+          <div class="progress-header">
+            <span>Term 1</span>
+            <span>95%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" style="width: 95%;"></div>
+          </div>
+        </div>
+
+        <div class="progress-item">
+          <div class="progress-header">
+            <span>Term 2</span>
+            <span>80%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" style="width: 80%;"></div>
+          </div>
+        </div>
+
+        <div class="progress-item">
+          <div class="progress-header">
+            <span>Term 3</span>
+            <span>45%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" style="width: 45%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
