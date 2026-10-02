@@ -5,7 +5,6 @@
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.dev/license
  */
-import { DiagnosticHandlingStrategy } from '@angular/localize/tools';
 import type { TranslationLoader } from './load-translations';
 export interface LocaleDescription {
     files: {
@@ -25,7 +24,6 @@ export interface I18nOptions {
     flatOutput?: boolean;
     readonly shouldInline: boolean;
     hasDefinedSourceLocale?: boolean;
-    i18nDuplicateTranslation?: DiagnosticHandlingStrategy;
 }
 export declare function createI18nOptions(projectMetadata: {
     i18n?: unknown;

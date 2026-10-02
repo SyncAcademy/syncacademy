@@ -1,0 +1,60 @@
+<ion-app>
+  <ion-split-pane contentId="teacher-main-content" when="(min-width: 992px)">
+    <!-- Sidebar -->
+    <ion-menu
+      contentId="teacher-main-content"
+      menuId="teacher-menu"
+      type="overlay"
+      [swipeGesture]="true"
+    >
+      <app-teacher-sidebar></app-teacher-sidebar>
+    </ion-menu>
+
+    <!-- Main Content Area -->
+    <div class="ion-page teacher-page" id="teacher-main-content">
+      <!-- Top Header -->
+      <ion-header class="ion-no-border">
+        <header class="teacher-header">
+          <div class="teacher-header__left">
+            <ion-menu-button menu="teacher-menu" class="mobile-menu-btn"></ion-menu-button>
+            <div class="teacher-header__titles">
+              <p class="teacher-header__breadcrumb">{{ pageBreadcrumb() }}</p>
+              <h1 class="global-page-title">{{ pageTitle() }}</h1>
+            </div>
+          </div>
+
+          <div class="teacher-header__right">
+            <app-academic-year-selector viewer="teacher"></app-academic-year-selector>
+            <a class="icon-btn" routerLink="/teacher/notifications" [attr.aria-label]="'Notifications, ' + store.unreadCount() + ' unread'" queryParamsHandling="preserve">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+            <span class="portal-pill">{{ store.unreadCount() }}</span></a>
+          </div>
+        </header>
+      </ion-header>
+
+      <!-- Scrollable Content -->
+      <main #teacherContent class="teacher-content" role="main" (scroll)="onContentScroll($event)">
+        <div class="teacher-content-inner">
+          <app-portal-connection />
+          <router-outlet></router-outlet>
+        </div>
+      </main>
+
+      <button
+        class="scroll-to-top"
+        [class.show]="showScrollTop()"
+        type="button"
+        aria-label="Scroll to top"
+        title="Back to top"
+        (click)="scrollToTop()"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 19V5M6 11l6-6 6 6" />
+        </svg>
+      </button>
+    </div>
+  </ion-split-pane>
+</ion-app>

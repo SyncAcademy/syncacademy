@@ -18,3 +18,4 @@ export declare const shouldOptimizeChunks: boolean;
 export declare const useComponentStyleHmr: boolean;
 export declare const useComponentTemplateHmr: boolean;
 export declare const usePartialSsrBuild: boolean;
+export declare const bazelEsbuildPluginPath: string | undefined;

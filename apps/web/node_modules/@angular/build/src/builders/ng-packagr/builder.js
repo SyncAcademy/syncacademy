@@ -57,7 +57,7 @@ const purge_cache_1 = require("../../utils/purge-cache");
 async function* execute(options, context) {
     // Purge old build disk cache.
     await (0, purge_cache_1.purgeStaleBuildCache)(context);
-    const root = context.workspaceRoot;
+    const workspaceRoot = context.workspaceRoot;
     let packager;
     try {
         packager = (await Promise.resolve().then(() => __importStar(require('ng-packagr')))).ngPackagr();
@@ -72,15 +72,18 @@ async function* execute(options, context) {
         }
         throw error;
     }
-    packager.forProject((0, node_path_1.resolve)(root, options.project));
-    if (options.tsConfig) {
-        packager.withTsConfig((0, node_path_1.resolve)(root, options.tsConfig));
-    }
     const projectName = context.target?.project;
     if (!projectName) {
         throw new Error('The builder requires a target.');
     }
     const metadata = await context.getProjectMetadata(projectName);
+    const ngPackagrConfig = options.project
+        ? (0, node_path_1.join)(workspaceRoot, options.project)
+        : (0, node_path_1.join)(workspaceRoot, metadata.root ?? '', 'ng-package.json');
+    packager.forProject(ngPackagrConfig);
+    if (options.tsConfig) {
+        packager.withTsConfig((0, node_path_1.resolve)(workspaceRoot, options.tsConfig));
+    }
     const { enabled: cacheEnabled, path: cacheDirectory } = (0, normalize_cache_1.normalizeCacheOptions)(metadata, context.workspaceRoot);
     const ngPackagrOptions = {
         cacheEnabled,

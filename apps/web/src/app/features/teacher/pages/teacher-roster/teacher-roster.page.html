@@ -1,0 +1,118 @@
+<p class="portal-notice">Class assignments and student rosters are live. Assessment entry and roster confirmation are not available yet.</p>
+<div class="teacher-roster">
+  <app-teacher-page-header
+    [title]="'Student List — ' + assignmentLabel()"
+    description="Review the list of students. Confirm it is correct or report any issues.">
+    <a [routerLink]="['/teacher']" class="back-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+      Back to Assignments
+    </a>
+  </app-teacher-page-header>
+
+  <div class="portal-context"><strong>{{ store.period() }}</strong><span>Official student list</span></div>
+  <div *ngIf="!found()" class="portal-empty"><h3>Assignment unavailable</h3><p>Return to your assignments to choose a valid class.</p></div>
+  <!-- Loading -->
+  <div *ngIf="loading()" class="skeleton-container" aria-busy="true">
+    <div class="skeleton-card" *ngFor="let i of [1,2,3,4,5,6]">
+      <div class="skeleton-line skeleton-line--md"></div>
+      <div class="skeleton-line skeleton-line--lg"></div>
+    </div>
+  </div>
+
+  <!-- Populated -->
+  <div *ngIf="!loading() && found()" class="roster-content">
+    <!-- Success message -->
+    <div *ngIf="issueSubmitted()" class="success-banner" role="status">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      Issue recorded in this demo. It is ready for Registrar review.
+    </div>
+
+    <div class="portal-notice" *ngIf="issues().length"><strong>{{ issues().length }} issue(s) recorded</strong><p *ngFor="let issue of issues()">{{ issue.description }} - {{ issue.resolvedAt ? 'Resolved: ' + issue.resolution : 'Awaiting review' }}</p></div>
+    <!-- Confirmed banner -->
+    <div *ngIf="confirmed()" class="confirmed-banner" role="status">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+      Student list confirmed.
+      <a class="action-btn action-btn--primary" [routerLink]="['/teacher', assignmentId, 'marks']">Continue to marks</a>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="roster-toolbar">
+      <div class="roster-toolbar__search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" aria-label="Search students" placeholder="Search students..." (input)="onSearchChange($any($event.target).value)" />
+      </div>
+      <span class="roster-toolbar__count">{{ filteredStudents().length }} students</span>
+    </div>
+
+    <!-- Student List -->
+    <div class="roster-list">
+      <div class="roster-item" *ngFor="let s of filteredStudents(); let i = index">
+        <span class="roster-item__number">{{ i + 1 }}</span>
+        <div class="roster-item__info">
+          <span class="roster-item__name">{{ s.fullName }}</span>
+          <span class="roster-item__meta">{{ s.studentNumber }} · {{ s.gender === 'M' ? 'Male' : 'Female' }}</span>
+        </div>
+        <span class="roster-item__status" [class.roster-item__status--active]="s.enrollmentStatus === 'active'">{{ s.enrollmentStatus === 'active' ? 'Active' : 'Transferred' }}</span>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="filteredStudents().length === 0 && !loading()" class="empty-state">
+      <p>No students match your search.</p>
+    </div>
+
+    <!-- Actions -->
+    <div class="roster-actions">
+      <button type="button" class="action-btn action-btn--primary" *ngIf="!confirmed()" [disabled]="store.readOnly()" (click)="openConfirmDialog()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        Confirm Student List
+      </button>
+      <button type="button" class="action-btn action-btn--outline" [disabled]="store.readOnly()" (click)="toggleIssueForm()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        Report an Issue
+      </button>
+    </div>
+
+    <!-- Issue Report Form -->
+    <div *ngIf="showIssueForm()" class="issue-form">
+      <h3 class="issue-form__title">Report an Issue</h3><p *ngIf="issueError()" class="portal-field-error" role="alert">{{ issueError() }}</p>
+      <div class="issue-form__field">
+        <label for="issue-type">Issue Type</label>
+        <select [value]="issueType()" id="issue-type" (change)="issueType.set($any($event.target).value)">
+          <option *ngFor="let t of issueTypes" [value]="t.value">{{ t.label }}</option>
+        </select>
+      </div>
+      <div class="issue-form__field">
+        <label for="issue-student" *ngIf="issueType() !== 'missing_student'">Affected student (optional)</label>
+        <select id="issue-student" *ngIf="issueType() !== 'missing_student'" [value]="issueStudentId() || ''" (change)="issueStudentId.set($any($event.target).value || null)"><option value="">Whole list / not specified</option><option *ngFor="let student of students()" [value]="student.id">{{ student.fullName }} &middot; {{ student.studentNumber }}</option></select>
+        <label for="issue-description">Description</label>
+        <textarea id="issue-description" [value]="issueDescription()" rows="3" placeholder="Describe the issue..." (input)="issueDescription.set($any($event.target).value)"></textarea>
+      </div>
+      <div class="issue-form__actions">
+        <button type="button" class="action-btn action-btn--primary" (click)="submitIssue()" [disabled]="!issueDescription()">Submit Report</button>
+        <button type="button" class="action-btn action-btn--ghost" [disabled]="store.readOnly()" (click)="toggleIssueForm()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Confirm Dialog -->
+    <div *ngIf="showConfirmDialog()" class="dialog-overlay" appDialogFocus role="dialog" aria-modal="true" aria-label="Confirm student list" (keydown.escape)="cancelConfirm()" (click)="cancelConfirm()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h3 class="dialog__title">Confirm Student List</h3>
+        <p class="dialog__text">You are confirming that the {{ students().length }} students listed above are correct for this assignment. You can still report issues later if needed.</p>
+        <div class="dialog__actions">
+          <button type="button" class="action-btn action-btn--primary" (click)="confirmRoster()">Yes, Confirm Student List</button>
+          <button type="button" class="action-btn action-btn--ghost" (click)="cancelConfirm()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

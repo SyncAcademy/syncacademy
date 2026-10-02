@@ -1,0 +1,10 @@
+
+# Runtime secrets and generated backend artifacts
+.env
+.env.*
+!.env.example
+**/node_modules/
+apps/api/dist/
+.runtime/
+**/.tmp/
+*.credentials.txt

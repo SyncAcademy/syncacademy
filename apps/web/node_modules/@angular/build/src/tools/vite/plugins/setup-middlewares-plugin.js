@@ -51,6 +51,7 @@ function createAngularSetupMiddlewaresPlugin(options) {
             server.middlewares.use((0, middlewares_1.createAngularHeadersMiddleware)(server));
             server.middlewares.use((0, middlewares_1.createAngularComponentMiddleware)(server, templateUpdates));
             server.middlewares.use((0, middlewares_1.createAngularAssetsMiddleware)(server, assets, outputFiles, componentStyles, await createEncapsulateStyle()));
+            server.middlewares.use((0, middlewares_1.createChromeDevtoolsMiddleware)(server.config.cacheDir, options.projectRoot));
             extensionMiddleware?.forEach((middleware) => server.middlewares.use(middleware));
             // Returning a function, installs middleware after the main transform middleware but
             // before the built-in HTML middleware

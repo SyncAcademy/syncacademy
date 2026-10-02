@@ -1,0 +1,194 @@
+<div class="page-header">
+  <div>
+    <h2>Schools Directory</h2>
+    <p>Manage all registered institutions on the platform.</p>
+  </div>
+  <button class="action-btn action-btn--primary" (click)="openSchool()">
+    + Register School
+  </button>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <span>Schools</span><strong>{{ filteredSchools().length }}</strong>
+  </div>
+  <div class="stat-card">
+    <span>Students</span><strong>{{ totalStudents() | number }}</strong>
+  </div>
+  <div class="stat-card">
+    <span>Staff</span><strong>{{ totalStaff() | number }}</strong>
+  </div>
+  <div class="stat-card">
+    <span>Total schools</span><strong>{{store.total()}}</strong>
+  </div>
+</div>
+
+<div class="filters">
+  <input
+    aria-label="Search schools, contacts..."
+    placeholder="Search schools, contacts..."
+    [ngModel]="search()"
+    (ngModelChange)="search.set($event)"
+  />
+  <select
+    aria-label="Status"
+    [ngModel]="statusFilter()"
+    (ngModelChange)="statusFilter.set($event)"
+  >
+    <option value="">All statuses</option>
+    <option value="active">Active</option>
+    <option value="suspended">Suspended</option>
+  </select>
+</div>
+
+<section class="panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>School</th>
+          <th>Location</th>
+          <th>Code</th>
+          <th>Status</th>
+          <th>Students</th>
+          <th>Staff</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (s of filteredSchools(); track s.id) {
+        <tr>
+          <td>
+            <button class="link-button" (click)="selectSchool(s.id)">
+              {{ s.name }}</button
+            ><span class="cell-sub">{{ s.contactName }}</span>
+          </td>
+          <td>{{ s.location }}</td>
+          <td>{{s.code}}</td>
+          <td>
+            <span class="status-dot" [attr.data-status]="s.status"></span>{{
+            s.status }}
+          </td>
+          <td>{{ s.students | number }}</td>
+          <td>{{ s.staff }}</td>
+        </tr>
+        } @empty {
+        <tr>
+          <td colspan="6">No schools match your filters.</td>
+        </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="pagination-bar" role="navigation" aria-label="Schools pagination">
+  <div class="pagination-info">
+    <span class="pagination-count"
+      >Page {{store.page()}} &middot; {{store.total()}} {{ store.total() === 1 ?
+      'school' : 'schools' }}</span
+    >
+    <span class="pagination-hint">Search and filters apply to this page.</span>
+  </div>
+  <div class="pagination-actions">
+    <button
+      type="button"
+      class="action-btn pagination-btn"
+      [disabled]="store.page() === 1 || store.loading()"
+      (click)="store.nextPage(-1)"
+      aria-label="Previous page"
+    >
+      <svg
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        class="btn-icon"
+        aria-hidden="true"
+      >
+        <path
+          fill-rule="evenodd"
+          d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z"
+          clip-rule="evenodd"
+        />
+      </svg>
+      <span>Previous</span>
+    </button>
+    <button
+      type="button"
+      class="action-btn pagination-btn"
+      [disabled]="store.page()*25 >= store.total() || store.loading()"
+      (click)="store.nextPage(1)"
+      aria-label="Next page"
+    >
+      <span>Next</span>
+      <svg
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        class="btn-icon"
+        aria-hidden="true"
+      >
+        <path
+          fill-rule="evenodd"
+          d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+          clip-rule="evenodd"
+        />
+      </svg>
+    </button>
+  </div>
+</div>
+
+@if (selected(); as school) {
+<section #schoolDetails class="detail-panel">
+  <div class="detail-heading">
+    <h3>{{ school.name }}</h3>
+    <button class="action-btn" (click)="selectedId.set('')">
+      Close details
+    </button>
+  </div>
+  <div class="detail-meta">
+    <p>{{school.location}} &middot; {{school.status}}</p>
+    <p>School code: <code>{{school.code}}</code></p>
+  </div>
+  <div class="row-actions">
+    <button class="action-btn" (click)="changeStatus()">
+      {{school.status === 'suspended' ? 'Reactivate' : 'Suspend'}}
+    </button>
+    <a
+      class="action-btn"
+      [routerLink]="['/workspace']"
+      [queryParams]="{school:school.id}"
+      >Manage school</a
+    >
+    <a
+      class="action-btn action-btn--primary"
+      [routerLink]="['/workspace']"
+      [queryParams]="{school:school.id,tab:'people'}"
+      >Invite school users</a
+    >
+  </div>
+</section>
+}
+
+<section class="detail-panel">
+  <h3>Active schools by region</h3>
+  <div class="region-list">
+    @for (r of regions(); track r.region) {
+    <span class="region-pill"
+      ><strong>{{ r.region }}</strong>: {{ r.count }}</span
+    >
+    } @empty {
+    <p class="empty-state">No active schools.</p>
+    }
+  </div>
+</section>
+
+@if (editor; as e) {
+<app-sa-editor
+  [description]="'School records are saved securely. The Headmaster receives a single-use email invitation.'"
+  [busy]="saving"
+  [error]="error"
+  [title]="e.title"
+  [fields]="e.fields"
+  [values]="e.values"
+  (saved)="save($event)"
+  (cancelled)="editor = null"
+/>
+}

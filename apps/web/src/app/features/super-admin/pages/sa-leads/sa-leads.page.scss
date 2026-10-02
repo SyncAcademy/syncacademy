@@ -1,0 +1,65 @@
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.page-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; margin-bottom: 24px; flex-wrap: wrap;
+  h2 { margin: 0; font-size: 1.5rem; font-weight: 700; color: $text-primary; }
+  p { margin: 4px 0 0; font-size: 0.875rem; color: $text-secondary; }
+}
+
+.pipeline-funnel {
+  display: flex; gap: 8px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 4px;
+}
+
+.funnel-stage {
+  flex: 1; min-width: 100px; padding: 12px 16px; background: #fff; border: 1px solid $input-border;
+  border-radius: $radius-md; text-align: center; cursor: pointer; transition: all 180ms;
+  display: flex; flex-direction: column; gap: 2px;
+
+  strong { font-size: 1.25rem; font-weight: 700; color: $text-primary; }
+  span { font-size: 0.75rem; color: $text-secondary; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  &:hover { border-color: $primary-orange; background: #fff7ed; }
+  &.active { border-color: $primary-orange; background: #fff7ed; box-shadow: 0 2px 8px rgba(232, 126, 36, 0.12); }
+  &.active strong { color: #c2410c; }
+}
+
+.filters {
+  display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
+  input { flex: 1 1 240px; min-width: 200px; padding: 8px 12px; border: 1px solid $input-border; border-radius: $radius-md; font-family: inherit; font-size: 0.875rem; }
+  select { padding: 8px 12px; border: 1px solid $input-border; border-radius: $radius-md; font-family: inherit; font-size: 0.875rem; background: #fff; }
+}
+
+.panel { background: #fff; border: 1px solid $input-border; border-radius: $radius-lg; padding: 0; }
+.table-scroll { width: 100%; overflow-x: auto; }
+table {
+  width: 100%; border-collapse: collapse; min-width: 900px;
+  th, td { padding: 12px 16px; text-align: left; font-size: 0.875rem; border-bottom: 1px solid #f1f5f9; }
+  th { font-weight: 600; color: #475569; background: #f8fafc; }
+  tbody tr { transition: background 160ms; }
+  tbody tr:hover { background: #fffaf5; }
+  strong { font-weight: 600; display: block; }
+}
+
+.cell-sub { font-size: 0.8125rem; color: $text-muted; display: block; }
+.notes-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8125rem; color: $text-secondary; }
+
+.source-pill {
+  padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;
+  background: #f1f5f9; color: #475569; text-transform: capitalize;
+}
+
+.portal-pill {
+  padding: 0.3rem 0.65rem; border-radius: 6px; font-size: 0.8125rem; font-weight: 600;
+  background: #f1f5f9; color: #475569;
+  &[data-status="new"] { background: #dbeafe; color: #1e40af; }
+  &[data-status="contacted"] { background: #e0e7ff; color: #3730a3; }
+  &[data-status="demo-scheduled"] { background: #fef3c7; color: #92400e; }
+  &[data-status="demo-done"] { background: #fff7ed; color: #c2410c; }
+  &[data-status="negotiation"] { background: #fce7f3; color: #9d174d; }
+  &[data-status="won"] { background: #ecfdf5; color: #065f46; }
+  &[data-status="lost"] { background: #fef2f2; color: #991b1b; }
+}
+
+@include mobile { .page-header { flex-direction: column; } .pipeline-funnel { flex-wrap: wrap; } }

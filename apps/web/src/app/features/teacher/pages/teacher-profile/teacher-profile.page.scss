@@ -1,0 +1,98 @@
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.teacher-profile {
+  max-width: 700px;
+}
+
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: #FFFFFF;
+  border: 1px solid $input-border;
+  border-radius: $radius-lg;
+  padding: 24px;
+  margin-bottom: 24px;
+
+  &__avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: $primary-orange;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #FFFFFF;
+    font-size: 1.5rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  &__name {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  &__role {
+    font-size: 0.875rem;
+    color: $text-secondary;
+  }
+
+  @include mobile {
+    padding: 16px;
+    gap: 16px;
+
+    &__avatar { width: 48px; height: 48px; font-size: 1.125rem; }
+  }
+}
+
+.details-card {
+  background: #FFFFFF;
+  border: 1px solid $input-border;
+  border-radius: $radius-lg;
+  padding: 24px;
+  margin-bottom: 24px;
+
+  &__title {
+    margin: 0 0 16px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  @include mobile {
+    padding: 16px;
+  }
+}
+
+.details-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #F3F4F6;
+
+  &:last-child { border-bottom: none; }
+
+  &__label {
+    font-size: 0.875rem;
+    color: $text-secondary;
+  }
+
+  &__value {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: $text-primary;
+
+    &--muted { color: #596579; font-weight: 400; }
+  }
+
+  @include mobile {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+}

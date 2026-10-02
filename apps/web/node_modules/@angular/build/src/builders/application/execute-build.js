@@ -229,8 +229,9 @@ async function executeBuild(options, context, rebuildState) {
         const result = await (0, execute_post_bundle_1.executePostBundleSteps)(metafile, options, executionResult.outputFiles, executionResult.assetFiles, initialFiles, 
         // Set lang attribute to the defined source locale if present
         i18nOptions.hasDefinedSourceLocale ? i18nOptions.sourceLocale : undefined);
-        executionResult.addErrors(result.errors);
-        executionResult.addWarnings(result.warnings);
+        // Deduplicate and add errors and warnings
+        executionResult.addErrors([...new Set(result.errors)]);
+        executionResult.addWarnings([...new Set(result.warnings)]);
         executionResult.addPrerenderedRoutes(result.prerenderedRoutes);
         executionResult.outputFiles.push(...result.additionalOutputFiles);
         executionResult.assetFiles.push(...result.additionalAssets);

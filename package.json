@@ -6,5 +6,11 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "overrides": {
+    "deepmerge-ts": "8.0.0"
+  },
+  "dependencies": {
+    "deepmerge-ts": "8.0.0"
+  }
 }

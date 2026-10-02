@@ -1,0 +1,110 @@
+<div class="page-header">
+  <div>
+    <h2>Platform Settings</h2>
+    <p>Platform information and administrator access.</p>
+  </div>
+</div>
+@if (notice) {
+<p class="portal-notice" role="status">{{ notice }}</p>
+} @if (error) {
+<p class="portal-notice portal-notice--error" role="alert">{{ error }}</p>
+}
+<section class="detail-panel">
+  <div class="detail-heading">
+    <h3>Platform preferences</h3>
+    <button
+      class="action-btn"
+      disabled
+      title="Preference editing is not available yet"
+    >
+      Edit preferences
+    </button>
+  </div>
+  <p>{{store.settings().platformName}}</p>
+  <p>Platform-wide preferences are not editable yet.</p>
+</section>
+<section class="detail-panel">
+  <div class="detail-heading">
+    <h3>Super Admins</h3>
+    <button
+      class="action-btn action-btn--primary"
+      (click)="inviteAdministrator()"
+    >
+      Invite Super Admin
+    </button>
+  </div>
+  @for(a of store.admins();track a.id){
+  <div class="detail-panel">
+    <div class="detail-heading">
+      <div>
+        <strong>{{a.name}}</strong>
+        <p>{{a.email}} · {{a.status}}</p>
+      </div>
+    </div>
+  </div>
+  }@empty {
+  <p>No platform administrators found.</p>
+  }
+</section>
+<section class="detail-panel">
+  <h3>Platform invitations</h3>
+  <p>
+    Invitations are single-use and expire at the selected time. Resending
+    invalidates the previous link.
+  </p>
+  @for(invitation of invitations;track invitation.id){
+  <div class="detail-heading">
+    <div>
+      <strong>{{invitation.name}}</strong>
+      <p>
+        {{invitation.email}} · {{invitationStatus(invitation)}} · Expires
+        {{invitation.expiresAt | date:'medium'}}
+      </p>
+    </div>
+    @if (!invitation.acceptedAt && !invitation.revokedAt &&
+    invitationStatus(invitation) === 'Pending') {
+    <div class="actions">
+      <button
+        class="action-btn"
+        [disabled]="saving"
+        (click)="invitationAction(invitation.id, 'resend')"
+      >
+        Resend</button
+      ><button
+        class="action-btn"
+        [disabled]="saving"
+        (click)="invitationAction(invitation.id, 'revoke')"
+      >
+        Revoke
+      </button>
+    </div>
+    }
+  </div>
+  }@empty {
+  <p>No platform invitations yet.</p>
+  }
+</section>
+<section class="detail-panel">
+  <div class="detail-heading">
+    <h3>Account security</h3>
+    <a class="action-btn" href="/auth/security"
+      >Manage password and authenticator</a
+    >
+  </div>
+  <p>
+    Super Admin accounts require an authenticator code. Use your account
+    security page to change your password.
+  </p>
+</section>
+@if (editor; as e) {
+<app-sa-editor
+  [title]="e.title"
+  description="The recipient sets their password after accepting this one-time email invitation."
+  [fields]="e.fields"
+  [values]="e.values"
+  [busy]="saving"
+  [error]="error"
+  (saved)="save($event)"
+  (cancelled)="editor = null"
+/>
+}

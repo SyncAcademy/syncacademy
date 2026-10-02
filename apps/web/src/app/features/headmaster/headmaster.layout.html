@@ -1,0 +1,68 @@
+<ion-app>
+  <ion-split-pane contentId="head-main-content" when="(min-width: 992px)">
+    <!-- Sidebar -->
+    <ion-menu
+      contentId="head-main-content"
+      menuId="head-menu"
+      type="overlay"
+      [swipeGesture]="true"
+    >
+      <app-head-sidebar></app-head-sidebar>
+    </ion-menu>
+
+    <!-- Main Content Area -->
+    <div class="ion-page head-page" id="head-main-content">
+      <!-- Top Header -->
+      <ion-header class="ion-no-border">
+        <header class="head-header">
+          <div class="head-header__left">
+            <ion-menu-button menu="head-menu" class="mobile-menu-btn"></ion-menu-button>
+            <div class="head-header__titles">
+              <p class="head-header__breadcrumb">{{ pageBreadcrumb() }}</p>
+              <h1 class="global-page-title">{{ pageTitle() }}</h1>
+            </div>
+          </div>
+
+          <div class="head-header__right">
+            <app-academic-year-selector viewer="head"></app-academic-year-selector>
+            <button class="icon-btn" [attr.aria-label]="'Notifications, ' + notificationCount() + ' items needing attention'" [attr.aria-expanded]="showNotifications()" (click)="showNotifications.set(!showNotifications())">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+            </button>
+          </div>
+        </header>
+      </ion-header>
+
+      <div *ngIf="showNotifications()" class="head-notifications-backdrop" (click)="showNotifications.set(false)">
+        <section class="head-notifications" appDialogFocus role="dialog" aria-modal="true" aria-label="School notifications" (keydown.escape)="showNotifications.set(false)" (click)="$event.stopPropagation()">
+          <div class="head-notifications__heading"><h2>Needs your attention</h2><button class="action-btn" (click)="showNotifications.set(false)">Close</button></div>
+          <a routerLink="/head/staff/pending" (click)="showNotifications.set(false)" queryParamsHandling="preserve"><strong>{{ store.pending().length }} pending staff approvals</strong><span>Review verified registrations</span></a>
+          <a routerLink="/head/reports/delivery" (click)="showNotifications.set(false)" queryParamsHandling="preserve"><strong>{{ reports.stats().failed }} failed deliveries</strong><span>Review guardian delivery details</span></a>
+          <a routerLink="/head/reports" (click)="showNotifications.set(false)" queryParamsHandling="preserve"><strong>Academic report readiness</strong><span>Preview and approve reports for release</span></a>
+        </section>
+      </div>
+      <!-- Scrollable Content -->
+      <main #headContent class="head-content" role="main" (scroll)="onContentScroll($event)">
+        <div class="head-content-inner">
+          <app-portal-connection />
+          <router-outlet></router-outlet>
+        </div>
+      </main>
+
+      <button
+        class="scroll-to-top"
+        [class.show]="showScrollTop()"
+        type="button"
+        aria-label="Scroll to top"
+        title="Back to top"
+        (click)="scrollToTop()"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 19V5M6 11l6-6 6 6" />
+        </svg>
+      </button>
+    </div>
+  </ion-split-pane>
+</ion-app>

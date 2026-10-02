@@ -1,0 +1,78 @@
+<p class="portal-notice" role="status">Lead management is not available yet. No sample records are shown and changes cannot be saved.</p><div inert>
+<div class="page-header">
+  <div>
+    <h2>Leads Pipeline</h2>
+    <p>Track and manage prospective school signups.</p>
+  </div>
+  <button class="action-btn action-btn--primary" (click)="openLead()">+ Add Lead</button>
+</div>
+
+<!-- Pipeline Funnel -->
+<div class="pipeline-funnel">
+  @for (stage of pipelineSummary(); track stage.key) {
+    <button class="funnel-stage" [class.active]="statusFilter() === stage.key" (click)="statusFilter.set(statusFilter() === stage.key ? '' : stage.key)">
+      <strong>{{ stage.count }}</strong>
+      <span>{{ stage.label }}</span>
+    </button>
+  }
+</div>
+
+<div class="filters">
+  <input aria-label="Search leads..." placeholder="Search leads..." [ngModel]="search()" (ngModelChange)="search.set($event)" />
+  <select aria-label="Status" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+    <option value="">All statuses</option>
+    <option value="new">New</option>
+    <option value="contacted">Contacted</option>
+    <option value="demo-scheduled">Demo Scheduled</option>
+    <option value="demo-done">Demo Done</option>
+    <option value="negotiation">Negotiation</option>
+    <option value="won">Won</option>
+    <option value="lost">Lost</option>
+  </select>
+  <select aria-label="Lead source" [ngModel]="sourceFilter()" (ngModelChange)="sourceFilter.set($event)">
+    <option value="">All sources</option>
+    <option value="website">Website</option>
+    <option value="referral">Referral</option>
+    <option value="social">Social Media</option>
+    <option value="event">Event</option>
+    <option value="cold-outreach">Cold Outreach</option>
+  </select>
+</div>
+
+<section class="panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>School</th>
+          <th>Contact</th>
+          <th>Location</th>
+          <th>Students</th>
+          <th>Source</th>
+          <th>Status</th>
+          <th>Notes</th>
+          <th>Follow-up</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (l of filtered(); track l.id) {
+          <tr>
+            <td><strong>{{ l.schoolName }}</strong></td>
+            <td>{{ l.contactName }}<span class="cell-sub">{{ l.contactEmail }}</span></td>
+            <td>{{ l.location }}</td>
+            <td>{{ l.studentCount | number }}</td>
+            <td><span class="source-pill">{{ l.source }}</span></td>
+            <td><span class="portal-pill" [attr.data-status]="l.status">{{ statusLabel(l.status) }}</span></td>
+            <td class="notes-cell">{{ l.notes }}</td>
+            <td>{{ l.owner || 'Unassigned' }}<span class="cell-sub">{{ l.followUp || 'No follow-up set' }}</span></td><td><div class="row-actions"><button class="action-btn" (click)="openLead(l)">Edit</button>@if (l.status === 'won' && !l.convertedSchoolId) { <button class="action-btn" (click)="store.convertLead(l.id)">Create trial school</button> } @if (l.convertedSchoolId) { <span>School created</span> }</div></td>
+          </tr>
+        } @empty {
+          <tr><td colspan="9">No leads match your filters.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+@if (editor; as values) { <app-sa-editor [title]="editingId ? 'Edit lead' : 'Add lead'" [fields]="fields" [values]="values" (saved)="save($event)" (cancelled)="editor = null" /> }
+</div>

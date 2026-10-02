@@ -1,0 +1,82 @@
+name: syncacademy
+x-app: &app
+  image: syncacademy-api:local
+  build:
+    context: .
+    dockerfile: apps/api/Dockerfile
+  environment:
+    DATABASE_URL: postgresql://syncacademy_runtime:${RUNTIME_DB_PASSWORD}@db:5432/syncacademy?connection_limit=10
+    NODE_ENV: ${NODE_ENV:-development}
+    APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN in .env}
+    SESSION_SECRET: ${SESSION_SECRET:?Generate local secrets first}
+    DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?Generate local secrets first}
+    PORT: 3000
+    SMTP_HOST: ${DOCKER_SMTP_HOST:-smtp.gmail.com}
+    SMTP_PORT: ${SMTP_PORT:-465}
+    SMTP_SECURE: ${SMTP_SECURE:-true}
+    SMTP_USER: ${SMTP_USER:-stanlymbilinyi@gmail.com}
+    SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    MAIL_FROM: ${MAIL_FROM:-stanlymbilinyi@gmail.com}
+    TRUST_PROXY_HOPS: 1
+  init: true
+  restart: unless-stopped
+services:
+  db:
+    image: postgres:17.9-bookworm
+    environment:
+      POSTGRES_DB: syncacademy
+      POSTGRES_USER: syncacademy
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run node scripts/setup-local.mjs first}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U syncacademy -d syncacademy"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  mail:
+    image: axllent/mailpit:v1.29
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+    restart: unless-stopped
+  migrate:
+    <<: *app
+    command: ["sh", "-c", "npx prisma migrate deploy && node dist/provision-runtime.js"]
+    environment:
+      DATABASE_URL: postgresql://syncacademy:${POSTGRES_PASSWORD}@db:5432/syncacademy?connection_limit=5
+      RUNTIME_DB_PASSWORD: ${RUNTIME_DB_PASSWORD:?Generate local secrets first}
+    restart: "no"
+    depends_on:
+      db: { condition: service_healthy }
+  api:
+    <<: *app
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  worker:
+    <<: *app
+    command: ["node", "dist/worker.js"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      mail: { condition: service_started }
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+volumes:
+  postgres-data:

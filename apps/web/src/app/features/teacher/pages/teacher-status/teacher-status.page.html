@@ -1,0 +1,49 @@
+<p class="portal-notice" role="status">Assessment workflows are not available yet.</p><div inert>
+<div class="teacher-status">
+  <app-teacher-page-header
+    [title]="'Submission Status \u2014 ' + assignmentLabel()"
+    description="Track the progress of your mark submission.">
+    <a [routerLink]="['/teacher']" class="back-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+      Back to Assignments
+    </a>
+  </app-teacher-page-header>
+
+  <div class="portal-context"><strong>{{ store.period() }}</strong></div><div *ngIf="!found()" class="portal-empty"><h3>Assignment unavailable</h3><p>Return to your assignments to continue.</p></div>
+  <div *ngIf="loading()" class="skeleton-container" aria-busy="true">
+    <div class="skeleton-timeline" *ngFor="let i of [1,2,3]"></div>
+  </div>
+
+  <div *ngIf="!loading()" class="status-content">
+    <div class="timeline">
+      <div class="timeline-step" *ngFor="let step of timeline(); let last = last"
+           [class.timeline-step--completed]="step.completed"
+           [class.timeline-step--active]="step.active && !step.completed"
+           [class.timeline-step--returned]="step.status === 'returned'">
+        <div class="timeline-step__indicator">
+          <div class="timeline-step__dot">
+            <svg *ngIf="step.completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span *ngIf="!step.completed && step.active" class="timeline-step__pulse"></span>
+          </div>
+          <div class="timeline-step__line" *ngIf="!last"></div>
+        </div>
+        <div class="timeline-step__content">
+          <h4 class="timeline-step__label">{{ step.label }}</h4>
+          <time class="timeline-step__time" *ngIf="step.timestamp">{{ step.timestamp | date:'MMM d, y \u2014 h:mm a' }}</time>
+          <p class="timeline-step__detail" *ngIf="step.detail">{{ step.detail }}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-actions">
+      <a *ngIf="isEditable()" [routerLink]="['/teacher', assignmentId, 'marks']" class="action-btn action-btn--primary">
+        Continue / correct marks
+      </a>
+      <a [routerLink]="['/teacher']" class="action-btn action-btn--ghost">Back to Dashboard</a>
+    </div>
+  </div>
+</div>
+
+</div>

@@ -1,0 +1,660 @@
+<div class="workspace-shell" [class.mobile-menu-active]="mobileMenuOpen">
+  <!-- Mobile Backdrop -->
+  @if (mobileMenuOpen) {
+    <div class="sidebar-backdrop" (click)="closeMobileMenu()"></div>
+  }
+
+  <!-- Dark Slate/Navy Sidebar Matching Normal Dashboard Criteria -->
+  <aside class="workspace-sidebar">
+    <!-- Top Pinned Logo Area -->
+    <div class="sidebar-logo-area">
+      <a class="sidebar-logo" routerLink="/">
+        <div class="sidebar-logo-icon">
+          <svg viewBox="0 0 24 24" fill="white">
+            <path d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z" />
+          </svg>
+        </div>
+        <span class="sidebar-logo-text">
+          <span class="sidebar-logo-sync">Sync</span>
+          <span class="sidebar-logo-academy">Academy</span>
+        </span>
+      </a>
+
+      <!-- Campus / School Context Box -->
+      <div class="sidebar-context" aria-label="Current school context">
+        <svg class="context-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3zm6.82 6L12 12.72 5.18 9 12 5.28 18.82 9zM17 15.99l-5 2.73-5-2.73v-3.72L12 15l5-2.73v3.72z"/>
+        </svg>
+        <div class="context-info">
+          <span class="context-title">{{ workspace?.school?.name || (auth.identity()?.platformAdmin ? 'Super Admin' : 'School Workspace') }}</span>
+          <span class="context-sub">{{ workspace?.school?.region ? (workspace.school.region + ' · ' + workspace.school.code) : role }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Middle Scrollable Navigation List -->
+    <div class="sidebar-scrollable">
+      <nav class="sidebar-nav" aria-label="Workspace navigation">
+        <span class="sidebar-section-label">School Management</span>
+
+        <button
+          class="sidebar-nav-item"
+          [class.sidebar-nav-item--active]="tab === 'overview'"
+          (click)="changeTab('overview')"
+        >
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="14" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+          </svg>
+          Overview
+        </button>
+
+        @if (workspace) {
+          @if (canManage) {
+            <button
+              class="sidebar-nav-item"
+              [class.sidebar-nav-item--active]="tab === 'people'"
+              (click)="changeTab('people')"
+            >
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              People &amp; Invitations
+            </button>
+          }
+
+          <button
+            class="sidebar-nav-item"
+            [class.sidebar-nav-item--active]="tab === 'students'"
+            (click)="changeTab('students')"
+          >
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/>
+              <path d="M6 6h10"/>
+              <path d="M6 10h10"/>
+            </svg>
+            Students
+          </button>
+
+          <button
+            class="sidebar-nav-item"
+            [class.sidebar-nav-item--active]="tab === 'classes'"
+            (click)="changeTab('classes')"
+          >
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="3" width="20" height="14" rx="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+            Classes &amp; Assignments
+          </button>
+        }
+
+        <span class="sidebar-section-label">Platform</span>
+
+        @if (auth.identity()?.platformAdmin || canManage) {
+          <button
+            class="sidebar-nav-item"
+            [class.sidebar-nav-item--active]="tab === 'audit'"
+            (click)="changeTab('audit')"
+          >
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+            Audit History
+          </button>
+        }
+
+        <a class="sidebar-nav-item" routerLink="/auth/security" (click)="closeMobileMenu()">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          Account Security
+        </a>
+
+        @if (auth.identity()?.platformAdmin) {
+          <a class="sidebar-nav-item sidebar-nav-item--return" routerLink="/super-admin/schools" (click)="closeMobileMenu()">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="19" y1="12" x2="5" y2="12"/>
+              <polyline points="12 19 5 12 12 5"/>
+            </svg>
+            Back to Super Admin
+          </a>
+        }
+      </nav>
+    </div>
+
+    <!-- Bottom Pinned User Profile -->
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-user-avatar">{{ auth.identity()?.name?.charAt(0) || 'U' }}</div>
+        <div class="sidebar-user-info">
+          <span class="sidebar-user-name">{{ auth.identity()?.name }}</span>
+          <span class="sidebar-user-role">{{ role }}</span>
+        </div>
+      </div>
+      <button class="sidebar-logout-btn" (click)="signOut()" [disabled]="busy">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        Sign Out
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="workspace-main">
+    <!-- Top Modern Header -->
+    <header class="workspace-header">
+      <div class="workspace-header__left">
+        <button class="mobile-toggle-btn" (click)="toggleMobileMenu()" aria-label="Toggle navigation menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <div class="workspace-header__titles">
+          <div class="breadcrumbs">
+            @if (auth.identity()?.platformAdmin) {
+              <a routerLink="/super-admin/schools">Super Admin / Schools</a>
+              <span class="separator">/</span>
+            }
+            <span class="current">{{ workspace?.school?.name || (auth.identity()?.platformAdmin ? 'Platform Administration' : 'School Workspace') }}</span>
+          </div>
+          <h1>
+            {{ tab === 'overview' ? 'Overview' : tab === 'people' ? 'People & Invitations' : tab === 'students' ? 'Students' : tab === 'audit' ? 'Audit History' : 'Classes & Assignments' }}
+          </h1>
+        </div>
+      </div>
+
+      <div class="workspace-header__actions">
+        @if (auth.identity()?.platformAdmin) {
+          <a class="action-btn" routerLink="/super-admin/schools">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="btn-icon">
+              <path fill-rule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clip-rule="evenodd" />
+            </svg>
+            Schools Directory
+          </a>
+        }
+        <button class="action-btn" (click)="load()" [disabled]="busy">
+          <svg viewBox="0 0 20 20" fill="currentColor" class="btn-icon">
+            <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.451a.75.75 0 000-1.5H4.5a.75.75 0 00-.75.75v3.75a.75.75 0 001.5 0v-2.146l.405.405a7 7 0 0011.83-3.165.75.75 0 00-1.423-.449zM4.688 8.576a5.5 5.5 0 019.201-2.466l.312.311H11.75a.75.75 0 000 1.5H15.5a.75.75 0 00.75-.75V3.421a.75.75 0 00-1.5 0v2.146l-.405-.405A7 7 0 002.515 8.327a.75.75 0 001.423.449z" clip-rule="evenodd" />
+          </svg>
+          Refresh
+        </button>
+        @if (auth.identity()?.platformAdmin && tab === 'overview') {
+          <button class="action-btn action-btn--primary" (click)="addSchool()">+ Add School</button>
+        }
+        @if (canManage && tab === 'people') {
+          <button class="action-btn action-btn--primary" (click)="invite()">+ Invite User</button>
+        }
+      </div>
+    </header>
+
+    <div class="workspace-content">
+      <div class="workspace-content-inner">
+        @if (auth.identity()!.memberships.length > 1 && !auth.identity()?.platformAdmin) {
+        <label class="school-select">
+          School
+          <select [ngModel]="schoolId" (ngModelChange)="choose($event)">
+            @for (m of auth.identity()!.memberships; track m.id) {
+              <option [value]="m.school.id">{{ m.school.name }} &middot; {{ roleNames[m.role] }}</option>
+            }
+          </select>
+        </label>
+      }
+
+      @if (busy) {
+        <div class="portal-notice" role="status">
+          <span>Loading workspace data...</span>
+        </div>
+      }
+
+      @if (error) {
+        <div class="portal-notice portal-notice--error" role="alert">
+          <span>{{ error }}</span>
+          <button class="action-btn action-btn--sm" (click)="load()" [disabled]="busy">Retry</button>
+        </div>
+      }
+
+      @if (notice) {
+        <div class="portal-notice portal-notice--success" role="status">
+          <span>{{ notice }}</span>
+        </div>
+      }
+
+      <!-- OVERVIEW TAB -->
+      @if (tab === 'overview') {
+        @if (auth.identity()?.platformAdmin) {
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Registered Schools</h2>
+                <p class="panel-sub">{{ total }} registered {{ total === 1 ? 'school' : 'schools' }}</p>
+              </div>
+              @if (schoolId) {
+                <button class="action-btn" (click)="choose('')">Platform Overview</button>
+              }
+            </div>
+
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>School</th>
+                    <th>Region</th>
+                    <th>Members</th>
+                    <th>Students</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (s of schools; track s.id) {
+                    <tr>
+                      <td>
+                        <strong>{{ s.name }}</strong>
+                        <small>{{ s.code }}</small>
+                      </td>
+                      <td>{{ s.region }}</td>
+                      <td>{{ s._count.memberships }}</td>
+                      <td>{{ s._count.students }}</td>
+                      <td>
+                        <span class="status-dot" [attr.data-status]="s.active ? 'active' : 'suspended'"></span>
+                        {{ s.active ? 'Active' : 'Suspended' }}
+                      </td>
+                      <td>
+                        <button class="action-btn action-btn--sm" (click)="choose(s.id)" [disabled]="!s.active">
+                          Manage School
+                        </button>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="6" class="empty">No schools yet. Add your first school and invite its Headmaster.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <div class="pagination-bar">
+              <button
+                class="action-btn action-btn--sm"
+                [disabled]="page === 1 || busy"
+                (click)="page = page - 1; load()"
+              >
+                Previous
+              </button>
+              <span>Page {{ page }}</span>
+              <button
+                class="action-btn action-btn--sm"
+                [disabled]="page * 25 >= total || busy"
+                (click)="page = page + 1; load()"
+              >
+                Next
+              </button>
+            </div>
+          </section>
+        }
+
+        @if (workspace; as w) {
+          <!-- Metric Stat Cards -->
+          <div class="metric-grid">
+            <div class="stat-card">
+              <span class="stat-card__label">Students Accessible</span>
+              <strong class="stat-card__value">{{ w.studentCount }}</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-card__label">Classes Loaded</span>
+              <strong class="stat-card__value">{{ w.classes.length }}</strong>
+            </div>
+            @if (canManage) {
+              <div class="stat-card">
+                <span class="stat-card__label">School Members Loaded</span>
+                <strong class="stat-card__value">{{ w.members.length }}</strong>
+              </div>
+            }
+          </div>
+
+          <!-- School Information & Quick Actions Banner -->
+          <section class="panel school-banner">
+            <div class="school-banner__header">
+              <div>
+                <h2>{{ w.school.name }}</h2>
+                <div class="school-banner__meta">
+                  <span>{{ w.school.region }}</span>
+                  &middot;
+                  <span>Code: <code>{{ w.school.code }}</code></span>
+                  &middot;
+                  <span>Status: <span class="status-dot" data-status="active"></span>Active</span>
+                </div>
+              </div>
+              <div class="actions">
+                @if (canManage) {
+                  <button class="action-btn action-btn--primary" (click)="invite()">+ Invite User</button>
+                }
+                @if (w.permissions.academic) {
+                  <button class="action-btn" (click)="addYear()">Create Academic Year</button>
+                  <button class="action-btn" (click)="addClass()" [disabled]="!w.years.length">Create Class</button>
+                }
+                @if (w.permissions.registrar) {
+                  <button class="action-btn" (click)="addStudent()" [disabled]="!w.classes.length">Register Student</button>
+                }
+              </div>
+            </div>
+            <p class="muted">
+              Start with an academic year and classes, then register students and assign accepted teachers. Invitations activate accounts only after acceptance.
+            </p>
+          </section>
+        } @else if (!auth.identity()?.platformAdmin && !busy) {
+          <section class="panel empty">
+            <h2>No active school membership</h2>
+            <p>Ask your administrator to invite you or restore your school access.</p>
+          </section>
+        }
+      }
+
+      <!-- PEOPLE & INVITATIONS TAB -->
+      @if (workspace; as w) {
+        @if (tab === 'people' && canManage) {
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <h2>School Members</h2>
+                <p class="panel-sub">Active and suspended staff accounts for {{ w.school.name }}</p>
+              </div>
+              <button class="action-btn action-btn--primary" (click)="invite()">+ Invite User</button>
+            </div>
+
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Access Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (m of w.members; track m.id) {
+                    <tr>
+                      <td><strong>{{ m.user.name }}</strong></td>
+                      <td>{{ m.user.email }}</td>
+                      <td><span class="role-badge">{{ roleNames[m.role] }}</span></td>
+                      <td>
+                        <span class="status-dot" [attr.data-status]="m.active ? 'active' : 'suspended'"></span>
+                        {{ m.active ? 'Active' : 'Suspended' }}
+                      </td>
+                      <td>
+                        @if (m.user.id !== auth.identity()?.id && (m.role !== 'HEADMASTER' || auth.identity()?.platformAdmin)) {
+                          <button
+                            class="action-btn action-btn--sm"
+                            [class.action-btn--danger]="m.active"
+                            (click)="toggleMember(m)"
+                            [disabled]="busy"
+                          >
+                            {{ m.active ? 'Suspend access' : 'Restore access' }}
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="5" class="empty">No accepted memberships yet.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Pending Invitations</h2>
+                <p class="panel-sub">Pending invitations are not active accounts. Resending invalidates the previous link.</p>
+              </div>
+              <button class="action-btn action-btn--primary" (click)="invite()">+ Invite User</button>
+            </div>
+
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Recipient</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Expires</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (i of w.invitations; track i.id) {
+                    <tr>
+                      <td>
+                        <strong>{{ i.name }}</strong>
+                        <span class="cell-sub">{{ i.email }}</span>
+                      </td>
+                      <td><span class="role-badge">{{ roleNames[i.role] }}</span></td>
+                      <td>
+                        <span class="portal-pill" [attr.data-inv-status]="invitationStatus(i)">
+                          {{ invitationStatus(i) }}
+                        </span>
+                      </td>
+                      <td>{{ i.expiresAt | date:'medium' }}</td>
+                      <td>
+                        @if (!i.acceptedAt && !i.revokedAt && (i.role !== 'HEADMASTER' || auth.identity()?.platformAdmin)) {
+                          <div class="actions">
+                            <button
+                              class="action-btn action-btn--sm"
+                              (click)="invitationAction(i.id, 'resend')"
+                              [disabled]="busy"
+                            >
+                              Resend
+                            </button>
+                            <button
+                              class="action-btn action-btn--sm action-btn--danger"
+                              (click)="invitationAction(i.id, 'revoke')"
+                              [disabled]="busy"
+                            >
+                              Revoke
+                            </button>
+                          </div>
+                        }
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="5" class="empty">No pending invitations.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+        }
+
+        <!-- STUDENTS TAB -->
+        @if (tab === 'students') {
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Student Records</h2>
+                <p class="panel-sub">Showing the latest {{ w.students.length }} of {{ w.studentCount }} accessible students.</p>
+              </div>
+              @if (w.permissions.registrar) {
+                <button
+                  class="action-btn action-btn--primary"
+                  (click)="addStudent()"
+                  [disabled]="!w.classes.length"
+                >
+                  Register Student
+                </button>
+              }
+            </div>
+
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Admission Number</th>
+                    <th>Class Enrollment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (s of w.students; track s.id) {
+                    <tr>
+                      <td><strong>{{ s.name }}</strong></td>
+                      <td><code>{{ s.admissionNumber }}</code></td>
+                      <td>
+                        @for (e of s.enrollments; track $index) {
+                          <span class="role-badge">{{ e.classroom.name }} / {{ e.classroom.year.name }}</span>
+                        }
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="3" class="empty">No student records available.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+        }
+
+        <!-- CLASSES & ASSIGNMENTS TAB -->
+        @if (tab === 'classes') {
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Academic Years &amp; Classes</h2>
+                <p class="panel-sub">Classes configured for {{ w.school.name }}</p>
+              </div>
+              @if (w.permissions.academic) {
+                <div class="actions">
+                  <button class="action-btn" (click)="addYear()">Create Year</button>
+                  <button class="action-btn" (click)="addClass()" [disabled]="!w.years.length">Create Class</button>
+                  <button
+                    class="action-btn action-btn--primary"
+                    (click)="assignTeacher()"
+                    [disabled]="!w.classes.length"
+                  >
+                    Assign Teacher
+                  </button>
+                </div>
+              }
+            </div>
+
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Class</th>
+                    <th>Academic Year</th>
+                    <th>Year Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (c of w.classes; track c.id) {
+                    <tr>
+                      <td><strong>{{ c.name }}</strong></td>
+                      <td>{{ c.year.name }}</td>
+                      <td>
+                        <span class="portal-pill" [attr.data-status]="c.year.closed ? 'Suspended' : 'Active'">
+                          {{ c.year.closed ? 'Closed' : 'Open' }}
+                        </span>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="3" class="empty">No classes available.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            @if (w.permissions.academic) {
+              <h3>Teacher Assignments</h3>
+              @for (a of w.assignments; track a.id) {
+                <p>{{ assignmentName(a) }}</p>
+              } @empty {
+                <p class="panel-sub">No teacher assignments yet.</p>
+              }
+            }
+          </section>
+        }
+      }
+
+      <!-- AUDIT TAB -->
+      @if (tab === 'audit') {
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Audit History</h2>
+              <p class="panel-sub">Latest 100 recorded platform actions for this school</p>
+            </div>
+          </div>
+
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Action</th>
+                  <th>Target</th>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (a of audit; track a.id) {
+                  <tr>
+                    <td><span class="role-badge">{{ a.action }}</span></td>
+                    <td><strong>{{ a.target }}</strong></td>
+                    <td>{{ a.createdAt | date:'medium' }}</td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="3" class="empty">No recorded events.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal Editor for Inviting Users / Creating Records -->
+@if (editor; as e) {
+  <app-sa-editor
+    [title]="e.title"
+    description="Changes are saved to your school's records. Invitations are delivered by email."
+    [fields]="e.fields"
+    [values]="e.values"
+    [error]="editorError"
+    [busy]="saving"
+    (saved)="save($event)"
+    (cancelled)="editor = null"
+  />
+}

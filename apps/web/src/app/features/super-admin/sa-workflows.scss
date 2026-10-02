@@ -1,0 +1,26 @@
+.detail-panel { padding: 20px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin: 20px 0; }
+.detail-heading, .row-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.detail-heading { justify-content: space-between; } .detail-heading h3 { margin: 0; }
+.detail-panel p { color: #475569; line-height: 1.6; } .notice { padding: 12px 16px; border-radius: 8px; background: #eff6ff; color: #1e40af; margin-bottom: 16px; }
+.link-button { padding: 0; border: 0; background: none; color: #b45309; text-align: left; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; }
+.region-list { display:flex; flex-wrap:wrap; gap:12px; } .region-list span { background:#f8fafc; padding:8px 12px; border-radius:6px; }
+button:disabled { opacity:.5; cursor:not-allowed; } .filters label { display:flex; flex-direction:column; gap:4px; font-size:.8rem; }
+
+.page-header > div, .panel, .detail-panel { min-width: 0; }
+.filters { align-items: end; width: 100%; }
+.filters > input, .filters > select, .filters > label { box-sizing: border-box; flex: 1 1 13rem; min-width: 0; }
+.filters > input, .filters > select, .filters > label input { width: 100%; min-height: 44px; }
+.filters > label input { box-sizing: border-box; }
+.table-scroll { max-width: 100%; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+.table-scroll table { max-width: 100%; }
+.row-actions { min-width: 0; }
+.row-actions > * { max-width: 100%; }
+
+@media (max-width: 600px) {
+	.page-header { align-items: stretch; }
+	.page-header > button { width: 100%; }
+	.filters { display: grid; grid-template-columns: minmax(0, 1fr); }
+	.filters > input, .filters > select, .filters > label { width: 100%; min-width: 0; }
+	.row-actions { flex-wrap: wrap; }
+	.region-list span { overflow-wrap: anywhere; }
+}

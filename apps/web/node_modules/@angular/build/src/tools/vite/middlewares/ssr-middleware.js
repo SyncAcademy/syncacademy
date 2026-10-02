@@ -23,11 +23,6 @@ function createAngularSsrInternalMiddleware(server, indexHtmlTransformer) {
             await (0, load_esm_1.loadEsmModule)('@angular/compiler');
             const { writeResponseToNodeResponse, createWebRequestFromNodeRequest } = await (0, load_esm_1.loadEsmModule)('@angular/ssr/node');
             const { ɵgetOrCreateAngularServerApp } = (await server.ssrLoadModule('/main.server.mjs'));
-            // `ɵgetOrCreateAngularServerApp` can be undefined right after an error.
-            // See: https://github.com/angular/angular-cli/issues/29907
-            if (!ɵgetOrCreateAngularServerApp) {
-                return next();
-            }
             const angularServerApp = ɵgetOrCreateAngularServerApp({
                 allowStaticRouteRender: true,
             });

@@ -1,0 +1,143 @@
+<p class="portal-notice">Class assignments and student rosters are live. Assessment entry and roster confirmation are not available yet.</p>
+<div class="teacher-dashboard">
+  <app-teacher-page-header
+    title="My Teaching Assignments"
+    description="View your classes, enter marks, and track submission status.">
+  </app-teacher-page-header>
+
+  <!-- Loading Skeleton -->
+  <div *ngIf="loading()" class="skeleton-container" aria-busy="true" aria-label="Loading assignments">
+    <div class="stats-row">
+      <div class="skeleton-stat" *ngFor="let i of [1,2,3,4]"></div>
+    </div>
+    <div class="assignment-grid">
+      <div class="skeleton-card" *ngFor="let i of [1,2,3,4,5]">
+        <div class="skeleton-line skeleton-line--md"></div>
+        <div class="skeleton-line skeleton-line--lg"></div>
+        <div class="skeleton-line skeleton-line--sm"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="error() && !loading()" class="error-state" role="alert">
+    <div class="error-state__icon-wrap">
+      <svg class="error-state__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+    </div>
+    <h3 class="error-state__title">Unable to Load Assignments</h3>
+    <p class="error-state__desc">There was an issue loading your teaching assignments. Please try again.</p>
+    <button type="button" class="error-state__retry-btn" (click)="retry()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"></polyline>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+      </svg>
+      Retry Loading
+    </button>
+  </div>
+
+  <!-- Populated State -->
+  <div *ngIf="!loading() && !error()" class="dashboard-content">
+    <!-- Quick Stats -->
+    <div class="stats-row" *ngIf="stats() as s">
+      <div class="quick-stat">
+        <span class="quick-stat__value">{{ s.totalAssignments }}</span>
+        <span class="quick-stat__label">Total Assignments</span>
+      </div>
+      <div class="quick-stat quick-stat--warning">
+        <span class="quick-stat__value">{{ s.pendingRosters }}</span>
+        <span class="quick-stat__label">Pending Student Lists</span>
+      </div>
+      <div class="quick-stat quick-stat--info">
+        <span class="quick-stat__value">{{ s.draftsInProgress }}</span>
+        <span class="quick-stat__label">Drafts In Progress</span>
+      </div>
+      <div class="quick-stat quick-stat--success">
+        <span class="quick-stat__value">{{ s.returned }}</span>
+        <span class="quick-stat__label">Needs Correction</span>
+      </div>
+    </div>
+
+    <div class="portal-context"><strong>{{ store.period() }}</strong><span>Your assigned assessments</span></div>
+    <div class="portal-filters">
+      <input class="sa-input" aria-label="Search assignments" placeholder="Search class or subject?" [ngModel]="search()" (ngModelChange)="search.set($event)">
+      <select class="sa-select" aria-label="Filter assignment status" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+        <option value="all">All statuses</option><option value="draft">In progress</option><option value="returned">Needs correction</option><option value="submitted">Submitted</option><option value="approved">Approved</option>
+      </select>
+    </div>
+    <div class="portal-empty" *ngIf="!filteredAssignments().length"><h3>{{ assignments().length ? 'No matching assignments' : 'No assignments for this academic year' }}</h3><p>{{ assignments().length ? 'Try another class, subject, or status.' : 'Select another academic year to view your assigned classes.' }}</p><button class="action-btn" (click)="search.set(''); statusFilter.set('all')">Clear filters</button></div>
+    <!-- Assignment Cards -->
+    <div class="assignment-grid">
+      <div class="assignment-card" *ngFor="let a of filteredAssignments()">
+        <div class="assignment-card__header">
+          <div class="assignment-card__subject">
+            <span class="assignment-card__code">{{ a.subjectCode }}</span>
+            <h3 class="assignment-card__title">{{ a.subjectName }}</h3>
+          </div>
+          <span class="assignment-card__badge"
+                [class.assignment-card__badge--approved]="a.assessmentProgress.status === 'approved'"
+                [class.assignment-card__badge--submitted]="a.assessmentProgress.status === 'submitted'"
+                [class.assignment-card__badge--returned]="a.assessmentProgress.status === 'returned'"
+                [class.assignment-card__badge--draft]="a.assessmentProgress.status === 'draft'">
+            {{ getStatusLabel(a.assessmentProgress.status) }}
+          </span>
+        </div>
+
+        <div class="assignment-card__meta">
+          <span class="assignment-card__class">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+              <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"></path>
+            </svg>
+            {{ a.classStream || a.className }}
+          </span>
+          <span class="assignment-card__students">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+            </svg>
+            {{ a.studentCount }} students
+          </span>
+          <span class="assignment-card__year">{{ a.academicYearLabel }} / {{ a.assessmentName || 'Term 2 / End-term assessment' }}</span>
+        </div>
+
+        <p class="portal-field-error" *ngIf="a.assessmentProgress.returnReason">{{ a.assessmentProgress.returnReason }}</p>
+        <!-- Progress Bar -->
+        <div class="assignment-card__progress">
+          <div class="progress-bar">
+            <div class="progress-bar__fill"
+                 [style.width.%]="getProgressPercent(a)"
+                 [class.progress-bar__fill--complete]="getProgressPercent(a) === 100"></div>
+          </div>
+          <span class="progress-label">{{ a.assessmentProgress.completed }}/{{ a.assessmentProgress.total }} marks entered</span>
+        </div>
+
+        <!-- Actions -->
+        <div class="assignment-card__actions">
+          <a *ngIf="a.rosterStatus === 'pending'"
+             [routerLink]="['/teacher', a.id, 'roster']"
+             class="action-btn action-btn--outline">
+            Confirm Student List
+          </a>
+          <a *ngIf="a.rosterStatus !== 'pending' && a.assessmentProgress.status === 'draft'"
+             [routerLink]="['/teacher', a.id, 'marks']"
+             class="action-btn action-btn--primary">
+            {{ a.assessmentProgress.completed > 0 ? 'Continue Entry' : 'Enter Marks' }}
+          </a>
+          <a *ngIf="a.assessmentProgress.status === 'returned'"
+             [routerLink]="['/teacher', a.id, 'marks']"
+             class="action-btn action-btn--warning">
+            Correct Marks
+          </a>
+          <a [routerLink]="['/teacher', a.id, 'status']"
+             class="action-btn action-btn--ghost">
+            View Status
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,4 @@
+﻿.stat-card strong { font-size:clamp(1.1rem, 1.8vw, 1.8rem); overflow-wrap:anywhere; }
+.bounded { max-height:420px; overflow:auto; }
+.pagination { display:flex; gap:12px; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin:20px 0; }
+.pagination span { margin-right:auto; font-size:.875rem; }

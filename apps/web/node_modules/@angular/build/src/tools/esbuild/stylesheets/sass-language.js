@@ -71,7 +71,8 @@ exports.SassStylesheetLanguage = Object.freeze({
             if (options.containingUrl) {
                 resolveDir = (0, node_path_1.dirname)((0, node_url_1.fileURLToPath)(options.containingUrl));
             }
-            const result = await build.resolve(url, {
+            const path = url.startsWith('pkg:') ? url.slice(4) : url;
+            const result = await build.resolve(path, {
                 kind: 'import-rule',
                 resolveDir,
             });
@@ -81,8 +82,8 @@ exports.SassStylesheetLanguage = Object.freeze({
     },
 });
 function parsePackageName(url) {
-    const parts = url.split('/');
-    const hasScope = parts.length >= 2 && parts[0].startsWith('@');
+    const parts = (url.startsWith('pkg:') ? url.slice(4) : url).split('/');
+    const hasScope = parts.length >= 2 && parts[0][0] === '@';
     const [nameOrScope, nameOrFirstPath, ...pathPart] = parts;
     const packageName = hasScope ? `${nameOrScope}/${nameOrFirstPath}` : nameOrScope;
     return {

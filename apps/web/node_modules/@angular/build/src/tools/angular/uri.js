@@ -50,6 +50,7 @@ function generateJitFileUri(file, type) {
  * @returns A string containing the full JIT namespace URI.
  */
 function generateJitInlineUri(data, type) {
+    // Node.js types do not allow a string even though this is valid.
     return `${JIT_BASE_NAMESPACE}:${type}:inline;${Buffer.from(data).toString('base64')}`;
 }
 /**

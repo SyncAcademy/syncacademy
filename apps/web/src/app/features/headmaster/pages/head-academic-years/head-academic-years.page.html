@@ -1,0 +1,283 @@
+<div class="academic-years-page">
+  <app-head-page-header
+    title="Academic Years"
+    description="Manage academic calendar, session periods, and active status">
+    <button type="button" class="header-action-btn" (click)="openCreateDialog()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+      <span>Create Academic Year</span>
+    </button>
+  </app-head-page-header>
+
+  <!-- Toolbar & Filters -->
+  <app-table-toolbar
+    [showSearch]="true"
+    searchPlaceholder="Search academic years..."
+    [searchValue]="searchQuery()"
+    (searchChange)="searchQuery.set($event)">
+    <div filters class="filter-controls">
+      <select
+        class="sa-select filter-select"
+        [ngModel]="statusFilter()"
+        (ngModelChange)="statusFilter.set($event)"
+        aria-label="Filter by status">
+        <option value="all">All Statuses</option>
+        <option value="active">Active</option>
+        <option value="draft">Draft</option>
+        <option value="closed">Closed</option>
+      </select>
+    </div>
+  </app-table-toolbar>
+
+  <!-- Loading Skeleton -->
+  <div *ngIf="loading()" class="skeleton-wrapper" aria-busy="true" aria-label="Loading academic years">
+    <div class="skeleton-table">
+      <div class="skeleton-table__row skeleton-table__header">
+        <div class="skeleton-cell skeleton-cell--sm"></div>
+        <div class="skeleton-cell skeleton-cell--md"></div>
+        <div class="skeleton-cell skeleton-cell--md"></div>
+        <div class="skeleton-cell skeleton-cell--sm"></div>
+        <div class="skeleton-cell skeleton-cell--sm"></div>
+      </div>
+      <div class="skeleton-table__row" *ngFor="let item of [1,2,3,4]">
+        <div class="skeleton-cell skeleton-cell--sm"></div>
+        <div class="skeleton-cell skeleton-cell--md"></div>
+        <div class="skeleton-cell skeleton-cell--md"></div>
+        <div class="skeleton-cell skeleton-cell--badge"></div>
+        <div class="skeleton-cell skeleton-cell--actions"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content States (when not loading) -->
+  <div *ngIf="!loading()">
+    <!-- Empty State: No Years At All -->
+    <app-empty-state
+      *ngIf="years().length === 0"
+      icon="folder"
+      title="No Academic Years Found"
+      description="You have not created any academic years yet. Add your school's first academic session to begin.">
+      <button type="button" class="empty-btn" (click)="openCreateDialog()">
+        + Create Academic Year
+      </button>
+    </app-empty-state>
+
+    <!-- Empty State: Filter Returned No Results -->
+    <app-empty-state
+      *ngIf="years().length > 0 && filteredYears().length === 0"
+      icon="search"
+      title="No Matching Academic Years"
+      description="No academic years match your current search criteria. Try modifying your search or clearing filters.">
+      <button type="button" class="empty-btn empty-btn--secondary" (click)="searchQuery.set(''); statusFilter.set('all')">
+        Clear Filters
+      </button>
+    </app-empty-state>
+
+    <!-- Populated View -->
+    <div *ngIf="filteredYears().length > 0" class="data-container">
+      <!-- Desktop & Tablet Table -->
+      <div class="table-section">
+        <div class="table-scroll-wrapper">
+          <table class="academic-table">
+            <thead>
+              <tr>
+                <th scope="col" class="th-label">Label</th>
+                <th scope="col">Start Date</th>
+                <th scope="col">End Date</th>
+                <th scope="col" class="th-status">Status</th>
+                <th scope="col" class="th-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let year of filteredYears()">
+                <td class="td-label">
+                  <span class="label-badge">{{ year.label }}</span>
+                </td>
+                <td class="td-date">{{ year.startDate | date:'mediumDate' }}</td>
+                <td class="td-date">{{ year.endDate | date:'mediumDate' }}</td>
+                <td class="td-status">
+                  <app-status-badge [variant]="year.status" [label]="year.status"></app-status-badge>
+                </td>
+                <td class="td-actions">
+                  <div class="action-btn-group">
+                    <button
+                      type="button"
+                      class="row-btn row-btn--edit"
+                      [disabled]="year.status === 'closed'" disabled title="Academic year editing is not available yet"
+                      title="Edit academic year"
+                      aria-label="Edit academic year">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                      </svg>
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="row-btn row-btn--delete"
+                      *ngIf="canDelete(year)" (click)="confirmDelete(year)"
+                      title="Delete academic year"
+                      aria-label="Delete academic year">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Mobile Record Cards View -->
+      <div class="mobile-section">
+        <app-record-card *ngFor="let year of filteredYears()">
+          <div class="m-card-header">
+            <span class="m-card-label">{{ year.label }}</span>
+            <app-status-badge [variant]="year.status" [label]="year.status"></app-status-badge>
+          </div>
+          <div class="m-card-body">
+            <div class="m-card-row">
+              <span class="m-card-key">Start Date:</span>
+              <span class="m-card-val">{{ year.startDate | date:'mediumDate' }}</span>
+            </div>
+            <div class="m-card-row">
+              <span class="m-card-key">End Date:</span>
+              <span class="m-card-val">{{ year.endDate | date:'mediumDate' }}</span>
+            </div>
+          </div>
+          <div class="m-card-actions">
+            <button
+              type="button"
+              class="m-btn m-btn--edit"
+              disabled title="Editing is not available yet">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              Edit
+            </button>
+            <button
+              type="button"
+              class="m-btn m-btn--delete"
+              *ngIf="canDelete(year)" (click)="confirmDelete(year)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              Delete
+            </button>
+          </div>
+        </app-record-card>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create/Edit Overlay Dialog -->
+  <div
+    class="dialog-backdrop"
+    *ngIf="showDialog()"
+    (click)="closeDialog()"
+    (keydown.escape)="closeDialog()"
+    appDialogFocus role="dialog"
+    aria-modal="true"
+    aria-labelledby="academic-year-dialog-title">
+    <div class="dialog-card" (click)="$event.stopPropagation()">
+      <div class="dialog-card__header">
+        <h3 id="academic-year-dialog-title" class="dialog-card__title">
+          {{ editingYear() ? 'Edit Academic Year' : 'Create Academic Year' }}
+        </h3>
+        <button
+          type="button"
+          class="dialog-card__close"
+          (click)="closeDialog()"
+          aria-label="Close dialog">
+          &times;
+        </button>
+      </div>
+
+      <form class="dialog-form" (ngSubmit)="saveYear()">
+        <div *ngIf="formError()" class="form-error-banner" role="alert">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <span>{{ formError() }}</span>
+        </div>
+
+        <div class="form-group">
+          <label for="year-label" class="sa-label">Year Label</label>
+          <input
+            id="year-label"
+            type="text"
+            class="sa-input"
+            placeholder="e.g. 2026 or 2026/2027"
+            [ngModel]="formLabel()"
+            (ngModelChange)="formLabel.set($event)"
+            name="label"
+            required
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="start-date" class="sa-label">Start Date</label>
+            <input
+              id="start-date"
+              type="date"
+              class="sa-input"
+              [ngModel]="formStartDate()"
+              (ngModelChange)="formStartDate.set($event)"
+              name="startDate"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="end-date" class="sa-label">End Date</label>
+            <input
+              id="end-date"
+              type="date"
+              class="sa-input"
+              [ngModel]="formEndDate()"
+              (ngModelChange)="formEndDate.set($event)"
+              name="endDate"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="year-status" class="sa-label">Status</label>
+          <p>New academic years are open for enrollment.</p>
+        </div>
+
+        <div class="dialog-card__actions">
+          <button type="button" class="dialog-btn dialog-btn--cancel" (click)="closeDialog()">
+            Cancel
+          </button>
+          <button type="submit" class="dialog-btn dialog-btn--save" [disabled]="saving">
+            {{ editingYear() ? 'Save Changes' : 'Create Year' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirm Dialog -->
+  <app-confirm-dialog
+    [open]="showDeleteConfirm()"
+    title="Delete Academic Year"
+    [message]="'Are you sure you want to delete academic year ' + (yearToDelete()?.label || '') + '? This action cannot be undone.'"
+    confirmLabel="Delete"
+    variant="danger"
+    (confirmed)="onDeleteConfirmed()"
+    (cancelled)="onDeleteCancelled()">
+  </app-confirm-dialog>
+</div>

@@ -1,0 +1,1 @@
+ALTER TABLE "Invitation" ADD COLUMN "expiresInMinutes" INTEGER NOT NULL DEFAULT 2880;

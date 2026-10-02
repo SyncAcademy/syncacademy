@@ -1,0 +1,2 @@
+ALTER TABLE "Invitation" ALTER COLUMN "schoolId" DROP NOT NULL;
+ALTER TABLE "Invitation" ADD COLUMN "platformAdmin" BOOLEAN NOT NULL DEFAULT false;

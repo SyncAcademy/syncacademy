@@ -1,0 +1,71 @@
+<div class="page-header">
+  <div>
+    <h2>Subscriptions</h2>
+    <p>Monitor billing, plan upgrades, trials, and revenue.</p>
+  </div>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card"><span>Active Subscriptions</span><strong>{{ store.activeSubscriptions().length }}</strong></div>
+  <div class="stat-card"><span>Trials</span><strong>{{ store.trialSubscriptions().length }}</strong></div>
+
+  <div class="stat-card"><span>Monthly recurring revenue</span><strong>{{ money(store.totalMRR()) }}</strong></div>
+  <div class="stat-card"><span>Overdue balance</span><strong>{{ money(store.overdueBalance()) }}</strong></div>
+</div>
+@if (search() || statusFilter() || planFilter()) { <p class="notice">Filtered monthly revenue: {{ money(filteredMRR()) }}</p> }
+<div class="filters">
+  <input aria-label="Search school..." placeholder="Search school..." [ngModel]="search()" (ngModelChange)="search.set($event)" />
+  <select aria-label="Status" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+    <option value="">All statuses</option>
+    <option value="active">Active</option>
+    <option value="trial">Trial</option>
+    <option value="expired">Expired</option>
+    <option value="cancelled">Cancelled</option>
+  </select>
+  <select aria-label="Plan" [ngModel]="planFilter()" (ngModelChange)="planFilter.set($event)">
+    <option value="">All plans</option>
+    <option value="starter">Starter</option>
+    <option value="professional">Professional</option>
+    <option value="enterprise">Enterprise</option>
+  </select>
+</div>
+
+<section class="panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>School</th>
+          <th>Plan</th>
+          <th>Billing</th>
+          <th>Amount</th>
+          <th>Status</th>
+          <th>Start Date</th>
+          <th>Renewal / Trial ends</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (s of filtered(); track s.id) {
+          <tr>
+            <td><strong>{{ s.schoolName }}</strong></td>
+            <td><span class="portal-pill" [attr.data-plan]="s.plan">{{ s.plan }}</span></td>
+            <td>{{ s.billingCycle }}</td>
+            <td>{{ money(s.amount) }}</td>
+            <td><span class="status-dot" [attr.data-status]="s.status"></span>{{ s.status }}</td>
+            <td>{{ s.startDate | date:'mediumDate' }}</td>
+            <td>{{ (s.status === 'trial' ? s.trialEndsAt : s.renewalDate) | date:'mediumDate' }}</td><td><div class="row-actions"><button class="action-btn" (click)="edit(s)">Change plan</button>@if (s.status === 'trial') { <button class="action-btn" (click)="store.extendTrial(s.id)">Extend 7 days</button><button class="action-btn" (click)="store.activateSubscription(s.id)">Activate demo plan</button> }</div></td>
+          </tr>
+        } @empty {
+          <tr><td colspan="8">No subscriptions match your filters.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="detail-panel"><h3>Invoices &amp; payment history</h3><p>Demo payments update local records only. No money is collected. Paying an invoice does not automatically reactivate a suspended school.</p>
+<div class="table-scroll"><table><thead><tr><th>Invoice</th><th>School</th><th>Amount</th><th>Due</th><th>Status</th><th>Payment date</th><th>Action</th></tr></thead><tbody>
+@for (i of invoices(); track i.id) { <tr><td>{{ i.id }}</td><td>{{ i.schoolName }}</td><td>{{ money(i.amount) }}</td><td>{{ i.dueDate | date:'mediumDate' }}</td><td>{{ i.status }}</td><td>{{ i.paidAt ? (i.paidAt | date:'medium') : '?' }}</td><td>@if (i.status === 'unpaid') { <button class="action-btn" (click)="store.recordPayment(i.id)">Record demo payment</button> } @else { <span>Recorded</span> }</td></tr> }
+@empty { <tr><td colspan="7">No invoices match these subscriptions.</td></tr> }
+</tbody></table></div></section>
+@if (editor; as values) { <app-sa-editor title="Change subscription" description="Starter: TZS 85,000/month; Professional: TZS 280,000/month; Enterprise: TZS 500,000/month. Annual billing is 12 monthly payments. Existing invoices stay unchanged." [fields]="fields" [values]="values" (saved)="save($event)" (cancelled)="editor = null" /> }

@@ -1,0 +1,168 @@
+@if(!['dashboard','teaching-assignments'].includes(section())){<p class="portal-notice" role="status">This workflow is not available yet. No changes can be saved.</p>}
+<div class="print-heading"><h1>{{ title() }}</h1><p>{{ store.year()?.label }} / {{ store.assessment()?.term }} / {{ store.assessment()?.name }}</p></div>
+<app-head-page-header [title]="title()" [description]="descriptions[section()]">
+  @switch (section()) {
+    @case ('assessments') { <button class="action-btn action-btn--primary" [disabled]="store.readOnly()" (click)="open('assessment')">Create assessment</button> }
+    @case ('timetable') { <button class="action-btn" [disabled]="!store.slots().length" (click)="exportTimetable()">Export timetable</button><button class="action-btn action-btn--primary" [disabled]="store.readOnly() || !store.assessment() || store.assessment()?.status === 'closed'" (click)="open('slot')">Schedule exam</button> }
+    @case ('curriculum') { <button class="action-btn action-btn--primary" [disabled]="store.readOnly() || !store.teachingAssignments().length" (click)="open('topic')">Add syllabus topic</button> }
+    @case ('teaching-assignments') { <button class="action-btn action-btn--primary" [disabled]="!store.year() || store.year()?.status === 'closed'" (click)="open('assignment')">Assign teacher</button> }
+    @case ('academic-reports') { <button class="action-btn" [disabled]="!results().length" (click)="exportResults()">Export CSV</button><button class="action-btn action-btn--primary" [disabled]="!results().length" (click)="print()">Print report</button> }
+    @case ('interventions') { <button class="action-btn action-btn--primary" [disabled]="store.readOnly()" (click)="open('support')">Create support plan</button> }
+    @case ('dashboard') { <a class="action-btn action-btn--primary" routerLink="/academic/marks-review" queryParamsHandling="preserve">Review submissions</a> }
+  }
+</app-head-page-header>
+
+<div class="context-row">
+  <span class="context-year">{{ store.year()?.label || 'No academic year' }}</span>
+  @if (['dashboard', 'marks-review', 'timetable', 'academic-reports', 'student-reports', 'interventions'].includes(section())) {
+    <label class="inline-field">Assessment
+      <select [ngModel]="store.assessment()?.id || ''" (ngModelChange)="store.selectAssessment($event)" [disabled]="!store.assessments().length">
+        @if (!store.assessments().length) { <option value="">No assessments</option> }
+        @for (assessment of store.assessments(); track assessment.id) { <option [value]="assessment.id">{{ assessment.term }} / {{ assessment.name }}</option> }
+      </select>
+    </label>
+  }
+  @if (store.readOnly()) { <span class="badge closed">Closed year · Read-only</span> }
+  <span class="demo-label">School records</span>
+</div>
+@if (!store.storageAvailable() || !store.teacher.storageAvailable()) { <p class="portal-notice portal-notice--warning" role="alert">Browser storage is unavailable. Changes will not survive a refresh.</p> }
+@if (notice()) { <p class="portal-notice" role="status">{{ notice() }}</p> }
+@if (error() && !dialog()) { <p class="portal-notice portal-notice--error" role="alert">{{ error() }}</p> }
+
+@switch (section()) {
+  @case ('dashboard') {
+    <div class="stats-grid">
+      <a class="stat-card" routerLink="/academic/marks-review" queryParamsHandling="preserve"><span>Awaiting review</span><strong>{{ store.summary().submissions }}</strong><small>Teacher submissions</small></a>
+      <a class="stat-card" routerLink="/academic/marks-review" queryParamsHandling="preserve"><span>Missing marks</span><strong>{{ store.summary().missing }}</strong><small>Across assigned classes</small></a>
+      <a class="stat-card" routerLink="/academic/student-reports" queryParamsHandling="preserve"><span>Approved subjects</span><strong>{{ store.summary().approved }}</strong><small>Ready for report preparation</small></a>
+      <a class="stat-card" routerLink="/academic/academic-reports" queryParamsHandling="preserve"><span>Average result</span><strong>{{ store.summary().average === null ? '—' : (store.summary().average | number:'1.1-1') }}<small *ngIf="store.summary().average !== null">%</small></strong><small>Approved marks only</small></a>
+    </div>
+    <div class="two-column">
+      <section class="panel"><div class="panel-heading"><div><h3>Submission progress</h3><p>Track each class and subject through review.</p></div><a routerLink="/academic/marks-review" queryParamsHandling="preserve">View all</a></div>
+        @for (a of store.assignments(); track a.id) {
+          <div class="progress-row"><div><strong>{{ store.classLabel(a) }} · {{ a.subjectName }}</strong><span>{{ completed(a.id) }} / {{ a.studentCount }} marks</span></div><span class="badge" [attr.data-status]="a.assessmentProgress.status">{{ a.assessmentProgress.status }}</span>
+            <progress [value]="completed(a.id)" [max]="a.studentCount || 1" [attr.aria-label]="store.classLabel(a) + ' marks completion'"></progress>
+          </div>
+        } @empty { <p class="empty">No submissions for this assessment.</p> }
+      </section>
+      <section class="panel"><h3>Needs your attention</h3>
+        <a class="task-link" routerLink="/academic/roster-issues" queryParamsHandling="preserve"><span>Open student list issues</span><strong>{{ store.openIssueCount() }}</strong></a>
+        <a class="task-link" routerLink="/academic/interventions" queryParamsHandling="preserve"><span>Results below 50%</span><strong>{{ atRisk().length }}</strong></a>
+        <a class="task-link" routerLink="/academic/curriculum" queryParamsHandling="preserve"><span>Syllabus coverage</span><strong>{{ store.summary().coverage | number:'1.0-0' }}%</strong></a>
+        <a class="task-link" routerLink="/academic/timetable" queryParamsHandling="preserve"><span>Scheduled exams</span><strong>{{ store.slots().length }}</strong></a>
+        <div class="deadline"><span>Submission deadline</span><strong>{{ store.assessment()?.deadline ? (store.assessment()!.deadline | date:'mediumDate') : 'Not scheduled' }}</strong></div>
+      </section>
+    </div>
+    <section class="panel"><div class="panel-heading"><h3>Academic activity</h3><span class="muted">Selected academic year</span></div>
+      @for (item of store.audit(); track item.id) { <div class="activity"><span>{{ item.message }}</span><time>{{ item.at | date:'medium' }}</time></div> }
+      @empty { <p class="empty">Reviews, assessment changes, and report preparation will appear here.</p> }
+    </section>
+  }
+  @case ('marks-review') {
+    <div class="filters">
+      <input aria-label="Search submissions" placeholder="Search class, subject, or teacher" [ngModel]="search()" (ngModelChange)="search.set($event)">
+      <select aria-label="Filter class" [ngModel]="classFilter()" (ngModelChange)="classFilter.set($event)"><option value="all">All classes</option>@for (c of classes(); track c) { <option>{{ c }}</option> }</select>
+      <select aria-label="Submission status" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"><option value="all">All statuses</option><option value="submitted">Awaiting review</option><option value="draft">Draft</option><option value="returned">Returned</option><option value="approved">Approved</option></select>
+    </div>
+    <section class="panel table-panel"><div class="table-scroll"><table><caption>Submissions for the selected assessment</caption><thead><tr><th>Class / subject</th><th>Teacher</th><th>Marks</th><th>Roster</th><th>Status</th><th>Action</th></tr></thead><tbody>
+      @for (a of filteredAssignments(); track a.id) { <tr><td><strong>{{ store.classLabel(a) }}</strong><span class="cell-sub">{{ a.subjectName }}</span></td><td>{{ a.teacherName || 'Teacher' }}</td><td>{{ completed(a.id) }} / {{ a.studentCount }}</td><td>{{ a.rosterStatus }}</td><td><span class="badge" [attr.data-status]="a.assessmentProgress.status">{{ a.assessmentProgress.status }}</span></td><td><button class="action-btn" (click)="open('review', a.id)">{{ a.assessmentProgress.status === 'submitted' ? 'Review marks' : 'View marks' }}</button></td></tr> }
+      @empty { <tr><td colspan="6" class="empty">No submissions match this view. Select another assessment or clear the filters.</td></tr> }
+    </tbody></table></div></section>
+  }
+  @case ('assessments') {
+    <div class="record-grid">
+      @for (a of store.assessments(); track a.id) { <section class="panel"><div class="panel-heading"><span class="eyebrow">{{ a.term }}</span><span class="badge" [attr.data-status]="a.status">{{ a.status }}</span></div><h3>{{ a.name }}</h3><p>Marks due {{ a.deadline | date:'mediumDate' }}</p><div class="actions"><button class="action-btn" [disabled]="store.readOnly() || a.status === 'closed'" (click)="open('assessment', a.id)">Edit details</button><button class="action-btn action-btn--primary" [disabled]="store.readOnly() || a.status === 'closed'" (click)="changeAssessment(a)">{{ a.status === 'draft' ? 'Open assessment' : 'Close assessment' }}</button><button class="action-btn" [disabled]="store.readOnly() || a.status !== 'open'" (click)="assignAssessment(a)">Assign existing classes</button></div></section> }
+      @empty { <section class="panel empty"><h3>No assessments for this year</h3><p>Create an assessment to start planning the exam cycle.</p></section> }
+    </div>
+  }
+  @case ('timetable') {
+    <section class="panel table-panel"><div class="table-scroll"><table><caption>Exam timetable</caption><thead><tr><th>Date / time</th><th>Class</th><th>Subject</th><th>Invigilator</th><th>Room</th><th>Action</th></tr></thead><tbody>
+      @for (slot of store.slots(); track slot.id) { <tr><td>{{ slot.date | date:'mediumDate' }}<span class="cell-sub">{{ slot.start }}–{{ slot.end }}</span></td><td>{{ slot.className }}</td><td>{{ slot.subject }}</td><td>{{ slot.teacher }}</td><td>{{ slot.room }}</td><td><button class="action-btn" [disabled]="store.readOnly() || store.assessment()?.status === 'closed'" (click)="store.removeSlot(slot.id)">Remove</button></td></tr> }
+      @empty { <tr><td colspan="6" class="empty">No exams scheduled for this assessment. Use Schedule exam to add one.</td></tr> }
+    </tbody></table></div></section>
+  }
+  @case ('teaching-assignments') {
+    <div class="filters"><input aria-label="Search teaching assignments" placeholder="Search teacher, class, or subject" [ngModel]="search()" (ngModelChange)="search.set($event)"></div>
+    <section class="panel table-panel"><div class="table-scroll"><table><caption>Teaching responsibilities</caption><thead><tr><th>Teacher</th><th>Class</th><th>Subject</th><th>Status</th></tr></thead><tbody>
+      @for (a of teaching(); track a.id) { <tr><td>{{ a.teacherName }}</td><td>{{ a.classStream || a.className }}</td><td>{{ a.subjectName }}</td><td><span class="badge" [attr.data-status]="a.status">{{ a.status }}</span></td></tr> }
+      @empty { <tr><td colspan="4" class="empty">No teaching assignments match this view.</td></tr> }
+    </tbody></table></div></section>
+  }
+  @case ('curriculum') {
+    <section class="panel"><div class="panel-heading"><div><h3>Syllabus completion</h3><p>{{ store.syllabus().length }} planned topics</p></div><strong class="large-value">{{ store.summary().coverage | number:'1.0-0' }}%</strong></div><progress [value]="store.summary().coverage" max="100" aria-label="Syllabus completion percentage"></progress></section>
+    <section class="panel table-panel"><div class="table-scroll"><table><caption>Topic coverage</caption><thead><tr><th>Topic</th><th>Teaching assignment</th><th>Target date</th><th>Completion</th></tr></thead><tbody>
+      @for (topic of store.syllabus(); track topic.id) { <tr><td>{{ topic.topic }}</td><td>{{ topicLabel(topic.assignmentId) }}</td><td>{{ topic.due | date:'mediumDate' }}</td><td><label class="check-label"><input type="checkbox" [checked]="topic.completed" [disabled]="store.readOnly()" (change)="store.toggleTopic(topic.id)">{{ topic.completed ? 'Completed' : 'In progress' }}</label></td></tr> }
+      @empty { <tr><td colspan="4" class="empty">No topics planned for this year.</td></tr> }
+    </tbody></table></div></section>
+  }
+  @case ('academic-reports') {
+    <div class="filters">
+      <select aria-label="Report class" [ngModel]="classFilter()" (ngModelChange)="classFilter.set($event)"><option value="all">All classes</option>@for (c of classes(); track c) { <option>{{ c }}</option> }</select>
+      <select aria-label="Report subject" [ngModel]="subjectFilter()" (ngModelChange)="subjectFilter.set($event)"><option value="all">All subjects</option>@for (s of subjects(); track s) { <option>{{ s }}</option> }</select>
+      <select aria-label="Results included" [ngModel]="reportScope()" (ngModelChange)="reportScope.set($event)"><option value="approved">Approved results</option><option value="all">All entered marks (provisional)</option></select>
+      <button class="action-btn" (click)="resetFilters()">Reset filters</button>
+    </div>
+    @if (reportScope() === 'all') { <p class="portal-notice portal-notice--warning">Provisional analysis includes unapproved marks. Missing marks are excluded, not counted as zero.</p> }
+    <div class="stats-grid"><div class="stat-card"><span>Recorded results</span><strong>{{ results().length }}</strong><small>Student-subject entries</small></div><div class="stat-card"><span>Average score</span><strong>{{ resultAverage() === null ? '—' : (resultAverage() | number:'1.1-1') }}</strong><small>Out of 100</small></div><div class="stat-card"><span>Pass rate</span><strong>{{ passRate() === null ? '—' : (passRate() | number:'1.1-1') }}{{ passRate() === null ? '' : '%' }}</strong><small>Pass mark for each result</small></div><div class="stat-card"><span>Classes represented</span><strong>{{ classResults().length }}</strong><small>Within current filters</small></div></div>
+    @if (results().length) {
+      <div class="two-column">
+        <section class="panel chart"><h3>Class-wise performance</h3><p>Average mark · 0–100</p><div class="chart-scale"><span>0</span><span>50</span><span>100</span></div>
+          @for (row of classResults(); track row.label) { <div class="bar-row"><div><span>{{ row.label }}</span><strong>{{ row.average | number:'1.1-1' }}%</strong></div><div class="bar-track" role="img" [attr.aria-label]="row.label + ': average ' + row.average.toFixed(1) + ' percent, ' + row.count + ' results'"><div class="bar-fill" [style.width.%]="row.average"></div></div><small>{{ row.count }} results · {{ row.passRate | number:'1.1-1' }}% pass rate</small></div> }
+        </section>
+        <section class="panel chart"><h3>Subject-wise performance</h3><p>Average mark · 0–100</p><div class="chart-scale"><span>0</span><span>50</span><span>100</span></div>
+          @for (row of subjectResults(); track row.label) { <div class="bar-row"><div><span>{{ row.label }}</span><strong>{{ row.average | number:'1.1-1' }}%</strong></div><div class="bar-track" role="img" [attr.aria-label]="row.label + ': average ' + row.average.toFixed(1) + ' percent, ' + row.count + ' results'"><div class="bar-fill secondary" [style.width.%]="row.average"></div></div><small>{{ row.count }} results · {{ row.passRate | number:'1.1-1' }}% pass rate</small></div> }
+        </section>
+      </div>
+      <section class="panel"><h3>Grade distribution</h3><p>Share of the filtered results in each grade band.</p><div class="grade-chart">@for (g of grades(); track g.label) { <div class="grade-column"><strong>{{ g.count }}</strong><div class="grade-track"><div [style.height.%]="g.count / results().length * 100" [attr.aria-label]="g.label + ': ' + g.count + ' results'" role="img"></div></div><span>Grade {{ g.label }}</span></div> }</div></section>
+      <section class="panel table-panel"><div class="panel-heading"><h3>Class summary</h3></div><div class="table-scroll"><table><thead><tr><th>Class</th><th>Results</th><th>Average</th><th>Pass rate</th></tr></thead><tbody>@for (row of classResults(); track row.label) { <tr><td>{{ row.label }}</td><td>{{ row.count }}</td><td>{{ row.average | number:'1.1-1' }}%</td><td>{{ row.passRate | number:'1.1-1' }}%</td></tr> }</tbody></table></div></section>
+      <section class="panel table-panel"><div class="panel-heading"><h3>Student results</h3><input aria-label="Search student results" placeholder="Search student name or number" [ngModel]="search()" (ngModelChange)="search.set($event)"></div><div class="table-scroll"><table><thead><tr><th>Student</th><th>Class</th><th>Subject</th><th>Mark</th><th>Grade</th><th>Status</th></tr></thead><tbody>@for (r of results(); track r.assignmentId + r.studentNumber) { <tr><td>{{ r.student }}<span class="cell-sub">{{ r.studentNumber }}</span></td><td>{{ r.className }}</td><td>{{ r.subject }}</td><td>{{ r.mark }}</td><td><span class="badge">{{ r.grade }}</span></td><td>{{ r.status }}</td></tr> }</tbody></table></div></section>
+    } @else { <section class="panel empty"><h3>No results in this view</h3><p>Select another assessment, class, subject, or result scope.</p><button class="action-btn" (click)="resetFilters()">Clear filters</button></section> }
+  }
+  @case ('student-reports') {
+    <div class="record-grid">@for (c of reportClasses(); track c) { <section class="panel"><h3>{{ c }}</h3><p>{{ store.readiness(c) || 'All subjects assigned to this assessment have approved marks.' }}</p><button class="action-btn action-btn--primary" [disabled]="store.readOnly() || !!store.readiness(c)" (click)="prepare(c)">Prepare student reports</button></section> } @empty { <section class="panel empty">No class submissions for this assessment.</section> }</div>
+    <section class="panel table-panel"><div class="panel-heading"><div><h3>Prepared reports</h3><p>Headmaster release approval and guardian verification happen after academic preparation.</p></div></div><div class="table-scroll"><table><thead><tr><th>Student</th><th>Class</th><th>Subjects</th><th>Release status</th><th>Action</th></tr></thead><tbody>@for (r of store.reports(); track r.id) { <tr><td>{{ r.student }}<span class="cell-sub">{{ r.studentNumber }}</span></td><td>{{ r.className }}</td><td>{{ r.results?.length || 0 }}</td><td>{{ r.status === 'generated' ? 'Awaiting headmaster approval' : r.status }}</td><td><button class="action-btn" (click)="open('preview', r.id)">Preview</button></td></tr> } @empty { <tr><td colspan="5" class="empty">No reports prepared yet.</td></tr> }</tbody></table></div></section>
+  }
+  @case ('roster-issues') {
+    <div class="filters"><select aria-label="Issue status" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"><option value="all">All issues</option><option value="open">Open issues</option><option value="resolved">Resolved issues</option></select></div>
+    @for (issue of issues(); track issue.index) { <section class="panel"><div class="panel-heading"><h3>{{ issue.assignment ? store.classLabel(issue.assignment) : '' }} · {{ issue.assignment?.subjectName }}</h3><span class="badge" [attr.data-status]="issue.resolvedAt ? 'approved' : 'returned'">{{ issue.resolvedAt ? 'Resolved' : 'Open' }}</span></div><p>{{ issue.description }}</p><p class="muted">{{ issue.issueType.replaceAll('_', ' ') }} · {{ issue.createdAt | date:'medium' }}</p>@if (issue.resolution) { <p><strong>Resolution:</strong> {{ issue.resolution }}</p> } @else { <button class="action-btn" [disabled]="store.readOnly()" (click)="open('issue', '' + issue.index)">Record resolution</button> }</section> }
+    @empty { <section class="panel empty"><h3>No roster issues</h3><p>Student list issues reported by teachers will appear here.</p></section> }
+  }
+  @case ('interventions') {
+    <section class="panel table-panel"><div class="panel-heading"><div><h3>Students to follow up</h3><p>Approved subject marks below 50%. Review the context before creating a support plan.</p></div></div><div class="table-scroll"><table><thead><tr><th>Student</th><th>Class / subject</th><th>Mark</th><th>Action</th></tr></thead><tbody>@for (r of atRisk(); track r.assignmentId + r.studentNumber) { <tr><td>{{ r.student }}<span class="cell-sub">{{ r.studentNumber }}</span></td><td>{{ r.className }} / {{ r.subject }}</td><td>{{ r.mark }}</td><td><button class="action-btn" [disabled]="store.readOnly()" (click)="addSupport(r)">Plan support</button></td></tr> } @empty { <tr><td colspan="4" class="empty">No approved results below 50% for this assessment.</td></tr> }</tbody></table></div></section>
+    <section class="panel"><h3>Support plans for this academic year</h3>@for (p of store.support(); track p.id) { <div class="support-row"><div><strong>{{ p.student }} · {{ p.className }} / {{ p.subject }}</strong><p>{{ p.action }}</p><small>{{ p.owner }} · Review {{ p.due | date:'mediumDate' }}</small></div><button class="action-btn" [disabled]="store.readOnly() || p.status === 'completed'" (click)="store.completeSupport(p.id)">{{ p.status === 'completed' ? 'Completed' : 'Mark completed' }}</button></div> } @empty { <p class="empty">No support plans recorded.</p> }</section>
+  }
+  @case ('settings') {
+    <div class="two-column"><section class="panel"><h3>Grading policy</h3><p>Current demo grading scale. Marks are entered out of 100.</p><table><thead><tr><th>Grade</th><th>Mark range</th><th>Result</th></tr></thead><tbody><tr><td>A</td><td>80–100</td><td>Pass</td></tr><tr><td>B</td><td>65–79</td><td>Pass</td></tr><tr><td>C</td><td>50–64</td><td>Pass</td></tr><tr><td>D</td><td>35–49</td><td>Pass</td></tr><tr><td>F</td><td>0–34</td><td>Below pass mark</td></tr></tbody></table></section>
+    <section class="panel"><h3>Academic workflow</h3><ol class="workflow"><li>Teachers confirm class lists and enter marks.</li><li>Complete submissions are reviewed by the Academic Master.</li><li>Corrections return to the teacher with written feedback.</li><li>Approved subjects are compiled into student reports.</li><li>The headmaster approves release to verified guardians.</li></ol><p>Closed academic years are read-only. Selecting a year changes your view without changing the school's active year.</p><a class="action-btn" routerLink="/academic/assessments" queryParamsHandling="preserve">Manage assessment deadlines</a></section></div>
+  }
+}
+
+@if (dialog()) {
+  <div class="modal-overlay" appDialogFocus role="dialog" aria-modal="true" aria-labelledby="academic-dialog-title" (keydown.escape)="close()" (click)="close()">
+    <section class="modal-card" [class.wide]="dialog() === 'review' || dialog() === 'preview'" (click)="$event.stopPropagation()">
+      <div class="panel-heading"><h2 id="academic-dialog-title">{{ dialog() === 'review' ? 'Review submission' : dialog() === 'preview' ? 'Student report' : dialog() === 'assessment' ? 'Assessment details' : dialog() === 'slot' ? 'Schedule exam' : dialog() === 'topic' ? 'Syllabus topic' : dialog() === 'issue' ? 'Resolve roster issue' : dialog() === 'assignment' ? 'Assign teacher' : 'Student support plan' }}</h2><button class="action-btn" aria-label="Close dialog" (click)="close()">Close</button></div>
+      @if (error()) { <p class="portal-notice portal-notice--error" role="alert">{{ error() }}</p> }
+      @if (dialog() === 'review') {
+        @if (review(); as a) { <p><strong>{{ store.classLabel(a) }} / {{ a.subjectName }}</strong> · {{ a.teacherName || 'Teacher' }}</p><p>{{ completed(a.id) }} / {{ a.studentCount }} valid marks · Roster {{ a.rosterStatus }} · {{ a.assessmentProgress.status }}</p>
+          <div class="table-scroll marks-list"><table><thead><tr><th>Student</th><th>Number</th><th>Mark / 100</th><th>Comment</th></tr></thead><tbody>@for (m of reviewMarks(); track m.studentId) { <tr><td>{{ m.fullName }}</td><td>{{ m.studentNumber }}</td><td [class.invalid]="!valid(m.marksValue)">{{ m.marksValue === null ? 'Missing' : m.marksValue }}</td><td>{{ m.comments || '—' }}</td></tr> }</tbody></table></div>
+          @if (a.assessmentProgress.returnReason) { <p class="portal-notice">{{ a.assessmentProgress.returnReason }}</p> }
+          @if (a.assessmentProgress.status === 'submitted' && !store.readOnly() && store.assessment()?.status !== 'closed') { <label class="field">Correction feedback<textarea rows="3" [(ngModel)]="form['reason']" placeholder="Explain the changes the teacher should make"></textarea></label><div class="actions"><button class="action-btn" (click)="decide('returned')">Return for correction</button><button class="action-btn action-btn--primary" (click)="decide('approved')">Approve marks</button></div> }
+        }
+      } @else if (dialog() === 'preview') {
+        @if (preview(); as r) { <h3>{{ r.student }}</h3><p>{{ r.studentNumber }} · {{ r.className }}</p><p>{{ r.period }}</p><table><thead><tr><th>Subject</th><th>Mark / 100</th><th>Grade</th></tr></thead><tbody>@for (result of r.results; track result.subject) { <tr><td>{{ result.subject }}</td><td>{{ result.mark }}</td><td>{{ result.grade }}</td></tr> }</tbody></table><p>Academic review complete. Release approval belongs to the headmaster.</p> }
+      } @else {
+        <form (ngSubmit)="save()" class="editor-form">
+          @switch (dialog()) {
+            @case ('assessment') { <label class="field">Assessment name<input name="name" [(ngModel)]="form['name']" required maxlength="100"></label><label class="field">Term<select name="term" [(ngModel)]="form['term']" required><option>Term 1</option><option>Term 2</option><option>Term 3</option></select></label><label class="field">Submission deadline<input type="date" name="deadline" [(ngModel)]="form['deadline']" [min]="store.year()?.startDate" [max]="store.year()?.endDate" required></label> }
+            @case ('slot') { <label class="field">Class<select name="class" [(ngModel)]="form['className']" required><option value="">Select class</option>@for (c of classes(); track c) { <option>{{ c }}</option> }</select></label><label class="field">Subject<select name="subject" [(ngModel)]="form['subject']" required><option value="">Select subject</option>@for (s of availableSubjects(); track s.id) { <option>{{ s.name }}</option> }</select></label><label class="field">Invigilator<input name="teacher" [(ngModel)]="form['teacher']" required></label><label class="field">Room<input name="room" [(ngModel)]="form['room']" required></label><label class="field">Exam date<input type="date" name="date" [(ngModel)]="form['date']" [min]="store.year()?.startDate" [max]="store.year()?.endDate" required></label><div class="form-row"><label class="field">Start time<input type="time" name="start" [(ngModel)]="form['start']" required></label><label class="field">End time<input type="time" name="end" [(ngModel)]="form['end']" required></label></div> }
+            @case ('topic') { <label class="field">Teaching assignment<select name="assignment" [(ngModel)]="form['assignmentId']" required><option value="">Select assignment</option>@for (a of store.teachingAssignments(); track a.id) { <option [value]="a.id">{{ topicLabel(a.id) }}</option> }</select></label><label class="field">Topic<input name="topic" [(ngModel)]="form['topic']" required></label><label class="field">Target completion<input type="date" name="due" [(ngModel)]="form['due']" [min]="store.year()?.startDate" [max]="store.year()?.endDate" required></label> }
+            @case ('issue') { <p>Confirm the underlying roster correction has been made, then record the resolution for the teacher.</p><label class="field">Resolution<textarea name="resolution" [(ngModel)]="form['resolution']" rows="4" minlength="10" required></textarea></label> }
+            @case ('assignment') { <label class="field">Teacher<select name="teacher" [(ngModel)]="form['teacherId']" required><option value="">Select teacher</option>@for (t of store.head.staff(); track t.id) { @if (t.role === 'teacher' && t.status === 'active') { <option [value]="t.id">{{ t.fullName }}</option> } }</select></label><label class="field">Class<select name="class" [(ngModel)]="form['classId']" (ngModelChange)="form['subjectId'] = ''" required><option value="">Select class</option>@for (c of store.classes(); track c.id) { <option [value]="c.id">{{ c.stream || c.name }}</option> }</select></label><p>This grants access to the class roster. Subject allocations will be available with academic assessments.</p> }
+            @case ('support') { <label class="field">Student number<input name="studentNumber" [(ngModel)]="form['studentNumber']" required></label><label class="field">Student name<input name="student" [(ngModel)]="form['student']" required></label><div class="form-row"><label class="field">Class<input name="className" [(ngModel)]="form['className']" required></label><label class="field">Subject<input name="subject" [(ngModel)]="form['subject']" required></label></div><label class="field">Support action<textarea name="action" [(ngModel)]="form['action']" rows="3" minlength="10" required></textarea></label><label class="field">Responsible teacher<input name="owner" [(ngModel)]="form['owner']" required></label><label class="field">Review date<input type="date" name="due" [(ngModel)]="form['due']" [min]="store.year()?.startDate" [max]="store.year()?.endDate" required></label> }
+          }
+          <div class="actions"><button type="button" class="action-btn" (click)="close()">Cancel</button><button type="submit" class="action-btn action-btn--primary" [disabled]="store.readOnly() && dialog() !== 'assignment'">Save</button></div>
+        </form>
+      }
+    </section>
+  </div>
+}

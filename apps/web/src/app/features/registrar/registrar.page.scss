@@ -1,0 +1,72 @@
+:host { display:block; color:#172338; }
+.context-row, .filters, .actions, .panel-heading, .row-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.context-row { margin-bottom:24px; font-size:.8125rem; }
+.context-year { padding:6px 10px; border-radius:6px; background:#fff7ed; color:#92400e; font-weight:700; }
+.demo-label { margin-left:auto; color:#64748b; }
+input, select, textarea { border:1px solid #cbd5e1; border-radius:8px; padding:10px 12px; max-width:100%; font:inherit; font-size:.875rem; }
+input[type='checkbox'] { min-height:20px; width:18px; height:18px; accent-color:#b45309; }
+.filters { margin-bottom:20px; }
+.filters input { flex:1 1 240px; }
+.filters select { flex:1 1 170px; }
+.stats-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:18px; margin-bottom:24px; }
+.stat-card { display:flex; flex-direction:column; gap:10px; padding:22px; border:1px solid #e2e8f0; background:white; border-radius:12px; text-decoration:none; color:inherit; }
+.stat-card > span { color:#596579; font-size:.8125rem; font-weight:600; }
+.stat-card strong { font-size:2rem; line-height:1.2; font-weight:700; }
+.stat-card small { color:#64748b; font-size:.75rem; font-weight:400; }
+a.stat-card:hover { border-color:#d5a16a; }
+.two-column { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }
+.panel { min-width:0; padding:24px; margin-bottom:24px; border:1px solid #e2e8f0; border-radius:12px; background:white; }
+h3 { margin:0 0 8px; font-size:1rem; font-weight:650; }
+h2 { font-size:1.25rem; margin:0; }
+p { color:#596579; font-size:.875rem; line-height:1.6; margin:8px 0 16px; }
+.panel-heading { justify-content:space-between; margin-bottom:16px; }
+.panel-heading h3 { margin-bottom:0; }
+.panel-heading a { color:#92400e; font-size:.8125rem; }
+.badge { display:inline-flex; font-size:.75rem; padding:5px 9px; border-radius:6px; text-transform:capitalize; background:#f1f5f9; color:#475569; white-space:nowrap; }
+.badge[data-status='approved'], .badge[data-status='active'], .badge[data-status='accepted'] { background:#ecfdf5; color:#065f46; }
+.badge[data-status='pending'], .closed { background:#fff7ed; color:#92400e; }
+.badge[data-status='rejected'], .badge[data-status='withdrawn'] { background:#fef2f2; color:#991b1b; }
+.task-link { display:flex; justify-content:space-between; gap:16px; padding:18px 0; color:#334155; border-bottom:1px solid #f1f5f9; text-decoration:none; font-size:.875rem; }
+a.task-link:hover { color:#92400e; }
+.activity { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:16px 0; border-bottom:1px solid #f1f5f9; font-size:.875rem; }
+.activity time { color:#64748b; font-size:.75rem; }
+.empty { text-align:center; padding:36px 20px; color:#64748b; line-height:1.6; }
+.table-panel { padding:0; overflow:hidden; }
+.table-scroll { overflow-x:auto; width:100%; }
+table { border-collapse:collapse; width:100%; font-size:.8125rem; text-align:left; }
+caption { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+th { background:#f8fafc; font-weight:600; color:#596579; white-space:nowrap; }
+th, td { padding:14px 18px; border-bottom:1px solid #e2e8f0; vertical-align:middle; }
+td { line-height:1.5; }
+td .action-btn { white-space:nowrap; }
+.cell-sub { display:block; margin-top:3px; font-size:.75rem; color:#64748b; }
+.bar-row { margin:22px 0; }
+.bar-row > div:first-child { display:flex; justify-content:space-between; gap:8px; margin-bottom:8px; font-size:.8125rem; }
+.bar-track { height:12px; border-radius:4px; overflow:hidden; background:#f1f5f9; }
+.bar-fill { height:100%; background:#b45309; border-radius:4px; }
+.modal-overlay { position:fixed; inset:0; z-index:1100; background:#0f172370; display:flex; align-items:center; justify-content:center; padding:20px; }
+.modal-card { background:white; border-radius:14px; padding:24px; width:560px; max-width:100%; max-height:calc(100dvh - 40px); overflow:auto; box-shadow:0 20px 60px #0f172340; }
+.modal-card.wide { width:900px; }
+.editor-form, .field { display:flex; flex-direction:column; gap:8px; }
+.editor-form { gap:16px; }
+.field { font-size:.8125rem; font-weight:600; margin:8px 0; }
+.field input, .field select, .field textarea { width:100%; font-weight:400; box-sizing:border-box; }
+.form-row { display:flex; gap:16px; }
+.form-row > * { flex:1; min-width:0; }
+.actions { margin-top:18px; }
+.class-chips { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:24px; }
+.class-chip { display:flex; justify-content:space-between; align-items:center; gap:24px; min-height:52px; background:white; padding:12px 18px; border:1px solid #e2e8f0; border-radius:9px; color:#334155; cursor:pointer; font:inherit; font-size:.875rem; }
+.class-chip.selected { background:#fff7ed; color:#92400e; border-color:#d5a16a; }
+.pagination { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:16px 20px; font-size:.8125rem; color:#64748b; }
+.profile-heading { display:flex; align-items:center; gap:16px; margin:16px 0; flex-wrap:wrap; }
+.profile-heading .action-btn { margin-left:auto; }
+.profile-heading p { margin:0; }
+.student-avatar { width:52px; height:52px; display:grid; place-items:center; background:#fff7ed; color:#92400e; font-size:1.5rem; font-weight:700; border-radius:12px; }
+.profile-details { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin:24px 0; padding:20px; border-radius:8px; background:#f8fafc; }
+dt { color:#64748b; font-size:.75rem; } dd { margin:6px 0 0; font-size:.875rem; overflow-wrap:anywhere; }
+.section-title { margin-top:24px; }
+.progression-list { max-height:500px; overflow:auto; }
+.progression-list th { position:sticky; top:0; }
+@media(max-width:1100px) { .stats-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:760px) { .two-column { grid-template-columns:1fr; gap:0; } .panel { padding:18px; } .table-panel { padding:0; } .stat-card { padding:18px; } .demo-label { margin-left:0; } .modal-overlay { padding:10px; } .modal-card { padding:18px; } .profile-details { grid-template-columns:1fr; } }
+@media(max-width:380px) { .stats-grid { gap:10px; } .stat-card { padding:14px; } .stat-card strong { font-size:1.6rem; } .form-row { flex-direction:column; gap:0; } }

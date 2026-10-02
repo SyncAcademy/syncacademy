@@ -1,0 +1,345 @@
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.teacher-dashboard {
+  max-width: 1200px;
+}
+
+// ── Quick Stats ──────────────────────────────────────────────
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+
+  @include tablet {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @include mobile {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+}
+
+.quick-stat {
+  background: #FFFFFF;
+  border: 1px solid $input-border;
+  border-radius: $radius-lg;
+  padding: 20px;
+  text-align: center;
+
+  &__value {
+    display: block;
+    font-size: 2rem;
+    font-weight: 700;
+    color: $text-primary;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  &__label {
+    font-size: 0.8125rem;
+    color: $text-secondary;
+  }
+
+  &--warning .quick-stat__value { color: #F59E0B; }
+  &--info .quick-stat__value { color: #3B82F6; }
+  &--success .quick-stat__value { color: $success-green; }
+
+  @include mobile {
+    padding: 16px 12px;
+
+    .quick-stat__value { font-size: 1.5rem; }
+    .quick-stat__label { font-size: 0.8125rem; }
+  }
+}
+
+// ── Assignment Cards ─────────────────────────────────────────
+.assignment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+.assignment-card {
+  background: #FFFFFF;
+  border: 1px solid $input-border;
+  border-radius: $radius-lg;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: box-shadow 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  }
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  &__subject {
+    min-width: 0;
+  }
+
+  &__code {
+    display: inline-block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #92400e;
+    background: $primary-orange-light;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  &__badge {
+    flex-shrink: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+
+    &--draft {
+      background: #F3F4F6;
+      color: $text-secondary;
+    }
+
+    &--submitted {
+      background: #DBEAFE;
+      color: #1D4ED8;
+    }
+
+    &--approved {
+      background: $success-green-bg;
+      color: #047857;
+    }
+
+    &--returned {
+      background: #FEF2F2;
+      color: #B91C1C;
+    }
+  }
+
+  &__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-size: 0.8125rem;
+    color: $text-secondary;
+
+    svg {
+      width: 16px;
+      height: 16px;
+      vertical-align: -3px;
+      margin-right: 4px;
+    }
+  }
+
+  &__progress {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+  }
+
+  @include mobile {
+    padding: 16px;
+  }
+}
+
+// ── Progress Bar ─────────────────────────────────────────────
+.progress-bar {
+  height: 6px;
+  background: #E5E7EB;
+  border-radius: 999px;
+  overflow: hidden;
+
+  &__fill {
+    height: 100%;
+    background: $primary-orange;
+    border-radius: 999px;
+    transition: width 0.4s ease;
+
+    &--complete {
+      background: $success-green;
+    }
+  }
+}
+
+.progress-label {
+  font-size: 0.8125rem;
+  color: #596579;
+}
+
+// ── Action Buttons ───────────────────────────────────────────
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: $radius-md;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  min-height: 44px;
+  transition: all 0.2s ease;
+
+  &--primary {
+    background: $primary-orange;
+    color: #FFFFFF;
+
+    &:hover {
+      background: $primary-orange-hover;
+    }
+  }
+
+  &--outline {
+    background: transparent;
+    color: #92400e;
+    border: 1px solid $primary-orange;
+
+    &:hover {
+      background: $primary-orange-light;
+    }
+  }
+
+  &--warning {
+    background: #FEF2F2;
+    color: #B91C1C;
+    border: 1px solid #FECACA;
+
+    &:hover {
+      background: #FEE2E2;
+    }
+  }
+
+  &--ghost {
+    background: transparent;
+    color: $text-secondary;
+
+    &:hover {
+      background: #F3F4F6;
+      color: $text-primary;
+    }
+  }
+}
+
+// ── Loading Skeleton ─────────────────────────────────────────
+.skeleton-container {
+  .skeleton-stat {
+    background: #FFFFFF;
+    border: 1px solid $input-border;
+    border-radius: $radius-lg;
+    height: 88px;
+  }
+
+  .skeleton-card {
+    background: #FFFFFF;
+    border: 1px solid $input-border;
+    border-radius: $radius-lg;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .skeleton-line {
+    border-radius: 4px;
+    background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+
+    &--sm { width: 60px; height: 12px; }
+    &--md { width: 140px; height: 16px; }
+    &--lg { width: 200px; height: 20px; }
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+// ── Error State ──────────────────────────────────────────────
+.error-state {
+  text-align: center;
+  padding: 64px 24px;
+  max-width: 400px;
+  margin: 0 auto;
+
+  &__icon-wrap {
+    margin-bottom: 16px;
+  }
+
+  &__icon {
+    width: 48px;
+    height: 48px;
+    color: $error-red;
+  }
+
+  &__title {
+    margin: 0 0 8px;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  &__desc {
+    margin: 0 0 24px;
+    font-size: 0.875rem;
+    color: $text-secondary;
+  }
+
+  &__retry-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: $primary-orange;
+    color: #FFFFFF;
+    border: none;
+    border-radius: $radius-md;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    min-height: 44px;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    &:hover {
+      background: $primary-orange-hover;
+    }
+  }
+}

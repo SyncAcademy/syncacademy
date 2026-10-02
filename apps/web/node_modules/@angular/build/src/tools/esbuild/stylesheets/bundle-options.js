@@ -47,6 +47,7 @@ function createStylesheetBundleOptions(options, cache, inlineComponentData) {
         minify: options.optimization,
         metafile: true,
         sourcemap: options.sourcemap,
+        sourcesContent: options.sourcesContent,
         outdir: options.workspaceRoot,
         write: false,
         platform: 'browser',

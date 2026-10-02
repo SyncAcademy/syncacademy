@@ -1,0 +1,64 @@
+<p class="portal-notice" role="status">Report generation and delivery is not available yet. No sample records are shown and changes cannot be saved.</p><div inert>
+<app-head-page-header [title]="title()" description="Review academic reports and follow each guardian delivery.">
+  <a *ngIf="mode() !== 'send'" routerLink="/head/reports/send" class="action-btn action-btn--primary" queryParamsHandling="preserve">Send reports</a>
+  <a *ngIf="mode() !== 'delivery'" routerLink="/head/reports/delivery" class="action-btn" queryParamsHandling="preserve">Delivery center</a>
+  <a *ngIf="mode() !== 'overview'" routerLink="/head/reports" class="action-btn" queryParamsHandling="preserve">Reports overview</a>
+</app-head-page-header>
+
+<div class="portal-notice" role="status" *ngIf="notice()">{{ notice() }}</div>
+<div class="portal-notice portal-notice--warning" *ngIf="!store.storageAvailable()">Storage is unavailable. Demo changes last only while this app remains open.</div>
+<div class="portal-filters">
+  <input class="sa-input" placeholder="Search student, number, or guardian?" aria-label="Search reports" [ngModel]="search()" (ngModelChange)="search.set($event); changeScope()">
+  <select class="sa-select" aria-label="Reporting period" [ngModel]="period()" (ngModelChange)="period.set($event); changeScope()"><option value="all">All reporting periods</option><option *ngFor="let item of periods()" [value]="item">{{ item }}</option></select>
+  <select class="sa-select" aria-label="Class" [ngModel]="classFilter()" (ngModelChange)="classFilter.set($event); changeScope()"><option value="all">All classes</option><option>Form 1A</option><option>Form 2A</option></select>
+  <select class="sa-select" aria-label="Report status" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event); changeScope()"><option value="all">All statuses</option><option value="generated">Awaiting release approval</option><option value="approved">Approved for release</option><option value="released">Released</option><option value="blocked">Blocked</option><option value="failed">Delivery failed</option></select>
+</div>
+<div class="stats-grid">
+  <div class="stat-card" *ngFor="let stat of summary()"><div class="stat-card__info"><h3 class="stat-card__value">{{ stat.value }}</h3><p class="stat-card__label">{{ stat.label }}</p></div></div>
+</div>
+<div *ngIf="mode() === 'send'" class="report-selection">
+  <label><input type="checkbox" [checked]="allSelected()" [disabled]="!eligible().length" (change)="selectAll()"> Select eligible reports</label>
+  <span>{{ selectedReports().length }} reports &middot; {{ recipientCount() }} verified recipients</span>
+  <button class="action-btn action-btn--primary" [disabled]="!selectedReports().length" (click)="sendSelected()">Review & send</button>
+</div>
+<div *ngIf="mode() === 'send'" class="portal-notice">Unapproved reports, unverified contacts, and previously sent messages are excluded from bulk sending. Resending requires a separate confirmation.</div>
+<div class="portal-empty" *ngIf="!filtered().length"><h3>No reports match this view</h3><p>Try another class, reporting period, or status.</p><button class="action-btn" (click)="clearFilters()">Clear filters</button></div>
+<div class="report-list">
+  <article class="report-record" *ngFor="let report of filtered()">
+    <div class="report-record__top">
+      <label *ngIf="mode() === 'send'" class="report-check"><input type="checkbox" [attr.aria-label]="'Select report for ' + report.student" [disabled]="!store.eligible(report)" [checked]="selection().includes(report.id)" (change)="toggle(report.id)"></label>
+      <div class="report-record__identity"><h3>{{ report.student }}</h3><p>{{ report.studentNumber }} &middot; {{ report.className }} &middot; {{ report.period }}</p></div>
+      <app-status-badge [variant]="report.status" [label]="report.status === 'generated' ? 'Prepared' : report.status === 'approved' ? 'Approved for release' : 'Released'"></app-status-badge>
+    </div>
+    <div class="report-record__bottom"><span [class.portal-field-error]="blocked(report)">{{ reason(report) }}</span><div class="report-actions">
+      <button class="action-btn" (click)="previewId.set(report.id)">Preview</button>
+      <button *ngIf="!store.readOnly() && report.academicApproved && report.status === 'generated'" class="action-btn action-btn--primary" (click)="request('approve', [report.id])">Approve release</button>
+      <button *ngIf="store.eligible(report) && mode() !== 'send'" class="action-btn action-btn--primary" (click)="request('send', [report.id])">{{ report.status === 'released' ? 'Retry failed delivery' : 'Review & send' }}</button>
+      <button *ngIf="!store.readOnly() && report.status === 'released' && !store.eligible(report)" class="action-btn" (click)="request('resend', [report.id])">Resend?</button>
+    </div></div>
+    <div *ngIf="mode() === 'delivery'" class="recipient-list">
+      <div class="recipient-row" *ngFor="let guardian of report.recipients">
+        <div><strong>{{ guardian.name }}</strong><p>{{ guardian.phone }} &middot; {{ guardian.channel }}</p></div>
+        <span class="portal-pill" [class.portal-pill--danger]="guardian.status === 'failed'" [class.portal-pill--success]="guardian.status === 'viewed' || guardian.status === 'delivered'">{{ !guardian.verified ? 'Unverified contact' : guardian.status === 'not_sent' ? 'Not sent' : guardian.status === 'viewed' ? 'Link opened' : (guardian.status | titlecase) }}</span>
+        <span class="recipient-time">{{ guardian.lastSent ? (guardian.lastSent | date:'d MMM, HH:mm':'+0300') + ' EAT' : 'No send recorded' }} &middot; {{ guardian.attempts }} attempt(s)</span>
+      </div>
+    </div>
+  </article>
+</div>
+<div class="report-preview-overlay" *ngIf="preview() as report" appDialogFocus role="dialog" aria-modal="true" aria-labelledby="report-preview-title" (keydown.escape)="previewId.set(null)" (click)="previewId.set(null)">
+  <section class="report-preview" (click)="$event.stopPropagation()">
+    <div class="report-preview__header"><div><p class="report-eyebrow">Dar es Salaam Academy</p><h2 id="report-preview-title">Academic report preview</h2></div><button class="action-btn" aria-label="Close report preview" (click)="previewId.set(null)">Close</button></div>
+    <div class="portal-notice">{{ report.results?.length ? 'Subject results prepared and approved by the Academic Master.' : 'Sample report layout. Subject results are illustrative demo data.' }}</div>
+    <h3>{{ report.student }}</h3><p>{{ report.studentNumber }} &middot; {{ report.className }} &middot; {{ report.period }}</p>
+    <table class="preview-table"><thead><tr><th scope="col">Subject</th><th scope="col">Mark / 100</th><th scope="col">Grade</th></tr></thead><tbody>
+      @if (report.results?.length) { @for (result of report.results; track result.subject) { <tr><td>{{ result.subject }}</td><td>{{ result.mark }}</td><td>{{ result.grade }}</td></tr> } }
+      @else { <tr><td>Mathematics</td><td>72</td><td>B</td></tr><tr><td>English Language</td><td>68</td><td>B</td></tr><tr><td>Kiswahili</td><td>84</td><td>A</td></tr> }
+    </tbody></table>
+    <p><strong>Academic review:</strong> {{ report.academicApproved ? 'Required subjects approved' : 'Subject approval outstanding' }}</p>
+    <h4>Guardian recipients</h4><p *ngFor="let guardian of report.recipients">{{ guardian.name }} &middot; {{ guardian.phone }} &middot; {{ guardian.verified ? 'Verified' : 'Verification needed' }}</p>
+    <p class="portal-notice portal-notice--warning" *ngIf="blocked(report)">{{ reason(report) }}. This report cannot be sent yet.</p>
+  </section>
+</div>
+<app-confirm-dialog [open]="!!action()" [title]="action() === 'approve' ? 'Approve report release?' : action() === 'resend' ? 'Resend this report?' : 'Review report delivery'" [message]="confirmation()" [confirmLabel]="action() === 'approve' ? 'Approve release' : 'Confirm demo send'" variant="primary" (confirmed)="confirmAction()" (cancelled)="action.set(null)"></app-confirm-dialog>
+
+</div>

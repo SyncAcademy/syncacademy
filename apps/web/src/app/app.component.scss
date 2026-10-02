@@ -1,0 +1,88 @@
+.preloader-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #ffffff; /* White background requested */
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.8s ease-in-out, visibility 0.8s ease-in-out;
+
+  &.fade-out {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.preloader-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  color: #E87E24; /* Orange color requested */
+}
+
+.logo-container {
+  /* Enlarge the SVG significantly and make it adapt to screen size using clamp */
+  width: clamp(120px, 20vw, 250px);
+  height: clamp(120px, 20vw, 250px);
+  margin-bottom: 24px;
+  animation: pulseFade 1.5s infinite ease-in-out;
+  
+  svg {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 4px 6px rgba(232, 126, 36, 0.2));
+  }
+}
+
+.brand-name {
+  font-size: 3rem;
+  font-weight: 800;
+  margin: 0 0 12px 0;
+  letter-spacing: -0.02em;
+  font-family: "Inter", -apple-system, sans-serif;
+  opacity: 1; /* Reset from previous slide up */
+  transform: none;
+}
+
+.brand-name-text {
+  display: inline-block;
+  clip-path: inset(0 100% 0 0); /* Hides text from the right */
+  animation: writeText 1s linear 0.2s forwards;
+  
+  .text-black {
+    color: #000000 !important;
+  }
+  .text-orange {
+    color: #E87E24 !important;
+  }
+}
+
+.brand-tagline {
+  font-size: 1.25rem;
+  font-weight: 500;
+  margin: 0;
+  font-family: "Inter", -apple-system, sans-serif;
+  color: #E87E24;
+  opacity: 0.9;
+  
+  display: inline-block;
+  clip-path: inset(0 100% 0 0); /* Hides text from the right */
+  animation: writeText 1.2s linear 1.2s forwards; /* Starts right after the name */
+}
+
+@keyframes pulseFade {
+  0%, 100% { opacity: 0.6; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes writeText {
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}

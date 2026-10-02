@@ -1,0 +1,103 @@
+<app-head-page-header title="Staff Directory" description="Manage school administrators, teachers, and other staff members.">
+  <a routerLink="/head/staff/invite" class="sa-btn--primary" queryParamsHandling="preserve">Invite Staff</a>
+</app-head-page-header>
+
+<app-table-toolbar
+  [showSearch]="true"
+  searchPlaceholder="Search by name..."
+  [searchValue]="searchTerm()"
+  (searchChange)="onSearchChange($event)"
+>
+  <div filters style="display: flex; gap: 8px;">
+    <select class="sa-select" [ngModel]="roleFilter()" (ngModelChange)="roleFilter.set($event)">
+      <option value="all">All Roles</option>
+      <option value="school_admin">School Admin</option>
+      <option value="registrar">Registrar</option>
+      <option value="academic_officer">Academic Officer</option>
+      <option value="teacher">Teacher</option>
+    </select>
+
+    <select class="sa-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+      <option value="all">All Status</option>
+      <option value="active">Active</option>
+      <option value="inactive">Inactive</option>
+    </select>
+  </div>
+</app-table-toolbar>
+
+<ng-container *ngIf="loading(); else content">
+  <div class="skeleton-row" *ngFor="let i of [1,2,3,4,5]"></div>
+</ng-container>
+
+<ng-template #content>
+  <div *ngIf="filteredStaff().length === 0">
+    <app-empty-state icon="users" title="No staff members found" description="Adjust your search or filters."></app-empty-state>
+  </div>
+
+  <div *ngIf="filteredStaff().length > 0">
+    <!-- Desktop view -->
+    <div class="table-scroll-wrapper desktop-only">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Contact</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let s of filteredStaff()">
+            <td>{{ s.fullName }}</td>
+            <td><app-status-badge variant="info" [label]="staffRoleLabels[s.role]"></app-status-badge></td>
+            <td>
+              <div style="font-size: 0.875rem">{{ s.email }}</div>
+              <div style="font-size: 0.75rem; color: #6B7280">{{ s.phone }}</div>
+            </td>
+            <td>
+              <app-status-badge [variant]="s.status === 'active' ? 'active' : 'inactive'" [label]="s.status"></app-status-badge>
+            </td>
+            <td>
+              <button class="action-btn action-btn--danger" *ngIf="(s.role !== 'school_admin' || store.api.auth.identity()?.platformAdmin) && s.email !== store.api.auth.identity()?.email" (click)="requestDeactivate(s)">{{s.status === 'active' ? 'Deactivate' : 'Reactivate'}}</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Mobile view -->
+    <div class="mobile-only">
+      <app-record-card *ngFor="let s of filteredStaff()">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <h4 style="margin: 0;">{{ s.fullName }}</h4>
+          <app-status-badge [variant]="s.status === 'active' ? 'active' : 'inactive'" [label]="s.status"></app-status-badge>
+        </div>
+        <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 8px;">
+          <app-status-badge variant="info" [label]="staffRoleLabels[s.role]"></app-status-badge>
+        </div>
+        <div class="card-row">
+          <span class="label">Email:</span>
+          <span class="value">{{ s.email }}</span>
+        </div>
+        <div class="card-row">
+          <span class="label">Phone:</span>
+          <span class="value">{{ s.phone }}</span>
+        </div>
+        <div style="margin-top: 12px; display: flex; justify-content: flex-end;" *ngIf="(s.role !== 'school_admin' || store.api.auth.identity()?.platformAdmin) && s.email !== store.api.auth.identity()?.email">
+          <button class="action-btn action-btn--danger" (click)="requestDeactivate(s)">{{s.status === 'active' ? 'Deactivate' : 'Reactivate'}}</button>
+        </div>
+      </app-record-card>
+    </div>
+  </div>
+</ng-template>
+
+<app-confirm-dialog
+  [open]="showDeactivateDialog()"
+  [title]="selectedStaff()?.status === 'active' ? 'Deactivate Staff Member' : 'Reactivate Staff Member'"
+  [message]="(selectedStaff()?.status === 'active' ? 'Deactivate ' : 'Reactivate ') + (selectedStaff()?.fullName || '') + '? Records are retained; deactivation revokes existing sessions.'"
+  [confirmLabel]="selectedStaff()?.status === 'active' ? 'Deactivate' : 'Reactivate'"
+  variant="danger"
+  (confirmed)="confirmDeactivate()"
+  (cancelled)="cancelDeactivate()"
+></app-confirm-dialog>

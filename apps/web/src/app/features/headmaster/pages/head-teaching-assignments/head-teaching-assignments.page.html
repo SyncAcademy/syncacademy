@@ -1,0 +1,155 @@
+<app-head-page-header title="Teaching Assignments" description="Manage which teachers are assigned to which classes and subjects.">
+  <button class="sa-btn--primary" [disabled]="store.readOnly()" (click)="openCreateDialog()">Create Assignment</button>
+</app-head-page-header>
+
+<app-table-toolbar [showSearch]="true" searchPlaceholder="Search assignments?" [searchValue]="searchQuery()" (searchChange)="onSearchChange($event)">
+  <div filters style="display: flex; gap: 8px; flex-wrap: wrap;">
+    <select class="sa-select" aria-label="Filter by teacher" [ngModel]="teacherFilter()" (ngModelChange)="teacherFilter.set($event)">
+      <option value="">All Teachers</option>
+      <option *ngFor="let t of teacherOptions()" [value]="t">{{ t }}</option>
+    </select>
+    
+    <select class="sa-select" aria-label="Filter by class" [ngModel]="classFilter()" (ngModelChange)="classFilter.set($event)">
+      <option value="">All Classes</option>
+      <option *ngFor="let c of classOptions()" [value]="c">{{ c }}</option>
+    </select>
+    
+    <select class="sa-select" aria-label="Filter by subject" [ngModel]="subjectFilter()" (ngModelChange)="subjectFilter.set($event)">
+      <option value="">All Subjects</option>
+      <option *ngFor="let s of subjectOptions()" [value]="s">{{ s }}</option>
+    </select>
+    
+
+  </div>
+</app-table-toolbar>
+
+<ng-container *ngIf="loading(); else content">
+  <div class="skeleton-row" *ngFor="let i of [1,2,3,4,5]"></div>
+</ng-container>
+
+<ng-template #content>
+  <div *ngIf="filteredAssignments().length === 0">
+    <app-empty-state icon="folder" title="No assignments found" description="Adjust your filters or create a new assignment."></app-empty-state>
+  </div>
+
+  <div *ngIf="filteredAssignments().length > 0">
+    <!-- Desktop view -->
+    <div class="table-scroll-wrapper desktop-only">
+      <table>
+        <thead>
+          <tr>
+            <th>Teacher</th>
+            <th>Class</th>
+            <th>Subject</th>
+            <th>Academic Year</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let a of filteredAssignments()">
+            <td><strong>{{ a.teacherName }}</strong></td>
+            <td>{{ a.classStream || a.className }}</td>
+            <td>{{ a.subjectName }}</td>
+            <td>{{ a.academicYearLabel }}</td>
+            <td>
+              <app-status-badge [variant]="a.status === 'active' ? 'active' : 'inactive'" [label]="a.status"></app-status-badge>
+            </td>
+            <td>
+              <button class="action-btn" [disabled]="store.readOnly()" (click)="openEditDialog(a)">Edit</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Mobile view -->
+    <div class="mobile-only">
+      <app-record-card *ngFor="let a of filteredAssignments()">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <h4 style="margin: 0;">{{ a.teacherName }}</h4>
+          <app-status-badge [variant]="a.status === 'active' ? 'active' : 'inactive'" [label]="a.status"></app-status-badge>
+        </div>
+        <div class="card-row" style="margin-top: 8px;">
+          <span class="label">Class:</span>
+          <span class="value">{{ a.classStream || a.className }}</span>
+        </div>
+        <div class="card-row">
+          <span class="label">Subject:</span>
+          <span class="value">{{ a.subjectName }}</span>
+        </div>
+        <div class="card-row">
+          <span class="label">Year:</span>
+          <span class="value">{{ a.academicYearLabel }}</span>
+        </div>
+        <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
+          <button class="action-btn" [disabled]="store.readOnly()" (click)="openEditDialog(a)">Edit</button>
+        </div>
+      </app-record-card>
+    </div>
+  </div>
+</ng-template>
+
+<p class="portal-notice">Choose an active teacher and a subject offered by the selected class. Deactivate assignments to preserve their history.</p>
+<!-- Create/Edit Dialog Overlay -->
+<div class="dialog-overlay" *ngIf="showDialog()" appDialogFocus role="dialog" aria-modal="true" aria-label="Teaching assignment" (keydown.escape)="closeDialog()">
+  <div class="dialog">
+    <div class="dialog__header">
+      <h3>{{ editingAssignment() ? 'Edit' : 'Create' }} Assignment</h3>
+      <button aria-label="Close assignment dialog" class="dialog__close" (click)="closeDialog()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    
+    <div class="dialog__body">
+      <div role="alert" class="form-error" *ngIf="formError()">
+        {{ formError() }}
+      </div>
+      
+      <div class="form-group">
+        <label class="sa-label">Teacher</label>
+        <select class="sa-select" aria-label="Teacher" [ngModel]="formTeacherId()" (ngModelChange)="formTeacherId.set($event)">
+          <option value="">Select Teacher...</option>
+          <option *ngFor="let t of availableTeachers" [value]="t.id">{{ t.fullName }}</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="sa-label">Class</label>
+        <select class="sa-select" aria-label="Class" [ngModel]="formClassId()" (ngModelChange)="changeClass($event)">
+          <option value="">Select Class...</option>
+          <option *ngFor="let c of availableClasses" [value]="c.id">{{ c.stream || c.name }}</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="sa-label">Subject</label>
+        <select class="sa-select" aria-label="Subject" [ngModel]="formSubjectId()" (ngModelChange)="formSubjectId.set($event)">
+          <option value="">Select Subject...</option>
+          <option *ngFor="let s of availableSubjects" [value]="s.id">{{ s.name }}</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label class="sa-label">Academic Year</label>
+        <select class="sa-select" aria-label="Academic year" [ngModel]="formYearId()" (ngModelChange)="formYearId.set($event)">
+          <option value="">Select Year...</option>
+          <option *ngFor="let y of availableYears" [value]="y.id">{{ y.label }}</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="sa-label">Status</label>
+        <select class="sa-select" aria-label="Assignment status" [ngModel]="formStatus()" (ngModelChange)="formStatus.set($event)">
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="dialog__footer">
+      <button class="sa-btn" style="background: transparent; border: 1px solid #D1D5DB; padding: 8px 16px; border-radius: 8px; cursor: pointer;" (click)="closeDialog()">Cancel</button>
+      <button class="sa-btn--primary" (click)="saveAssignment()">Save</button>
+    </div>
+  </div>
+</div>

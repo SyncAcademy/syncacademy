@@ -1,0 +1,18 @@
+﻿@use '../academic/academic.page';
+.stat-card strong { font-size:clamp(1rem, 1.7vw, 1.65rem); overflow-wrap:anywhere; }
+.pagination { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:16px; font-size:.8125rem; }
+.pagination .actions, td .actions { margin:0; }
+.check-label { margin-bottom:16px; }
+.receipt { max-width:650px; margin:auto; padding:20px; }
+.receipt dl { display:grid; grid-template-columns:160px 1fr; gap:16px; font-size:.9rem; }
+.receipt dt { color:#64748b; }
+.receipt dd { margin:0; overflow-wrap:anywhere; }
+.receipt-total { font-size:1.5rem; font-weight:700; }
+@media(max-width:600px) { .receipt { padding:0; } .receipt dl { grid-template-columns:1fr; gap:8px; } .receipt dd { margin-bottom:12px; } }
+@media print {
+  :host > :not(.printable) { display:none !important; }
+  .no-print { display:none !important; }
+  .modal-overlay.printable { position:static; display:block; background:white; padding:0; }
+  .modal-card { max-height:none; overflow:visible; width:100%; padding:0; box-shadow:none; }
+  .table-scroll { overflow:visible; }
+}

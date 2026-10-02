@@ -201,6 +201,32 @@ class I18nInliner {
             warnings,
         };
     }
+    async inlineTemplateUpdate(locale, translation, templateCode, templateId) {
+        const hasLocalize = templateCode.includes(LOCALIZE_KEYWORD);
+        if (!hasLocalize) {
+            return {
+                code: templateCode,
+                errors: [],
+                warnings: [],
+            };
+        }
+        const { output, messages } = await this.#workerPool.run({ code: templateCode, filename: templateId, locale, translation }, { name: 'inlineCode' });
+        const errors = [];
+        const warnings = [];
+        for (const message of messages) {
+            if (message.type === 'error') {
+                errors.push(message.message);
+            }
+            else {
+                warnings.push(message.message);
+            }
+        }
+        return {
+            code: output,
+            errors,
+            warnings,
+        };
+    }
     /**
      * Stops all active transformation tasks and shuts down all workers.
      * @returns A void promise that resolves when closing is complete.

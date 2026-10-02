@@ -30,8 +30,10 @@ a {
   font-weight: 600;
   cursor: pointer;
 
-  &:hover {
+  &:hover,
+  &:focus,
+  &:active {
     color: $primary-orange-hover;
-    text-decoration: underline;
+    text-decoration: none;
   }
 }

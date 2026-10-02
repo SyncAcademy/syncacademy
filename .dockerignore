@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/.angular
+**/.tmp
+.git
+.env
+.env.*
+.runtime
+**/*.credentials.txt

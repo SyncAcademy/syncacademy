@@ -1,0 +1,349 @@
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.teacher-marks {
+  max-width: 900px;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.875rem;
+  color: $text-secondary;
+  text-decoration: none;
+  svg { width: 16px; height: 16px; }
+  &:hover { color: #92400e; }
+}
+
+// ── Toolbar ──────────────────────────────────
+.marks-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+
+  &__left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__search {
+    display: flex;
+    align-items: center;
+    background: #FFFFFF;
+    border: 1px solid $input-border;
+    border-radius: $radius-md;
+    padding: 0 12px;
+    height: 44px;
+    flex: 1;
+    max-width: 300px;
+
+    svg { width: 16px; height: 16px; color: #596579; margin-right: 8px; }
+    input {
+      border: none; background: transparent; outline: none;
+      font-size: 0.875rem; width: 100%; color: $text-primary;
+      font-family: $font-family;
+      &::placeholder { color: #596579; }
+    }
+  }
+
+  &__autosave {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8125rem;
+    color: $success-green;
+    white-space: nowrap;
+    svg { width: 14px; height: 14px; }
+  }
+
+  &__progress {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  &__count {
+    font-size: 0.8125rem;
+    color: $text-secondary;
+    white-space: nowrap;
+  }
+
+  @include mobile {
+    flex-direction: column;
+    align-items: stretch;
+
+    &__left { flex-direction: column; align-items: stretch; }
+    &__search { max-width: 100%; }
+    &__progress { align-items: stretch; }
+  }
+}
+
+.progress-bar {
+  width: 160px;
+  height: 6px;
+  background: #E5E7EB;
+  border-radius: 999px;
+  overflow: hidden;
+
+  &__fill {
+    height: 100%;
+    background: $primary-orange;
+    border-radius: 999px;
+    transition: width 0.4s ease;
+    &--complete { background: $success-green; }
+  }
+
+  @include mobile {
+    width: 100%;
+  }
+}
+
+// ── Mark Cards ─────────────────────────────────
+.marks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mark-card {
+  background: #FFFFFF;
+  border: 1px solid $input-border;
+  border-radius: $radius-lg;
+  padding: 16px 20px;
+  transition: box-shadow 0.2s ease;
+
+  &:focus-within {
+    border-color: $primary-orange;
+    box-shadow: 0 0 0 3px $primary-orange-light;
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  &__number {
+    width: 28px;
+    text-align: center;
+    font-size: 0.8125rem;
+    color: #596579;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  &__student {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__name {
+    display: block;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: $text-primary;
+  }
+
+  &__id {
+    font-size: 0.8125rem;
+    color: #596579;
+  }
+
+  &__grade {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #596579;
+    min-width: 32px;
+    text-align: center;
+
+    &--high { color: $success-green; }
+  }
+
+  &__fields {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+
+    @include mobile {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+
+  &__field {
+    label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: $text-secondary;
+      margin-bottom: 4px;
+    }
+
+    &--comment {
+      flex: 1;
+    }
+  }
+
+  @include mobile {
+    padding: 14px 16px;
+  }
+}
+
+.mark-input {
+  width: 100px;
+  padding: 10px 12px;
+  border: 1px solid $input-border;
+  border-radius: $radius-md;
+  font-size: 1rem;
+  font-family: $font-family;
+  color: $text-primary;
+  text-align: center;
+  min-height: 44px;
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $primary-orange;
+    box-shadow: 0 0 0 3px $primary-orange-light;
+  }
+
+  @include mobile {
+    width: 100%;
+  }
+}
+
+.comment-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid $input-border;
+  border-radius: $radius-md;
+  font-size: 0.875rem;
+  font-family: $font-family;
+  color: $text-primary;
+  min-height: 44px;
+
+  &:focus {
+    outline: none;
+    border-color: $primary-orange;
+    box-shadow: 0 0 0 3px $primary-orange-light;
+  }
+
+  &::placeholder { color: #596579; }
+}
+
+// ── Footer ──────────────────────────────────
+.marks-footer {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+
+  &__hint {
+    font-size: 0.8125rem;
+    color: #596579;
+  }
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: $radius-md;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  min-height: 44px;
+  transition: all 0.2s ease;
+  svg { width: 16px; height: 16px; }
+
+  &--primary { background: $primary-orange; color: #FFFFFF; &:hover { background: $primary-orange-hover; } }
+  &--ghost { background: transparent; color: $text-secondary; &:hover { background: #F3F4F6; } }
+  &--lg { padding: 14px 32px; font-size: 1rem; min-height: 48px; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+// ── Submitted State ─────────────────────────────
+.submitted-state {
+  text-align: center;
+  padding: 64px 24px;
+  max-width: 480px;
+  margin: 0 auto;
+
+  &__icon {
+    margin-bottom: 16px;
+    svg { width: 56px; height: 56px; color: $success-green; }
+  }
+
+  h3 { margin: 0 0 8px; font-size: 1.5rem; font-weight: 600; color: $text-primary; }
+  p { margin: 0 0 24px; font-size: 0.875rem; color: $text-secondary; line-height: 1.6; }
+}
+
+// ── Dialog ──────────────────────────────────
+.dialog-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+
+.dialog {
+  background: #FFFFFF; border-radius: $radius-lg;
+  padding: 32px; max-width: 440px; width: 100%;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+
+  &__title { margin: 0 0 12px; font-size: 1.25rem; font-weight: 600; color: $text-primary; }
+  &__text { margin: 0 0 24px; font-size: 0.875rem; color: $text-secondary; line-height: 1.5; }
+  &__actions { display: flex; gap: 12px; justify-content: flex-end; }
+}
+
+// ── Skeleton ────────────────────────────────
+.skeleton-container {
+  display: flex; flex-direction: column; gap: 12px;
+
+  .skeleton-card {
+    background: #FFFFFF; border: 1px solid $input-border; border-radius: $radius-lg;
+    height: 100px;
+    background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+// Compact desktop rows; comfortable cards on phones.
+@media (min-width: 1024px) {
+  .teacher-marks { max-width: 1200px; }
+  .mark-card { display: grid; grid-template-columns: minmax(230px, 1fr) minmax(320px, 1.3fr); align-items: center; gap: 24px; padding: 12px 20px; }
+  .mark-card__header { margin-bottom: 0; }
+  .mark-card__field label { font-size: .8125rem; }
+}
+.mark-card__id, .mark-card__field label { font-size: .8125rem; color: #596579; }
+.marks-toolbar__autosave { color: #065f46; font-size: .8125rem; white-space: normal; }
+.marks-footer { position: sticky; bottom: 0; z-index: 5; background: #f8f9faf5; border-top: 1px solid #d9e2ec; padding: 16px; margin-top: 24px; }
+.mark-input[aria-invalid=true] { border-color: #b91c1c; background: #fff7f7; }
+input[readonly] { background: #f8fafc; color: #475569; }

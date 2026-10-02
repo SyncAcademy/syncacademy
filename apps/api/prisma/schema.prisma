@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+enum Role {
+  HEADMASTER
+  REGISTRAR
+  ACADEMIC
+  TEACHER
+  BURSAR
+  STUDENT
+  PARENT
+}
+model User {
+  id String @id @default(uuid()) @db.Uuid
+  email String @unique
+  name String
+  passwordHash String
+  platformAdmin Boolean @default(false)
+  enabled Boolean @default(true)
+  mustChangePassword Boolean @default(false)
+  sessionVersion Int @default(0)
+  mfaSecret String?
+  mfaLastStep BigInt @default(0)
+  mfaRecovery String[] @default([])
+  createdAt DateTime @default(now())
+  memberships Membership[]
+  resets PasswordReset[]
+  students Student[]
+}
+model School {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  code String @unique
+  region String
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  memberships Membership[]
+  invitations Invitation[]
+  years AcademicYear[]
+  classes Classroom[]
+  students Student[]
+  enrollments Enrollment[]
+  assignments TeachingAssignment[]
+}
+model Membership {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  schoolId String @db.Uuid
+  role Role
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id])
+  school School @relation(fields: [schoolId], references: [id])
+  assignments TeachingAssignment[]
+  @@unique([userId, schoolId, role])
+  @@unique([id, schoolId])
+  @@index([schoolId, role, active])
+}
+model Invitation {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String? @db.Uuid
+  platformAdmin Boolean @default(false)
+  email String
+  name String
+  role Role
+  tokenHash String @unique
+  generation Int @default(1)
+  expiresInMinutes Int @default(2880)
+  expiresAt DateTime
+  acceptedAt DateTime?
+  revokedAt DateTime?
+  invitedBy String @db.Uuid
+  studentId String? @db.Uuid
+  createdAt DateTime @default(now())
+  school School? @relation(fields: [schoolId], references: [id])
+  student Student? @relation(fields: [studentId, schoolId], references: [id, schoolId])
+  @@index([schoolId, email, role])
+  @@index([expiresAt])
+}
+model PasswordReset {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  tokenHash String @unique
+  expiresAt DateTime
+  usedAt DateTime?
+  user User @relation(fields: [userId], references: [id])
+}
+model AcademicYear {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  name String
+  startsAt DateTime @db.Date
+  endsAt DateTime @db.Date
+  closed Boolean @default(false)
+  school School @relation(fields: [schoolId], references: [id])
+  classes Classroom[]
+  @@unique([id, schoolId])
+  @@unique([schoolId, name])
+}
+model Classroom {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  yearId String @db.Uuid
+  name String
+  school School @relation(fields: [schoolId], references: [id])
+  year AcademicYear @relation(fields: [yearId, schoolId], references: [id, schoolId])
+  enrollments Enrollment[]
+  assignments TeachingAssignment[]
+  @@unique([id, schoolId])
+  @@unique([schoolId, yearId, name])
+}
+model Student {
+  gender String?
+  address String?
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  admissionNumber String
+  name String
+  dateOfBirth DateTime? @db.Date
+  userId String? @db.Uuid
+  createdAt DateTime @default(now())
+  school School @relation(fields: [schoolId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
+  enrollments Enrollment[]
+  invitations Invitation[]
+  @@unique([id, schoolId])
+  @@unique([schoolId, admissionNumber])
+  @@unique([schoolId, userId])
+}
+model Enrollment {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  studentId String @db.Uuid
+  classroomId String @db.Uuid
+  createdAt DateTime @default(now())
+  school School @relation(fields: [schoolId], references: [id])
+  student Student @relation(fields: [studentId, schoolId], references: [id, schoolId])
+  classroom Classroom @relation(fields: [classroomId, schoolId], references: [id, schoolId])
+  @@unique([schoolId, studentId, classroomId])
+  @@index([schoolId, classroomId])
+}
+model TeachingAssignment {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  membershipId String @db.Uuid
+  classroomId String @db.Uuid
+  school School @relation(fields: [schoolId], references: [id])
+  membership Membership @relation(fields: [membershipId, schoolId], references: [id, schoolId])
+  classroom Classroom @relation(fields: [classroomId, schoolId], references: [id, schoolId])
+  @@unique([schoolId, membershipId, classroomId])
+}
+model AuditEvent {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String? @db.Uuid
+  actorId String? @db.Uuid
+  action String
+  target String
+  createdAt DateTime @default(now())
+  @@index([schoolId, createdAt])
+}
+model Outbox {
+  id String @id @default(uuid()) @db.Uuid
+  payload String
+  invitationId String? @db.Uuid
+  invitationGeneration Int?
+  resetId String? @db.Uuid
+  attempts Int @default(0)
+  availableAt DateTime @default(now())
+  leaseUntil DateTime?
+  leaseId String?
+  sentAt DateTime?
+  cancelledAt DateTime?
+  failedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([sentAt, failedAt, availableAt])
+}
+model RateBucket {
+  key String @id
+  count Int @default(1)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+model Idempotency {
+  scope String
+  key String
+  fingerprint String
+  result Json
+  createdAt DateTime @default(now())
+  @@id([scope, key])
+}
+
+model WebSession {
+  sid String @id @db.VarChar
+  sess Json @db.Json
+  expire DateTime @db.Timestamp(6)
+  @@index([expire], map: "IDX_session_expire")
+  @@map("session")
+}

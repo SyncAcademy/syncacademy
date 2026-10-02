@@ -1,0 +1,382 @@
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.academic-years-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+// Header Action Button
+.header-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: $primary-orange;
+  color: #fff;
+  border: none;
+  border-radius: $radius-md;
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover {
+    background-color: $primary-orange-hover;
+  }
+}
+
+// Filter Controls
+.filter-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-select {
+  min-width: 140px;
+}
+
+// Loading Skeletons
+.skeleton-wrapper {
+  margin-top: 16px;
+}
+.skeleton-table {
+  background: #fff;
+  border-radius: $radius-lg;
+  border: 1px solid $input-border;
+  overflow: hidden;
+}
+.skeleton-table__row {
+  display: flex;
+  padding: 16px;
+  border-bottom: 1px solid $input-border;
+  gap: 16px;
+  
+  &:last-child {
+    border-bottom: none;
+  }
+  
+  &.skeleton-table__header {
+    background: #f8fafc;
+  }
+}
+.skeleton-cell {
+  height: 20px;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 4px;
+  
+  &--sm { width: 15%; }
+  &--md { width: 25%; }
+  &--badge { width: 80px; border-radius: 12px; }
+  &--actions { width: 100px; margin-left: auto; }
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+// Empty State Buttons
+.empty-btn {
+  background: $primary-orange;
+  color: #fff;
+  border: none;
+  border-radius: $radius-md;
+  padding: 10px 20px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 16px;
+  transition: background-color 0.2s;
+  
+  &:hover {
+    background: $primary-orange-hover;
+  }
+  
+  &--secondary {
+    background: #fff;
+    color: $text-secondary;
+    border: 1px solid $input-border;
+    
+    &:hover {
+      background: #f8fafc;
+      color: $text-primary;
+    }
+  }
+}
+
+// Table Styles
+.data-container {
+  margin-top: 16px;
+}
+
+.table-section {
+  @include mobile {
+    display: none;
+  }
+}
+
+.mobile-section {
+  display: none;
+  @include mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+.academic-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid $input-border;
+
+  th, td {
+    padding: 16px;
+    text-align: left;
+    border-bottom: 1px solid $input-border;
+  }
+
+  th {
+    background: #f8fafc;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $text-secondary;
+    text-transform: uppercase;
+  }
+
+  td {
+    font-size: 0.875rem;
+    color: $text-primary;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+}
+
+.label-badge {
+  font-weight: 600;
+  color: $text-primary;
+}
+
+// Action Buttons
+.action-btn-group {
+  display: flex;
+  gap: 8px;
+}
+
+.row-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.8125rem;
+  padding: 6px 10px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  &--edit {
+    color: #92400e;
+    background: rgba(232, 126, 36, 0.05);
+    &:hover {
+      background: rgba(232, 126, 36, 0.15);
+    }
+  }
+
+  &--delete {
+    color: #EF4444;
+    background: rgba(239, 68, 68, 0.05);
+    &:hover {
+      background: rgba(239, 68, 68, 0.15);
+    }
+  }
+}
+
+// Mobile Record Cards
+.m-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.m-card-label {
+  font-weight: 600;
+  font-size: 1rem;
+}
+.m-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.m-card-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+}
+.m-card-key {
+  color: $text-secondary;
+}
+.m-card-val {
+  color: $text-primary;
+  font-weight: 500;
+}
+.m-card-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  border-top: 1px solid $input-border;
+  padding-top: 12px;
+}
+
+.m-btn {
+  @extend .row-btn;
+}
+
+// Dialog Overlays
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  animation: fadeIn 0.15s ease;
+}
+
+.dialog-card {
+  background: #fff;
+  border-radius: $radius-lg;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow-y: auto;
+
+  &__header {
+    padding: 20px 24px;
+    border-bottom: 1px solid $input-border;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  &__close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: #596579;
+    cursor: pointer;
+    &:hover {
+      color: $text-primary;
+    }
+  }
+
+  &__actions {
+    margin-top: 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+}
+
+.dialog-form {
+  padding: 24px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+  
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.form-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  color: #991B1B;
+  border-radius: $radius-md;
+  font-size: 0.875rem;
+  margin-bottom: 16px;
+  
+  svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+}
+
+.dialog-btn {
+  padding: 8px 16px;
+  border-radius: $radius-md;
+  font-weight: 500;
+  cursor: pointer;
+  
+  &--cancel {
+    background: transparent;
+    border: 1px solid $input-border;
+    color: $text-secondary;
+    
+    &:hover {
+      background: #f8fafc;
+      color: $text-primary;
+    }
+  }
+  
+  &--save {
+    background: $primary-orange;
+    border: none;
+    color: #fff;
+    
+    &:hover {
+      background: $primary-orange-hover;
+    }
+  }
+}

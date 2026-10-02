@@ -1,0 +1,100 @@
+<nav class="sidebar">
+  <!-- Top: Logo (pinned) -->
+  <div class="sidebar__logo-area">
+    <a
+      class="sidebar__logo"
+      routerLink="/"
+      aria-label="SyncAcademy — go to landing page"
+      (click)="$event.preventDefault(); navigateTo('/')"
+     queryParamsHandling="preserve">
+      <div class="sidebar__logo-icon">
+        <svg
+          viewBox="0 0 24 24"
+          fill="white"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z"
+          />
+        </svg>
+      </div>
+      <span class="sidebar__logo-text">
+        <span class="sidebar__logo-sync">Sync</span>
+        <span class="sidebar__logo-academy">Academy</span>
+      </span>
+    </a>
+  </div>
+
+  <!-- Middle: Scrollable navigation area -->
+  <div class="sidebar__scrollable">
+    <!-- Campus Selector -->
+    <div class="sidebar__campus-selector" aria-label="Current school campus">
+      <svg
+        class="sidebar__campus-icon"
+        viewBox="0 0 24 24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M19 4h-4V2H9v2H5v18h14V4zM7 18H6v-2h1v2zm0-4H6v-2h1v2zm0-4H6V8h1v2zm4 8H9v-2h2v2zm0-4H9v-2h2v2zm0-4H9V8h2v2zm4 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V8h2v2z"
+        />
+      </svg>
+      <span>{{ selectedCampus() }}</span>
+      <svg
+        class="sidebar__chevron"
+        viewBox="0 0 24 24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+      </svg>
+    </div>
+
+    <!-- Navigation Sections -->
+    <div class="sidebar__nav">
+      <div class="sidebar__section" *ngFor="let section of navSections()">
+        <span class="sidebar__section-label">{{ section.label }}</span>
+        <a
+          *ngFor="let item of section.items"
+          class="sidebar__nav-item"
+          [routerLink]="item.route"
+          routerLinkActive="sidebar__nav-item--active"
+          [routerLinkActiveOptions]="{ exact: true }"
+          (click)="$event.preventDefault(); navigateTo(item.route)"
+        >
+          <svg class="sidebar__nav-icon" aria-hidden="true">
+            <use
+              [attr.href]="'assets/icons/sidebar-icons.svg#icon-' + item.icon"
+            ></use>
+          </svg>
+          {{ item.title }}
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom: User + Logout (pinned) -->
+  <div class="sidebar__bottom">
+    <div class="sidebar__user">
+      <div class="sidebar__user-avatar">{{ auth.identity()?.name?.charAt(0) }}</div>
+      <div class="sidebar__user-info">
+        <span class="sidebar__user-name">{{ auth.identity()?.name }}</span>
+        <span class="sidebar__user-role">Teacher</span>
+      </div>
+    </div>
+    <button class="sidebar__logout-btn" (click)="logout()">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <polyline points="16 17 21 12 16 7"></polyline>
+        <line x1="21" y1="12" x2="9" y2="12"></line>
+      </svg>
+      Logout
+    </button>
+  </div>
+  <app-sidebar-resize-handle></app-sidebar-resize-handle>
+</nav>

@@ -1,0 +1,250 @@
+@use 'variables' as *;
+
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.sidebar {
+  width: var(--sidebar-size, #{$sidebar-width});
+  max-width: 100%;
+  box-sizing: border-box;
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  background-color: $sidebar-bg;
+  border-right: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: $sidebar-text;
+
+  &__logo-area {
+    flex: 0 0 auto;
+    padding: 24px 20px 0;
+    margin-bottom: 16px;
+  }
+
+  &__logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    cursor: pointer;
+    margin-bottom: 16px;
+  }
+
+  &__logo-icon {
+    width: 32px;
+    height: 32px;
+    background-color: $primary-orange;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    svg {
+      width: 20px;
+      height: 20px;
+      fill: #FFFFFF;
+    }
+  }
+
+  &__logo-text {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: $sidebar-text;
+    display: flex;
+    gap: 4px;
+  }
+
+  &__logo-sync {
+    color: $sidebar-text;
+  }
+
+  &__logo-academy {
+    color: #92400e;
+  }
+
+  &__scrollable {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 20px;
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(203, 213, 225, 0.35) transparent;
+
+    &::-webkit-scrollbar { width: 4px; }
+    &::-webkit-scrollbar-track { background: transparent; }
+    &::-webkit-scrollbar-thumb { background: rgba(203, 213, 225, 0.3); border-radius: 999px; }
+    &::-webkit-scrollbar-thumb:hover { background: rgba(203, 213, 225, 0.6); }
+  }
+
+  &__campus-selector {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #334155;
+    border: 1px solid #475569;
+    border-radius: $radius-md;
+    color: $sidebar-text;
+    font-size: 0.875rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    margin-bottom: 32px;
+    transition: background-color 0.2s;
+
+    &:hover { background: #3d4b60; }
+  }
+
+  &__campus-icon, &__chevron {
+    width: 20px;
+    height: 20px;
+    fill: $text-secondary;
+  }
+
+  &__chevron {
+    margin-left: auto;
+  }
+
+  &__section {
+    margin-bottom: 24px;
+  }
+
+  &__section-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+    padding-left: 12px;
+  }
+
+  &__nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    color: #CBD5E1;
+    text-decoration: none;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    border-radius: $radius-md;
+    transition: all 0.2s ease;
+    margin-bottom: 4px;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: $sidebar-text;
+    }
+
+    &--active {
+      background: $primary-orange;
+      color: #FFFFFF;
+      font-weight: 600;
+
+      .sidebar__nav-bullet {
+        border-color: $primary-orange;
+        background: $primary-orange;
+      }
+    }
+  }
+
+  &__nav-bullet {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid $text-muted;
+    flex-shrink: 0;
+  }
+
+  &__nav-icon {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  &__bottom {
+    flex: 0 0 auto;
+    border-top: 1px solid #334155;
+    padding: 20px;
+  }
+
+  &__user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: $primary-orange;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  &__user-info {
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__user-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: $sidebar-text;
+  }
+
+  &__user-role {
+    font-size: 0.8125rem;
+    color: $text-secondary;
+  }
+
+  &__logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 16px;
+    padding: 10px 12px;
+    background: transparent;
+    border: 1px solid #475569;
+    border-radius: $radius-md;
+    color: #CBD5E1;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+    }
+
+    &:hover {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #FCA5A5;
+    }
+  }
+}

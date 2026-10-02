@@ -1,5 +1,6 @@
 @use 'styles/variables' as *;
 @use 'styles/typography';
+@use 'styles/portal';
 
 /* Ionic core CSS */
 @import '@ionic/angular/css/core.css';
@@ -18,17 +19,27 @@
   box-sizing: border-box;
 }
 
+a,
+a:hover,
+a:focus,
+a:active {
+  text-decoration: none !important;
+}
 
-
-
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 100px;
+}
 
 body {
   margin: 0;
   background-color: $body-bg;
 }
 
-body:has(.landing-page),
-body:has(.auth-layout) {
+html.landing-route,
+body.landing-route,
+html:has(.auth-layout, .auth-screen),
+body:has(.auth-layout, .auth-screen) {
   position: static;
   width: auto;
   max-width: none;
@@ -41,6 +52,13 @@ body:has(.auth-layout) {
   overscroll-behavior-y: auto;
 }
 
+body.landing-route app-root,
+body:has(.auth-layout, .auth-screen) app-root {
+  display: block;
+  height: auto;
+  min-height: 100%;
+}
+
 html,
 body,
 app-root,
@@ -48,6 +66,12 @@ ion-app {
   width: 100%;
   min-width: 0;
   height: 100%;
+}
+
+html:has(.workspace-shell),
+body:has(.workspace-shell) {
+  height: 100%;
+  overflow: hidden;
 }
 
 ion-app {
@@ -83,29 +107,9 @@ ion-menu app-sidebar {
   }
 }
 
-/* Routed dashboard pages are created outside the layout component's style scope. */
-.dashboard-page ion-router-outlet {
-  display: block;
-  position: static !important;
-  width: 100%;
-  min-width: 0;
-  min-height: 0 !important;
-  height: auto !important;
-  contain: none !important;
-}
-
-.dashboard-page ion-router-outlet .ion-page {
-  display: block !important;
-  position: relative !important;
-  inset: auto !important;
-  width: 100%;
-  min-height: 0 !important;
-  height: auto !important;
-  contain: none !important;
-}
-
 /* Override Ionic CSS variables */
 :root {
+  --sidebar-size: #{$sidebar-width};
   --ion-font-family: #{$font-family};
   --ion-color-primary: #{$primary-orange};
   --ion-color-primary-shade: #{$primary-orange-hover};
@@ -204,30 +208,35 @@ ion-menu app-sidebar {
   }
 }
 
-/* Make component headers span full width and merge visually with layout header */
+/* Floating sticky component headers */
 .page-header {
-  background-color: #FFFFFF !important;
-  margin: -24px -24px 24px -24px !important;
-  width: calc(100% + 48px) !important;
-  min-width: calc(100% + 48px) !important;
-  flex: 0 0 calc(100% + 48px) !important;
-  transform: translateX(-24px);
+  position: sticky !important;
+  top: 16px !important;
+  z-index: 100 !important;
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(8px);
+  margin: 0 0 24px 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  flex: 0 1 100% !important;
+  transform: none !important;
   padding: 16px 24px !important;
-  border-bottom: 1px solid var(--sa-input-border) !important;
+  border: 1px solid var(--sa-input-border) !important;
+  border-radius: 24px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.05) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
   
   @media (max-width: 768px) {
-    margin: -16px -16px 16px -16px !important;
-    width: calc(100% + 32px) !important;
-    min-width: calc(100% + 32px) !important;
-    flex-basis: calc(100% + 32px) !important;
-    transform: translateX(-16px);
+    top: 12px !important;
+    margin: 0 0 16px 0 !important;
     padding: 16px !important;
     flex-direction: column;
     align-items: flex-start !important;
     gap: 12px;
+    border-radius: 20px !important;
   }
 
   h1 {
@@ -235,3 +244,24 @@ ion-menu app-sidebar {
     margin: 0 !important;
   }
 }
+
+
+/* Hide scrollbars for all scrollable tables universally */
+.table-scroll-wrapper,
+.table-responsive,
+.table-container {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  
+  &::-webkit-scrollbar {
+    display: none !important;
+  }
+}
+
+
+
+
+
+
+
+

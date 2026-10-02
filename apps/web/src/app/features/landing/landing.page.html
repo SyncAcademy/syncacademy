@@ -1,7 +1,6 @@
 <div class="landing-page">
   <!-- Hero Section Wrapper with Background -->
-  <div class="hero-wrapper">
-    <!-- 1. Navigation (Floating) -->
+  <div id="home" class="hero-wrapper">
     <nav class="floating-navbar">
       <div class="logo">
         <app-logo variant="dark" size="md"></app-logo>
@@ -27,12 +26,34 @@
     <!-- 2. Hero Section (Left Aligned) -->
     <header class="hero left-aligned">
       <div class="hero-content">
-        <h1>A smarter way to<br />manage your school</h1>
-        <p>
-          Sync Academy brings your entire school together in one powerful
-          platform — from students and academics to finance, communication, and
-          administration.
-        </p>
+        <div
+          class="hero-slider"
+          (mouseenter)="pauseSlider()"
+          (mouseleave)="resumeSlider()"
+          aria-live="polite"
+        >
+          <div
+            *ngFor="let slide of heroSlides; let i = index"
+            class="hero-slide"
+            [class.active]="currentSlide() === i"
+            [class.exiting]="previousSlide() === i"
+            [attr.aria-hidden]="currentSlide() !== i"
+          >
+            <h1>{{ slide.line1 }}<br />{{ slide.line2 }}</h1>
+            <p>{{ slide.description }}</p>
+          </div>
+        </div>
+
+        <div class="hero-indicators" aria-label="Slide indicators">
+          <button
+            *ngFor="let slide of heroSlides; let i = index"
+            type="button"
+            class="indicator-dot"
+            [class.active]="currentSlide() === i"
+            (click)="setSlide(i)"
+            [attr.aria-label]="'Go to slide ' + (i + 1)"
+          ></button>
+        </div>
         <div class="hero-actions">
           <button class="btn btn-primary btn-lg" routerLink="/auth/register">
             Create Account
@@ -60,16 +81,319 @@
     </header>
   </div>
 
+  <!-- Animated Stat Counters Strip -->
+  <section
+    class="stats-counter-strip"
+    aria-label="Sync Academy platform metrics"
+  >
+    <div class="stats-container">
+      <div *ngFor="let stat of statCounters()" class="stat-card">
+        <div class="stat-icon-wrap" [ngClass]="'stat-' + stat.id">
+          <!-- schools icon -->
+          <svg
+            *ngIf="stat.id === 'schools'"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 21V9l8-5 8 5v12H4z"></path>
+            <path d="M9 21v-7h6v7"></path>
+            <line x1="12" y1="4" x2="12" y2="2"></line>
+          </svg>
+          <!-- students icon -->
+          <svg
+            *ngIf="stat.id === 'students'"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+            <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+          </svg>
+          <!-- attendance icon -->
+          <svg
+            *ngIf="stat.id === 'attendance'"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+            <path d="m9 16 2 2 4-4"></path>
+          </svg>
+          <!-- financials icon -->
+          <svg
+            *ngIf="stat.id === 'financials'"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            <path d="m9 12 2 2 4-4"></path>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <div class="stat-number">{{ formatCounter(stat) }}</div>
+          <div class="stat-label">{{ stat.label }}</div>
+          <div class="stat-sublabel">{{ stat.sublabel }}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- 3. Unified Solution Section -->
-  <section class="section unified-solution">
+  <section id="solutions" class="section unified-solution">
     <span class="section-label">THE UNIFIED SOLUTION</span>
     <h2>A single source of truth for your entire community.</h2>
-    <p class="section-subtitle">
-      Say goodbye to scattered spreadsheets and disjointed tools. SyncAcademy
-      brings everyone onto the same page.
+    <p class="section-subtitle scroll-animate scroll-animate-right">
+      Say goodbye to scattered spreadsheets and disjointed tools. Choose your
+      role below to explore how Sync Academy transforms your daily school
+      experience.
     </p>
 
-    <div class="grid-4">
+    <!-- Role Switcher Navigation (SVGs only, NO emojis) -->
+    <div class="role-switcher-container">
+      <div
+        class="role-switcher-tabs"
+        role="tablist"
+        aria-label="Select role to view tailored capabilities"
+      >
+        <button
+          type="button"
+          role="tab"
+          class="role-tab-btn"
+          [class.active]="activeRole() === 'leadership'"
+          [attr.aria-selected]="activeRole() === 'leadership'"
+          (click)="setRole('leadership')"
+        >
+          <svg
+            class="role-svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M3 21h18"></path>
+            <path d="M5 21V7l7-4 7 4v14"></path>
+            <path d="M9 10h1"></path>
+            <path d="M9 14h1"></path>
+            <path d="M14 10h1"></path>
+            <path d="M14 14h1"></path>
+          </svg>
+          <span>School Leadership</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          class="role-tab-btn"
+          [class.active]="activeRole() === 'teachers'"
+          [attr.aria-selected]="activeRole() === 'teachers'"
+          (click)="setRole('teachers')"
+        >
+          <svg
+            class="role-svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M2 3h20v14H2z"></path>
+            <path d="M8 21h8"></path>
+            <path d="M12 17v4"></path>
+          </svg>
+          <span>Teachers & Faculty</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          class="role-tab-btn"
+          [class.active]="activeRole() === 'bursar'"
+          [attr.aria-selected]="activeRole() === 'bursar'"
+          (click)="setRole('bursar')"
+        >
+          <svg
+            class="role-svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+            <line x1="2" y1="10" x2="22" y2="10"></line>
+            <circle cx="7" cy="15" r="1.5"></circle>
+            <path d="M14 15h4"></path>
+          </svg>
+          <span>Accountants & Bursars</span>
+        </button>
+      </div>
+
+      <!-- Active Role Spotlight Card -->
+      <div class="role-spotlight-card" [attr.data-role]="activeRole()">
+        <div class="spotlight-left">
+          <span class="spotlight-tagline">{{ currentRoleData().tagline }}</span>
+          <h3 class="spotlight-headline">{{ currentRoleData().headline }}</h3>
+          <p class="spotlight-description">
+            {{ currentRoleData().description }}
+          </p>
+
+          <ul class="spotlight-benefits">
+            <li *ngFor="let benefit of currentRoleData().benefits">
+              <svg
+                class="check-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <span>{{ benefit }}</span>
+            </li>
+          </ul>
+
+          <div class="spotlight-actions">
+            <a class="btn btn-primary" [routerLink]="currentRoleData().ctaLink"
+              >{{ currentRoleData().ctaText }}</a
+            >
+          </div>
+        </div>
+
+        <div class="spotlight-right">
+          <div class="spotlight-preview-panel">
+            <div class="panel-header">
+              <div class="panel-badge">{{ currentRoleData().badgeLabel }}</div>
+              <div class="panel-live-pill">
+                <span class="pulsing-dot"></span>
+                <span>Active Portal</span>
+              </div>
+            </div>
+
+            <div class="panel-metric-highlight">
+              <div class="metric-big">{{ currentRoleData().metricNumber }}</div>
+              <div class="metric-caption">
+                {{ currentRoleData().metricLabel }}
+              </div>
+            </div>
+
+            <!-- Role-specific micro-preview items -->
+            <div
+              class="panel-feature-list"
+              *ngIf="activeRole() === 'leadership'"
+            >
+              <div class="panel-item">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                  ></path>
+                </svg>
+                <span>Automated Fee Reconciliation</span>
+              </div>
+              <div class="panel-item">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                </svg>
+                <span>Enrolment & Admissions Tracker</span>
+              </div>
+            </div>
+
+            <div class="panel-feature-list" *ngIf="activeRole() === 'teachers'">
+              <div class="panel-item">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="m9 12 2 2 4-4"></path>
+                  <circle cx="12" cy="12" r="10"></circle>
+                </svg>
+                <span>1-Click Roster Attendance</span>
+              </div>
+              <div class="panel-item">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                  ></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span>Terminal Gradebook Tabulation</span>
+              </div>
+            </div>
+
+            <div class="panel-feature-list" *ngIf="activeRole() === 'bursar'">
+              <div class="panel-item">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                  ></path>
+                </svg>
+                <span>Automated Fee Ledger Posting</span>
+              </div>
+              <div class="panel-item">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                  <line x1="2" y1="10" x2="22" y2="10"></line>
+                  <circle cx="7" cy="15" r="1"></circle>
+                </svg>
+                <span>Instant Payment & SMS Receipts</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-4 staggered-card-grid">
       <div class="card">
         <div class="icon-wrapper">
           <svg
@@ -147,15 +471,16 @@
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-            <path
-              d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
-            ></path>
+            <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+            <line x1="2" y1="10" x2="22" y2="10"></line>
+            <circle cx="7" cy="15" r="1.5"></circle>
+            <path d="M14 15h4"></path>
           </svg>
         </div>
-        <h3>Students</h3>
+        <h3>Accountants & Bursars</h3>
         <p>
-          Access study materials, schedules, and report cards from any device.
+          Reconcile fee ledgers, record bank & mobile money payments, and issue
+          automated receipts.
         </p>
       </div>
     </div>
@@ -165,7 +490,7 @@
   <section class="section dashboard-preview-section">
     <span class="section-label">SYSTEM OVERVIEW</span>
     <h2>See your entire school at a glance</h2>
-    <p class="section-subtitle">
+    <p class="section-subtitle scroll-animate scroll-animate-right">
       Our intuitive interface provides directors and administrators with
       comprehensive insights, clear dashboards, and structural control.
     </p>
@@ -400,15 +725,15 @@
   </section>
 
   <!-- Functional Modules -->
-  <section class="section functional-modules">
+  <section id="features" class="section functional-modules">
     <span class="section-label">FUNCTIONAL MODULES</span>
     <h2>Everything works together</h2>
-    <p class="section-subtitle">
+    <p class="section-subtitle scroll-animate scroll-animate-right">
       Each segment functions perfectly on its own while staying intimately
       connected to school-wide metrics in real time.
     </p>
 
-    <div class="grid-4 functional-grid">
+    <div class="grid-4 functional-grid staggered-card-grid">
       <!-- 1. Student Management -->
       <div class="card">
         <div class="icon-wrapper">
@@ -600,7 +925,7 @@
   </section>
 
   <!-- 6. Alternating Feature Blocks -->
-  <section class="section feature-blocks">
+  <section id="services" class="section feature-blocks">
     <!-- Block A: Student Profiles -->
     <div class="feature-block">
       <div class="feature-text">
@@ -674,8 +999,9 @@
           <div class="mockup-profile-user">
             <div class="avatar">
               <img
-                src="/assets/images/amani-juma.svg"
+                src="/assets/images/amani-juma.jpg"
                 alt="Amani Juma profile picture"
+                onerror="this.src = '/assets/images/amani-juma.svg'"
               />
             </div>
             <div class="user-info">
@@ -820,7 +1146,7 @@
   </section>
 
   <!-- 7. Security & Roles Grid (NEW) -->
-  <section class="section security-roles bg-gray">
+  <section id="about" class="section security-roles bg-gray">
     <div class="container text-center">
       <span class="section-label">SECURITY & ROLES</span>
       <h2>The right information for the right people</h2>
@@ -969,6 +1295,208 @@
     </div>
   </section>
 
+  <!-- 7.5. Contact Section -->
+  <section id="contact" class="section section-light">
+    <div class="container contact-grid">
+      <!-- Contact Info (Left) -->
+      <div class="contact-info scroll-animate scroll-animate-left">
+        <div class="section-badge">
+          <span class="badge-text">OUR CONTACT DETAILS</span>
+          <span class="badge-line"></span>
+        </div>
+        <h2 class="info-title">We're here to help</h2>
+        <p class="info-subtitle">
+          Reach out to us through any of the channels below. Our team will get
+          back to you as soon as possible.
+        </p>
+
+        <div class="info-items">
+          <!-- Office -->
+          <div class="info-item">
+            <div class="icon-wrapper icon-orange">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+            </div>
+            <div class="item-details">
+              <h4>Our Office</h4>
+              <p>123 Education Road, Oyster Bay<br />Dar es Salaam, Tanzania</p>
+            </div>
+          </div>
+
+          <!-- Phone -->
+          <div class="info-item">
+            <div class="icon-wrapper icon-green">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"
+                ></path>
+              </svg>
+            </div>
+            <div class="item-details">
+              <h4>Phone</h4>
+              <p>+255 22 123 4567<br />+255 767 123 456</p>
+            </div>
+          </div>
+
+          <!-- Email -->
+          <div class="info-item">
+            <div class="icon-wrapper icon-orange">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
+                ></path>
+                <polyline points="22,6 12,13 2,6"></polyline>
+              </svg>
+            </div>
+            <div class="item-details">
+              <h4>Email</h4>
+              <p>
+                info&#64;syncacademy.co.tz<br />support&#64;syncacademy.co.tz
+              </p>
+            </div>
+          </div>
+
+          <!-- Working Hours -->
+          <div class="info-item">
+            <div class="icon-wrapper icon-green">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+            </div>
+            <div class="item-details">
+              <h4>Working Hours</h4>
+              <p>
+                Monday - Friday: 8:00 AM - 5:00 PM<br />Saturday: 9:00 AM - 1:00
+                PM
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contact Form (Right) -->
+      <div class="contact-card scroll-animate scroll-animate-right">
+        <h2 class="contact-title">Send us a message</h2>
+        <p class="contact-subtitle">
+          Fill out the form below and we'll get back to you shortly.
+        </p>
+
+        <form class="contact-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="fullName"
+                >Full Name <span class="required">*</span></label
+              >
+              <input
+                type="text"
+                id="fullName"
+                placeholder="Enter your full name"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="emailAddress"
+                >Email Address <span class="required">*</span></label
+              >
+              <input
+                type="email"
+                id="emailAddress"
+                placeholder="Enter your email"
+                required
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="phoneNumber">Phone Number</label>
+              <input
+                type="tel"
+                id="phoneNumber"
+                placeholder="Enter your phone number"
+              />
+            </div>
+            <div class="form-group">
+              <label for="subject"
+                >Subject <span class="required">*</span></label
+              >
+              <div class="select-wrapper">
+                <select id="subject" required>
+                  <option value="" disabled selected>Select a subject</option>
+                  <option value="sales">Sales & Pricing</option>
+                  <option value="support">Technical Support</option>
+                  <option value="demo">Request a Demo</option>
+                  <option value="other">Other Inquiry</option>
+                </select>
+                <svg
+                  class="select-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group full-width">
+            <label for="message">Message <span class="required">*</span></label>
+            <textarea
+              id="message"
+              placeholder="Type your message here..."
+              rows="4"
+              required
+            ></textarea>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-submit">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+              </svg>
+              Send Message
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
   <!-- 8. Footer -->
   <footer class="footer dark-footer">
     <div class="footer-cta text-center">
@@ -1025,4 +1553,17 @@
       </div>
     </div>
   </footer>
+
+  <button
+    class="scroll-to-top"
+    [class.show]="showScrollTop()"
+    type="button"
+    aria-label="Scroll to top"
+    title="Back to top"
+    (click)="scrollToTop()"
+  >
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 19V5M6 11l6-6 6 6" />
+    </svg>
+  </button>
 </div>

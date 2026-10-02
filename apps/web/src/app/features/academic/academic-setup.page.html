@@ -1,0 +1,440 @@
+<app-head-page-header
+  [title]="title()"
+  description="Prepare the academic structure used by teachers and the Registrar."
+>
+  @if (section() === 'classes-subjects') {
+  <button
+    class="action-btn"
+    [disabled]="!futureYears().length"
+    (click)="open('copy')"
+  >
+    Prepare next-year classes</button
+  ><button
+    class="action-btn"
+    [disabled]="store.readOnly()"
+    (click)="open('subject')"
+  >
+    Add subject</button
+  ><button
+    class="action-btn action-btn--primary"
+    [disabled]="store.readOnly()"
+    (click)="open('class')"
+  >
+    Create class
+  </button>
+  } @if (section() === 'teachers') {
+  <a
+    class="action-btn"
+    routerLink="/academic/teaching-assignments"
+    queryParamsHandling="preserve"
+    >Assign classes & subjects</a
+  ><button class="action-btn action-btn--primary" (click)="open('teacher')">
+    Add teacher
+  </button>
+  }
+</app-head-page-header>
+<div class="context-row">
+  <span class="context-year">{{ store.year()?.label }}</span>@if
+  (store.readOnly()) { <span class="badge closed">Read-only year</span> }
+</div>
+@if (notice()) {
+<p class="portal-notice" role="status">{{ notice() }}</p>
+} @if (error() && !dialog()) {
+<p class="portal-notice portal-notice--error" role="alert">{{ error() }}</p>
+} @if (section() === 'classes-subjects') {
+<div class="filters">
+  <input
+    aria-label="Search classes"
+    placeholder="Search class or stream"
+    [ngModel]="search()"
+    (ngModelChange)="search.set($event)"
+  />
+</div>
+<div class="record-grid">
+  @for (c of classes(); track c.id) {
+  <section class="panel">
+    <div class="panel-heading">
+      <h3>{{ c.stream || c.name }}</h3>
+      <span class="badge" [attr.data-status]="c.enrolmentStatus"
+        >{{ c.enrolmentStatus === 'open' ? 'Open for enrolment' :
+        c.enrolmentStatus }}</span
+      >
+    </div>
+    <p>{{ c.name }} · {{ c.studentCount }} students</p>
+    <p>
+      Class teacher:
+      <strong
+        >{{ store.classTeachers.forClass(c.id, store.year()!.id)?.teacherName ||
+        'Not assigned' }}</strong
+      >
+    </p>
+    <p>
+      Subjects: @for (m of store.subjects(c.id); track m.id) {
+      <span>{{ m.subjectName }}{{ $last ? '' : ', ' }}</span> } @empty {
+      <span>No subjects assigned</span> }
+    </p>
+    <div class="actions">
+      <button
+        class="action-btn"
+        [disabled]="store.readOnly()"
+        (click)="open('class', c.id)"
+      >
+        Edit class</button
+      ><button
+        class="action-btn"
+        [disabled]="store.readOnly()"
+        (click)="open('class-teacher', c.id)"
+      >
+        Assign class teacher</button
+      >@if (c.enrolmentStatus === 'draft') {
+      <button
+        class="action-btn"
+        [disabled]="store.readOnly()"
+        (click)="open('delete', c.id)"
+      >
+        Delete unused draft
+      </button>
+      }
+    </div>
+  </section>
+  } @empty {
+  <section class="panel empty">
+    No classes for this academic year. Create a class before the Registrar can
+    enrol students.
+  </section>
+  }
+</div>
+<section class="panel">
+  <h3>School subject catalogue</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Subject</th>
+        <th>Code</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (s of store.head.subjects(); track s.id) {
+      <tr>
+        <td>{{ s.name }}</td>
+        <td>{{ s.code }}</td>
+      </tr>
+      }
+    </tbody>
+  </table>
+</section>
+} @if (section() === 'teachers') {
+<section class="panel">
+  <h3>Teacher invitations</h3>
+  <p>
+    Invite teachers by email. They create their account by accepting the secure
+    link.
+  </p>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Status</th>
+          <th>Expires</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (invitation of store.teacherInvitations(); track invitation.id) {
+        <tr>
+          <td>{{ invitation.name }}</td>
+          <td>{{ invitation.email }}</td>
+          <td>{{ invitationStatus(invitation) | titlecase }}</td>
+          <td>{{ invitation.expiresAt | date:'medium' }}</td>
+        </tr>
+        } @empty {
+        <tr>
+          <td colspan="4">No teacher invitations yet.</td>
+        </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+<section class="panel">
+  <h3>Shared teacher directory</h3>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Teacher</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Account status</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (t of store.teachers(); track t.id) {
+        <tr>
+          <td>{{ t.fullName }}</td>
+          <td>{{ t.email }}</td>
+          <td>{{ t.phone }}</td>
+          <td>
+            <span class="badge" [attr.data-status]="t.status"
+              >{{ t.status }}</span
+            >
+          </td>
+        </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+} @if (section() === 'settings') {
+<p class="portal-notice">
+  Grading policies are not configured yet. Editing is unavailable.
+</p>
+<fieldset disabled>
+  <section class="panel">
+    <h3>Grading scheme · revision {{ store.policy().revision }}</h3>
+    <p>
+      Enter minimum scores in descending order, ending at 0. Each band covers
+      its minimum up to the next band's boundary; the top band includes 100.
+      This covers all scores without gaps or overlaps.
+    </p>
+    <form (ngSubmit)="saveGrading()">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Grade name</th>
+              <th>Minimum score</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (band of bands; track $index) {
+            <tr>
+              <td>
+                <input
+                  [name]="'grade-' + $index"
+                  [(ngModel)]="band.label"
+                  aria-label="Grade name"
+                  required
+                  [disabled]="store.readOnly()"
+                />
+              </td>
+              <td>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  [name]="'minimum-' + $index"
+                  [(ngModel)]="band.minimum"
+                  aria-label="Minimum score"
+                  required
+                  [disabled]="store.readOnly()"
+                />
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="action-btn"
+                  [disabled]="store.readOnly() || bands.length <= 2"
+                  (click)="bands.splice($index, 1)"
+                >
+                  Remove
+                </button>
+              </td>
+            </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="actions">
+        <button
+          type="button"
+          class="action-btn"
+          [disabled]="store.readOnly()"
+          (click)="bands.push({ label: '', minimum: 0 })"
+        >
+          Add grade band
+        </button>
+      </div>
+      <label class="field"
+        >Pass mark (out of 100)<input
+          type="number"
+          name="passMark"
+          min="0"
+          max="100"
+          step="0.1"
+          [(ngModel)]="passMark"
+          required
+          [disabled]="store.readOnly()"
+      /></label>
+      <p>
+        Draft marks use the current scheme. Submitted marks and prepared reports
+        keep the scheme captured when they were submitted.
+      </p>
+      <button
+        class="action-btn action-btn--primary"
+        type="submit"
+        [disabled]="store.readOnly()"
+      >
+        Save grading scheme
+      </button>
+    </form>
+  </section>
+</fieldset>
+} @if (dialog()) {
+<div
+  class="modal-overlay"
+  appDialogFocus
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="setup-title"
+  (keydown.escape)="close()"
+  (click)="close()"
+>
+  <section class="modal-card" (click)="$event.stopPropagation()">
+    <div class="panel-heading">
+      <h2 id="setup-title">
+        {{ dialog() === 'class-teacher' ? 'Assign class teacher' : dialog() ===
+        'class' ? 'Class setup' : dialog() === 'teacher' ? 'Create teacher
+        profile' : dialog() === 'copy' ? 'Prepare next-year classes' : dialog()
+        === 'delete' ? 'Delete unused class?' : dialog() === 'verify' ? 'Record
+        contact check' : 'Add subject' }}
+      </h2>
+      <button class="action-btn" (click)="close()">Close</button>
+    </div>
+    @if (error()) {
+    <p class="portal-notice portal-notice--error" role="alert">{{ error() }}</p>
+    }
+    <form class="editor-form" (ngSubmit)="save()">
+      @switch (dialog()) { @case ('class-teacher') {
+      <label class="field"
+        >Class teacher<select
+          name="classTeacher"
+          [(ngModel)]="form['teacherId']"
+        >
+          <option value="">No class teacher</option>
+          @for (t of store.teachers(); track t.id) { @if (t.status === 'active')
+          {
+          <option [value]="t.id">{{ t.fullName }}</option>
+          } }
+        </select></label
+      >
+      <p>
+        This assignment applies to {{ store.year()?.label }}. Replacing a
+        teacher removes their class-teacher access and preserves attendance
+        history. Subject teaching assignments remain separate.
+      </p>
+      } @case ('class') {
+      <label class="field"
+        >Class name<input
+          name="name"
+          [(ngModel)]="form['name']"
+          placeholder="Form 1"
+          required /></label
+      ><label class="field"
+        >Stream (optional)<input
+          name="stream"
+          [(ngModel)]="form['stream']"
+          placeholder="Form 1A"
+      /></label>
+      <p>New classes are open for enrollment.</p>
+      <fieldset>
+        <legend>Subjects offered</legend>
+        @for (s of store.head.subjects(); track s.id) {
+        <label class="check-label"
+          ><input
+            type="checkbox"
+            [checked]="subjects.includes(s.id)"
+            (change)="toggleSubject(s.id)"
+          />{{ s.name }}</label
+        >
+        }
+      </fieldset>
+      } @case ('subject') {
+      <label class="field"
+        >Subject name<input
+          name="name"
+          [(ngModel)]="form['name']"
+          required /></label
+      ><label class="field"
+        >Subject code<input name="code" [(ngModel)]="form['code']" required
+      /></label>
+      } @case ('teacher') {
+      <label class="field"
+        >Full name<input
+          name="name"
+          [(ngModel)]="form['name']"
+          autocomplete="name"
+          required /></label
+      ><label class="field"
+        >Email address<input
+          type="email"
+          name="email"
+          [(ngModel)]="form['email']"
+          autocomplete="email"
+          required /></label
+      ><label class="field"
+        >Invitation link expires after<select
+          name="expiresInMinutes"
+          [(ngModel)]="form['expiresInMinutes']"
+          required
+        >
+          @for (option of expiryOptions; track option.minutes) {
+          <option [value]="option.minutes">{{ option.label }}</option>
+          }
+        </select></label
+      >
+      <p>
+        The teacher receives an email invitation and sets their password when
+        accepting it. Link expires after {{
+        expiryLabel(form['expiresInMinutes']) }}.
+      </p>
+      } @case ('verify') {
+      <label class="field"
+        >How were the details checked?<textarea
+          name="verification"
+          [(ngModel)]="form['verification']"
+          minlength="10"
+          required
+        ></textarea>
+      </label>
+      } @case ('copy') {
+      <label class="field"
+        >Target academic year<select
+          name="target"
+          [(ngModel)]="form['target']"
+          required
+        >
+          <option value="">Select year</option>
+          @for (y of futureYears(); track y.id) {
+          <option [value]="y.id">{{ y.label }}</option>
+          }
+        </select></label
+      >
+      <p>
+        Copy class structures and subject mappings as drafts. Select the target
+        year and open its classes before the Registrar can promote students.
+      </p>
+      } @case ('delete') {
+      <p>
+        Only an unused draft can be deleted. Any student, admission, teacher
+        assignment, or assessment records will prevent deletion.
+      </p>
+      } }
+      <div class="actions">
+        <button type="button" class="action-btn" (click)="close()">
+          Cancel</button
+        ><button
+          type="submit"
+          class="action-btn action-btn--primary"
+          [disabled]="store.readOnly() && dialog() !== 'copy' && dialog() !== 'teacher'"
+        >
+          Confirm
+        </button>
+      </div>
+    </form>
+  </section>
+</div>
+}

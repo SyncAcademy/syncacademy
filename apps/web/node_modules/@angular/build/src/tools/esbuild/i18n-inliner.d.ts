@@ -38,6 +38,11 @@ export declare class I18nInliner {
         errors: string[];
         warnings: string[];
     }>;
+    inlineTemplateUpdate(locale: string, translation: Record<string, unknown> | undefined, templateCode: string, templateId: string): Promise<{
+        code: string;
+        errors: string[];
+        warnings: string[];
+    }>;
     /**
      * Stops all active transformation tasks and shuts down all workers.
      * @returns A void promise that resolves when closing is complete.

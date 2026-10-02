@@ -1,0 +1,122 @@
+<p class="portal-notice" role="status">Assessment workflows are not available yet.</p><div inert>
+<div class="teacher-marks">
+  <app-teacher-page-header
+    [title]="'Mark Entry \u2014 ' + assignmentLabel()"
+    description="Enter marks and comments. Assessment entry is not available yet.">
+    <a [routerLink]="['/teacher']" class="back-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+      Back
+    </a>
+  </app-teacher-page-header>
+
+  <div class="portal-context"><strong>{{ store.period() }}</strong><span>Assessment entry unavailable</span></div>
+  <div *ngIf="!assignment()" class="portal-empty"><h3>Assignment unavailable</h3><p>Choose an assignment from your dashboard.</p></div>
+  <div *ngIf="assignment()?.assessmentProgress?.returnReason" class="portal-notice portal-notice--warning"><strong>Correction requested:</strong> {{ assignment()?.assessmentProgress?.returnReason }}</div>
+  <div *ngIf="assignment() && readOnly() && !submitted()" class="portal-notice">
+    {{ assignment()?.rosterStatus !== 'confirmed' ? 'Confirm the official student list before entering marks.' : 'These marks are locked. You can review them below.' }}
+    <a class="back-link" [routerLink]="['/teacher', assignmentId, assignment()?.rosterStatus !== 'confirmed' ? 'roster' : 'status']">{{ assignment()?.rosterStatus !== 'confirmed' ? 'Review student list' : 'View submission status' }}</a>
+  </div>
+  <div *ngIf="!store.storageAvailable()" role="alert" class="portal-notice portal-notice--warning">Browser storage is unavailable. Keep this page open to retain your demo changes.</div>
+  <!-- Loading -->
+  <div *ngIf="loading()" class="skeleton-container" aria-busy="true">
+    <div class="skeleton-card" *ngFor="let i of [1,2,3,4,5,6]"></div>
+  </div>
+
+  <!-- Submitted State -->
+  <div *ngIf="submitted() && !loading()" class="submitted-state">
+    <div class="submitted-state__icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+    </div>
+    <h3>Submission Recorded in Demo</h3>
+    <p>This assignment is now locked and marked as submitted in the frontend demo. No data has been sent to a server.</p>
+    <a [routerLink]="['/teacher', assignmentId, 'status']" class="action-btn action-btn--primary">View Submission Status</a>
+  </div>
+
+  <!-- Marks Entry -->
+  <div *ngIf="!loading() && !submitted() && assignment()" class="marks-content">
+    <!-- Progress + Auto-save -->
+    <div class="marks-toolbar">
+      <div class="marks-toolbar__left">
+        <div class="marks-toolbar__search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" aria-label="Search by student name or number" placeholder="Search student..." (input)="onSearchChange($any($event.target).value)" />
+        </div>
+        <span class="marks-toolbar__autosave" role="status" aria-live="polite" *ngIf="autoSaveStatus()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          {{ autoSaveStatus() }}
+        </span>
+      </div>
+      <div class="marks-toolbar__progress">
+        <span class="marks-toolbar__count">{{ completedCount() }}/{{ totalCount() }} completed</span>
+        <div class="progress-bar">
+          <div class="progress-bar__fill" [style.width.%]="progressPercent()" [class.progress-bar__fill--complete]="progressPercent() === 100"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="portal-filters"><label><input type="checkbox" [ngModel]="missingOnly()" (ngModelChange)="missingOnly.set($event)"> Show incomplete or invalid marks only</label></div>
+    <div class="portal-empty" *ngIf="!filteredMarks().length"><h3>No matching students</h3><p>Clear your search or the incomplete filter to see all students.</p></div>
+    <!-- Marks Cards (mobile-first, touch-friendly) -->
+    <div class="marks-list">
+      <div class="mark-card" *ngFor="let m of filteredMarks(); let i = index; trackBy: trackStudent">
+        <div class="mark-card__header">
+          <span class="mark-card__number">{{ i + 1 }}</span>
+          <div class="mark-card__student">
+            <span class="mark-card__name">{{ m.fullName }}</span>
+            <span class="mark-card__id">{{ m.studentNumber }}</span>
+          </div>
+          <span class="mark-card__grade" *ngIf="m.grade" [class.mark-card__grade--high]="m.grade === 'A' || m.grade === 'B'">{{ m.grade }}</span>
+        </div>
+        <div class="mark-card__fields">
+          <div class="mark-card__field">
+            <label>Marks (0–100)</label>
+            <input
+              type="number" inputmode="decimal" step="0.5" [id]="'mark-' + m.studentId" [attr.aria-label]="'Marks for ' + m.fullName" [readOnly]="readOnly()" [attr.aria-invalid]="m.marksValue !== null && !valid(m)" [attr.aria-describedby]="m.marksValue !== null && !valid(m) ? 'error-' + m.studentId : null"
+              min="0" max="100"
+              [value]="m.marksValue ?? ''"
+              placeholder="—"
+              (input)="onMarkChange(m.studentId, $any($event.target).value)"
+              class="mark-input" /><p *ngIf="m.marksValue !== null && !valid(m)" class="portal-field-error" [id]="'error-' + m.studentId">Enter a number from 0 to 100.</p>
+          </div>
+          <div class="mark-card__field mark-card__field--comment">
+            <label [attr.for]="'comment-' + m.studentId">Comment</label>
+            <input
+              type="text"
+              [id]="'comment-' + m.studentId" [attr.aria-label]="'Comment for ' + m.fullName" [readOnly]="readOnly()" [value]="m.comments"
+              placeholder="Optional comment..."
+              (input)="onCommentChange(m.studentId, $any($event.target).value)"
+              class="comment-input" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <div class="marks-footer" *ngIf="!readOnly()">
+      <button type="button" class="action-btn action-btn--primary action-btn--lg" [disabled]="!canSubmit()" (click)="openSubmitDialog()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        Submit for Review
+      </button>
+      <p class="marks-footer__hint" *ngIf="!canSubmit()">Complete all {{ totalCount() }} marks before submitting.</p>
+    </div>
+
+    <!-- Submit Confirmation Dialog -->
+    <div *ngIf="showSubmitDialog()" class="dialog-overlay" appDialogFocus role="dialog" aria-modal="true" aria-labelledby="submit-title" (keydown.escape)="cancelSubmit()" (click)="cancelSubmit()">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h3 class="dialog__title" id="submit-title">Submit Marks for Review?</h3>
+        <p class="dialog__text">Record {{ totalCount() }} marks as submitted in this demo? After submission, you will not be able to edit marks unless they are returned for corrections.</p>
+        <div class="dialog__actions">
+          <button type="button" class="action-btn action-btn--primary" (click)="confirmSubmit()">Yes, Submit</button>
+          <button type="button" class="action-btn action-btn--ghost" (click)="cancelSubmit()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>

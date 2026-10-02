@@ -1,0 +1,572 @@
+<p *ngIf="mappingNotice()" class="portal-notice portal-notice--warning" role="status">{{ mappingNotice() }}</p>
+<div class="page-container">
+  <!-- Page Header -->
+  <app-head-page-header
+    title="Classes & Subjects"
+    description="Configure classes, academic subjects, and class-subject curriculum mappings"
+  >
+  </app-head-page-header>
+
+  <!-- Error Alert -->
+  <div *ngIf="error()" class="error-banner" role="alert">
+    <div class="error-banner__content">
+      <svg class="error-banner__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+      <span>{{ error() }}</span>
+    </div>
+    <button type="button" class="btn-retry" (click)="loadData()">Retry</button>
+  </div>
+
+  <!-- Segmented Tabs Navigation -->
+  <div class="tabs-bar" role="tablist" aria-label="Academic structure tabs">
+    <button
+      type="button"
+      role="tab"
+      class="tab-btn"
+      id="tab-classes" aria-controls="panel-classes" [attr.tabindex]="activeTab() === 'classes' ? 0 : -1" (keydown)="onTabKey($event, 'classes')" [class.active]="activeTab() === 'classes'"
+      [attr.aria-selected]="activeTab() === 'classes'"
+      (click)="setActiveTab('classes')"
+    >
+      <span>Classes</span>
+      <span class="tab-badge" *ngIf="!loading()">{{ classes().length }}</span>
+    </button>
+
+    <button
+      type="button"
+      role="tab"
+      class="tab-btn"
+      id="tab-subjects" aria-controls="panel-subjects" [attr.tabindex]="activeTab() === 'subjects' ? 0 : -1" (keydown)="onTabKey($event, 'subjects')" [class.active]="activeTab() === 'subjects'"
+      [attr.aria-selected]="activeTab() === 'subjects'"
+      (click)="setActiveTab('subjects')"
+    >
+      <span>Subjects</span>
+      <span class="tab-badge" *ngIf="!loading()">{{ subjects().length }}</span>
+    </button>
+
+    <button
+      type="button"
+      role="tab"
+      class="tab-btn"
+      id="tab-mappings" aria-controls="panel-mappings" [attr.tabindex]="activeTab() === 'mappings' ? 0 : -1" (keydown)="onTabKey($event, 'mappings')" [class.active]="activeTab() === 'mappings'"
+      [attr.aria-selected]="activeTab() === 'mappings'"
+      (click)="setActiveTab('mappings')"
+    >
+      <span>Class-Subject Mappings</span>
+      <span class="tab-badge" *ngIf="!loading()">{{ mappings().length }}</span>
+    </button>
+  </div>
+
+  <!-- Loading State Skeleton -->
+  <div *ngIf="loading()" class="loading-container" aria-busy="true" aria-label="Loading data">
+    <div class="skeleton-toolbar">
+      <div class="skeleton skeleton--search"></div>
+      <div class="skeleton skeleton--btn"></div>
+    </div>
+    <div class="skeleton-table">
+      <div class="skeleton-row" *ngFor="let item of [1, 2, 3, 4, 5]">
+        <div class="skeleton skeleton--cell"></div>
+        <div class="skeleton skeleton--cell"></div>
+        <div class="skeleton skeleton--cell"></div>
+        <div class="skeleton skeleton--cell-sm"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content When Loaded -->
+  <div *ngIf="!loading()" class="tab-content-wrapper">
+    <!-- Toolbar with Search & Tab-Specific Add Button -->
+    <app-table-toolbar
+      [showSearch]="true"
+      [searchPlaceholder]="searchPlaceholder"
+      [searchValue]="searchQuery()"
+      (searchChange)="onSearchChange($event)"
+    >
+      <!-- Add Button per Active Tab -->
+      <button
+        *ngIf="activeTab() === 'classes'"
+        type="button"
+        class="sa-btn-action"
+        [disabled]="store.readOnly()" (click)="openAddDialog('class')"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        <span>Add Class</span>
+      </button>
+
+      <button
+        *ngIf="activeTab() === 'subjects'"
+        type="button"
+        class="sa-btn-action"
+        [disabled]="store.readOnly()" (click)="openAddDialog('subject')"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        <span>Add Subject</span>
+      </button>
+
+      <button
+        *ngIf="activeTab() === 'mappings'"
+        type="button"
+        class="sa-btn-action"
+        [disabled]="store.readOnly()" (click)="openAddDialog('mapping')"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        <span>Add Mapping</span>
+      </button>
+    </app-table-toolbar>
+
+    <!-- ──────────────── TAB 1: CLASSES ──────────────── -->
+    <section *ngIf="activeTab() === 'classes'" class="tab-pane" role="tabpanel" id="panel-classes" aria-labelledby="tab-classes">
+      <!-- Populated State: Table & Cards -->
+      <ng-container *ngIf="filteredClasses().length > 0; else noClassesState">
+        <!-- Desktop Table View -->
+        <div class="table-scroll-wrapper desktop-table">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Class Name</th>
+                <th>Stream / Section</th>
+                <th>Student Count</th>
+                <th class="col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let cls of filteredClasses()">
+                <td class="font-medium text-primary">{{ cls.name }}</td>
+                <td>
+                  <span class="stream-pill" *ngIf="cls.stream; else noStream">
+                    {{ cls.stream }}
+                  </span>
+                  <ng-template #noStream>
+                    <span class="text-muted">—</span>
+                  </ng-template>
+                </td>
+                <td>
+                  <span class="count-badge">{{ cls.studentCount }} students</span>
+                </td>
+                <td class="col-actions">
+                  <button
+                    type="button"
+                    class="btn-icon-action"
+                    [disabled]="store.readOnly()" (click)="openEditClass(cls)"
+                    title="Edit Class"
+                    aria-label="Edit Class"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    <span>Edit</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Mobile Cards View -->
+        <div class="mobile-cards">
+          <app-record-card *ngFor="let cls of filteredClasses()">
+            <div class="card-header-row">
+              <div class="card-title-group">
+                <h4 class="card-title">{{ cls.name }}</h4>
+                <span class="stream-pill" *ngIf="cls.stream">{{ cls.stream }}</span>
+              </div>
+              <button
+                type="button"
+                class="btn-icon-action"
+                [disabled]="store.readOnly()" (click)="openEditClass(cls)"
+                aria-label="Edit class"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                <span>Edit</span>
+              </button>
+            </div>
+            <div class="card-detail-row">
+              <span class="card-label">Enrolled Students:</span>
+              <span class="count-badge">{{ cls.studentCount }} students</span>
+            </div>
+          </app-record-card>
+        </div>
+      </ng-container>
+
+      <ng-template #noClassesState>
+        <app-empty-state
+          [icon]="searchQuery() ? 'search' : 'folder'"
+          [title]="searchQuery() ? 'No matching classes' : 'No classes registered'"
+          [description]="searchQuery() ? 'Try adjusting your search terms.' : 'Create school classes and streams to organize your students.'"
+        >
+          <button
+            *ngIf="!searchQuery()"
+            type="button"
+            class="sa-btn-action"
+            [disabled]="store.readOnly()" (click)="openAddDialog('class')"
+          >
+            Add Class
+          </button>
+        </app-empty-state>
+      </ng-template>
+    </section>
+
+    <!-- ──────────────── TAB 2: SUBJECTS ──────────────── -->
+    <section *ngIf="activeTab() === 'subjects'" class="tab-pane" role="tabpanel" id="panel-subjects" aria-labelledby="tab-subjects">
+      <!-- Populated State: Table & Cards -->
+      <ng-container *ngIf="filteredSubjects().length > 0; else noSubjectsState">
+        <!-- Desktop Table View -->
+        <div class="table-scroll-wrapper desktop-table">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Subject Name</th>
+                <th>Subject Code</th>
+                <th class="col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let sub of filteredSubjects()">
+                <td class="font-medium text-primary">{{ sub.name }}</td>
+                <td>
+                  <span class="code-pill">{{ sub.code }}</span>
+                </td>
+                <td class="col-actions">
+                  <button
+                    type="button"
+                    class="btn-icon-action"
+                    [disabled]="store.readOnly()" (click)="openEditSubject(sub)"
+                    title="Edit Subject"
+                    aria-label="Edit Subject"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    <span>Edit</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Mobile Cards View -->
+        <div class="mobile-cards">
+          <app-record-card *ngFor="let sub of filteredSubjects()">
+            <div class="card-header-row">
+              <h4 class="card-title">{{ sub.name }}</h4>
+              <button
+                type="button"
+                class="btn-icon-action"
+                [disabled]="store.readOnly()" (click)="openEditSubject(sub)"
+                aria-label="Edit subject"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                <span>Edit</span>
+              </button>
+            </div>
+            <div class="card-detail-row">
+              <span class="card-label">Subject Code:</span>
+              <span class="code-pill">{{ sub.code }}</span>
+            </div>
+          </app-record-card>
+        </div>
+      </ng-container>
+
+      <ng-template #noSubjectsState>
+        <app-empty-state
+          [icon]="searchQuery() ? 'search' : 'file'"
+          [title]="searchQuery() ? 'No matching subjects' : 'No subjects registered'"
+          [description]="searchQuery() ? 'Try adjusting your search terms.' : 'Register curriculum subjects to assign to classes and teachers.'"
+        >
+          <button
+            *ngIf="!searchQuery()"
+            type="button"
+            class="sa-btn-action"
+            [disabled]="store.readOnly()" (click)="openAddDialog('subject')"
+          >
+            Add Subject
+          </button>
+        </app-empty-state>
+      </ng-template>
+    </section>
+
+    <!-- ──────────────── TAB 3: MAPPINGS ──────────────── -->
+    <section *ngIf="activeTab() === 'mappings'" class="tab-pane" role="tabpanel" id="panel-mappings" aria-labelledby="tab-mappings">
+      <!-- Populated State: Table & Cards -->
+      <ng-container *ngIf="filteredMappings().length > 0; else noMappingsState">
+        <!-- Desktop Table View -->
+        <div class="table-scroll-wrapper desktop-table">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Class</th>
+                <th>Stream / Section</th>
+                <th>Subject</th>
+                <th class="col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let map of filteredMappings()">
+                <td class="font-medium text-primary">{{ map.className }}</td>
+                <td>
+                  <span class="stream-pill" *ngIf="map.classStream; else noMappingStream">
+                    {{ map.classStream }}
+                  </span>
+                  <ng-template #noMappingStream>
+                    <span class="text-muted">—</span>
+                  </ng-template>
+                </td>
+                <td>
+                  <span class="subject-badge">{{ map.subjectName }}</span>
+                </td>
+                <td class="col-actions">
+                  <button
+                    type="button"
+                    class="btn-icon-action btn-icon-action--danger"
+                    [disabled]="store.readOnly()" (click)="removeMapping(map.id)"
+                    title="Remove Mapping"
+                    aria-label="Remove Mapping"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      <line x1="10" y1="11" x2="10" y2="17" />
+                      <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                    <span>Remove</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Mobile Cards View -->
+        <div class="mobile-cards">
+          <app-record-card *ngFor="let map of filteredMappings()">
+            <div class="card-header-row">
+              <div class="card-title-group">
+                <h4 class="card-title">{{ map.className }}</h4>
+                <span class="stream-pill" *ngIf="map.classStream">{{ map.classStream }}</span>
+              </div>
+              <button
+                type="button"
+                class="btn-icon-action btn-icon-action--danger"
+                [disabled]="store.readOnly()" (click)="removeMapping(map.id)"
+                aria-label="Remove mapping"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                <span>Remove</span>
+              </button>
+            </div>
+            <div class="card-detail-row">
+              <span class="card-label">Subject:</span>
+              <span class="subject-badge">{{ map.subjectName }}</span>
+            </div>
+          </app-record-card>
+        </div>
+      </ng-container>
+
+      <ng-template #noMappingsState>
+        <app-empty-state
+          [icon]="searchQuery() ? 'search' : 'folder'"
+          [title]="searchQuery() ? 'No matching mappings' : 'No curriculum mappings'"
+          [description]="searchQuery() ? 'Try adjusting your search terms.' : 'Link subjects to classes to enable subject grading and teacher assignments.'"
+        >
+          <button
+            *ngIf="!searchQuery()"
+            type="button"
+            class="sa-btn-action"
+            [disabled]="store.readOnly()" (click)="openAddDialog('mapping')"
+          >
+            Add Mapping
+          </button>
+        </app-empty-state>
+      </ng-template>
+    </section>
+  </div>
+
+  <!-- ──────────────── MODAL DIALOG ──────────────── -->
+  <div
+    *ngIf="showDialog()"
+    class="modal-backdrop"
+    (click)="closeDialog()"
+    (keydown.escape)="closeDialog()"
+    appDialogFocus role="dialog"
+    aria-modal="true" aria-labelledby="structure-dialog-title"
+  >
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <!-- Modal Header -->
+      <div class="modal-header">
+        <h3 class="modal-title" id="structure-dialog-title">
+          <ng-container *ngIf="dialogMode() === 'class'">
+            {{ isEditing() ? 'Edit Class' : 'Add Class' }}
+          </ng-container>
+          <ng-container *ngIf="dialogMode() === 'subject'">
+            {{ isEditing() ? 'Edit Subject' : 'Add Subject' }}
+          </ng-container>
+          <ng-container *ngIf="dialogMode() === 'mapping'">
+            Add Class-Subject Mapping
+          </ng-container>
+        </h3>
+        <button
+          type="button"
+          class="btn-close"
+          (click)="closeDialog()"
+          aria-label="Close dialog"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal Body Form -->
+      <div class="modal-body">
+        <!-- Error alert in dialog -->
+        <div *ngIf="formError()" class="form-error-box">
+          {{ formError() }}
+        </div>
+
+        <!-- Mode: Class -->
+        <ng-container *ngIf="dialogMode() === 'class'">
+          <div class="form-group">
+            <label class="sa-label" for="cls-name">Class Name *</label>
+            <input
+              id="cls-name"
+              type="text"
+              class="sa-input"
+              placeholder="e.g. Form 1, Grade 7"
+              [ngModel]="classForm().name"
+              (ngModelChange)="classForm.set({ name: $event, stream: classForm().stream, studentCount: classForm().studentCount })"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="sa-label" for="cls-stream">Stream / Section (Optional)</label>
+            <input
+              id="cls-stream"
+              type="text"
+              class="sa-input"
+              placeholder="e.g. Form 1A, Blue Stream"
+              [ngModel]="classForm().stream"
+              (ngModelChange)="classForm.set({ name: classForm().name, stream: $event, studentCount: classForm().studentCount })"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="sa-label" for="cls-students">Enrolled students</label><p id="student-count-help" class="help-text">Calculated from enrollment records.</p>
+            <input
+              id="cls-students" readonly aria-describedby="student-count-help"
+              type="number"
+              min="0"
+              class="sa-input"
+              placeholder="0"
+              [ngModel]="classForm().studentCount"
+              (ngModelChange)="classForm.set({ name: classForm().name, stream: classForm().stream, studentCount: $event })"
+            />
+          </div>
+        </ng-container>
+
+        <!-- Mode: Subject -->
+        <ng-container *ngIf="dialogMode() === 'subject'">
+          <div class="form-group">
+            <label class="sa-label" for="sub-name">Subject Name *</label>
+            <input
+              id="sub-name"
+              type="text"
+              class="sa-input"
+              placeholder="e.g. Mathematics, History"
+              [ngModel]="subjectForm().name"
+              (ngModelChange)="subjectForm.set({ name: $event, code: subjectForm().code })"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="sa-label" for="sub-code">Subject Code *</label>
+            <input
+              id="sub-code"
+              type="text"
+              class="sa-input"
+              placeholder="e.g. MATH, HIST"
+              [ngModel]="subjectForm().code"
+              (ngModelChange)="subjectForm.set({ name: subjectForm().name, code: $event })"
+            />
+          </div>
+        </ng-container>
+
+        <!-- Mode: Mapping -->
+        <ng-container *ngIf="dialogMode() === 'mapping'">
+          <div class="form-group">
+            <label class="sa-label" for="map-class">Select Class *</label>
+            <select
+              id="map-class"
+              class="sa-select"
+              [ngModel]="mappingForm().classId"
+              (ngModelChange)="mappingForm.set({ classId: $event, subjectId: mappingForm().subjectId })"
+            >
+              <option value="" disabled>Select a class</option>
+              <option *ngFor="let cls of classes()" [value]="cls.id">
+                {{ cls.name }} {{ cls.stream ? '(' + cls.stream + ')' : '' }}
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="sa-label" for="map-subject">Select Subject *</label>
+            <select
+              id="map-subject"
+              class="sa-select"
+              [ngModel]="mappingForm().subjectId"
+              (ngModelChange)="mappingForm.set({ classId: mappingForm().classId, subjectId: $event })"
+            >
+              <option value="" disabled>Select a subject</option>
+              <option *ngFor="let sub of subjects()" [value]="sub.id">
+                {{ sub.name }} ({{ sub.code }})
+              </option>
+            </select>
+          </div>
+        </ng-container>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="modal-footer">
+        <button
+          type="button"
+          class="btn-modal btn-modal--secondary"
+          (click)="closeDialog()"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="btn-modal btn-modal--primary"
+          (click)="saveDialog()"
+        >
+          {{ isEditing() ? 'Update' : 'Save' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<app-confirm-dialog [open]="!!mappingToRemove()" title="Remove subject mapping?" message="This removes the unused subject from this class in the demo." confirmLabel="Remove mapping" (confirmed)="confirmRemoveMapping()" (cancelled)="mappingToRemove.set(null)"></app-confirm-dialog>

@@ -10,7 +10,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.default = inlineLocale;
+exports.default = inlineFile;
+exports.inlineCode = inlineCode;
 const remapping_1 = __importDefault(require("@ampproject/remapping"));
 const core_1 = require("@babel/core");
 const node_assert_1 = __importDefault(require("node:assert"));
@@ -25,9 +26,9 @@ const { files, missingTranslation, shouldOptimize } = (node_worker_threads_1.wor
  * This function is the main entry for the Worker's action that is called by the worker pool.
  *
  * @param request An InlineRequest object representing the options for inlining
- * @returns An array containing the inlined file and optional map content.
+ * @returns An object containing the inlined file and optional map content.
  */
-async function inlineLocale(request) {
+async function inlineFile(request) {
     const data = files.get(request.filename);
     (0, node_assert_1.default)(data !== undefined, `Invalid inline request for file '${request.filename}'.`);
     const code = await data.text();
@@ -37,6 +38,20 @@ async function inlineLocale(request) {
         file: request.filename,
         code: result.code,
         map: result.map,
+        messages: result.diagnostics.messages,
+    };
+}
+/**
+ * Inlines the provided locale and translation into JavaScript code that contains `$localize` usage.
+ * This function is a secondary entry primarily for use with component HMR update modules.
+ *
+ * @param request An InlineRequest object representing the options for inlining
+ * @returns An object containing the inlined code.
+ */
+async function inlineCode(request) {
+    const result = await transformWithBabel(request.code, undefined, request);
+    return {
+        output: result.code,
         messages: result.diagnostics.messages,
     };
 }

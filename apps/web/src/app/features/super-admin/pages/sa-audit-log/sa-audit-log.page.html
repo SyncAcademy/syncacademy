@@ -1,0 +1,49 @@
+<div class="page-header">
+  <div>
+    <h2>Platform Audit Log</h2>
+    <p>Recorded platform actions (latest 100 events).</p>
+  </div>
+  <button class="action-btn" (click)="exportCsv()">Export CSV</button>
+</div>
+
+<div class="filters">
+  <input aria-label="Search actions, schools, details..." placeholder="Search actions, schools, details..." [ngModel]="search()" (ngModelChange)="search.set($event)" />
+  <select aria-label="Actor" [ngModel]="actorFilter()" (ngModelChange)="actorFilter.set($event)">
+    <option value="">All actors</option>
+    @for (a of actors(); track a) {
+      <option [value]="a">{{ a }}</option>
+    }
+  </select>
+  <select aria-label="Action" [ngModel]="actionFilter()" (ngModelChange)="actionFilter.set($event)"><option value="">All actions</option>@for (a of actions(); track a) { <option [value]="a">{{ a }}</option> }</select>
+  <label>From<input type="date" [ngModel]="from()" (ngModelChange)="from.set($event)" /></label><label>To<input type="date" [ngModel]="to()" (ngModelChange)="to.set($event)" /></label>
+</div>
+<section class="panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Action</th>
+          <th>Actor</th>
+          <th>Target</th>
+          <th>Details</th>
+          <th>IP Address</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (log of filtered(); track log.id) {
+          <tr>
+            <td><span class="action-badge" [attr.data-action]="log.action">{{ log.action }}</span></td>
+            <td>{{ log.actor }}</td>
+            <td><strong>{{ log.target }}</strong></td>
+            <td class="details-cell">{{ log.details }}</td>
+            <td><code>{{ log.ip }}</code></td>
+            <td>{{ log.timestamp | date:'medium' }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="6">No audit entries match your filters.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>

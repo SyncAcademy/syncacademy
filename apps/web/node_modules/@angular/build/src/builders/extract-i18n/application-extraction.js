@@ -27,6 +27,9 @@ async function extractMessages(options, builderName, context, extractorConstruct
     buildOptions.index = false;
     buildOptions.serviceWorker = false;
     buildOptions.outputMode = schema_1.OutputMode.Static;
+    buildOptions.appShell = undefined;
+    buildOptions.ssr = undefined;
+    buildOptions.prerender = undefined;
     buildOptions.server = undefined;
     // Build the application with the build options
     const builderResult = await first((0, application_1.buildApplicationInternal)(buildOptions, context, extensions));

@@ -1,0 +1,37 @@
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.page-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; margin-bottom: 24px; flex-wrap: wrap;
+  h2 { margin: 0; font-size: 1.5rem; font-weight: 700; color: $text-primary; }
+  p { margin: 4px 0 0; font-size: 0.875rem; color: $text-secondary; }
+}
+
+.portal-notice {
+  padding: 0.875rem 1rem; margin-bottom: 1.25rem; border: 1px solid #bfdbfe;
+  border-radius: 8px; background: #eff6ff; color: #1e40af; font-size: 0.875rem; line-height: 1.6;
+}
+
+.settings-grid {
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+.settings-card {
+  background: #fff; border: 1px solid $input-border; border-radius: $radius-lg;
+  padding: 20px; display: flex; align-items: center; gap: 16px;
+  transition: border-color 180ms, box-shadow 180ms;
+
+  &:hover { border-color: $primary-orange; box-shadow: 0 2px 8px rgba(232, 126, 36, 0.06); }
+
+  &__icon { font-size: 1.75rem; flex-shrink: 0; }
+  &__content {
+    flex: 1; min-width: 0;
+    h3 { margin: 0 0 4px; font-size: 1rem; font-weight: 600; color: $text-primary; }
+    p { margin: 0; font-size: 0.875rem; color: $text-secondary; }
+  }
+
+  @include mobile {
+    flex-direction: column; align-items: flex-start;
+  }
+}
