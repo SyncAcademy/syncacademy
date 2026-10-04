@@ -15,7 +15,7 @@ Implemented:
 - Academic years, classes, teacher-to-class assignments, and staff-managed student registration/enrollment are supported; only staff receive sign-in accounts.
 - Every supported staff role can accept its invitation and sign in. Teachers see only students in assigned classes.
 - Hashed, expiring, revocable invitation/reset tokens; resend invalidates the preceding token. Existing users must sign in as the invited account before accepting a new membership.
-- Durable PostgreSQL outbox with encrypted pending email contents, leases, bounded retries, stale-link cancellation, and local SMTP delivery. Email provider failure does not undo enrollment or school creation.
+- Durable PostgreSQL outbox with encrypted pending email contents, leases, bounded retries, stale-link cancellation, and SMTP delivery. Email provider failure does not undo enrollment or school creation.
 - Audit events, atomic registration, idempotency keys, unique constraints, and school-consistent foreign keys.
 
 This is the authentication/onboarding foundation, not a claim that every earlier prototype workflow has been migrated. Marks, attendance, report generation, broader settings, billing-independent Bursar duties, and advanced monitoring remain future increments. Unfinished workflows are explicitly unavailable.
@@ -35,7 +35,7 @@ docker compose up --build -d
 ```
 
 - Application: http://localhost:8080/auth/login
-- Local email viewer: http://localhost:8025
+- Email delivery uses the SMTP settings in `.env`.
 - PostgreSQL for local administration: localhost:55432, database `syncacademy`
 - Configuration and generated credentials must never be committed.
 
@@ -87,7 +87,7 @@ Recreate the worker after changing configuration:
 docker compose up -d --force-recreate worker
 ```
 
-Gmail delivery was not configured or tested without an App Password. Local SMTP tests do not send external emails. Gmail has sending limits and should eventually be replaced by a transactional provider as needed.
+Gmail delivery requires an App Password. Gmail has sending limits and should eventually be replaced by a transactional provider as needed.
 
 **An emailed localhost link only works on the same computer.** Before inviting remote people, deploy to an HTTPS address reachable by them and set `APP_ORIGIN` to that exact origin. Changing the email provider alone does not publish the application.
 
@@ -95,7 +95,7 @@ The local Compose file uses development HTTP and binds ports to localhost. Do no
 
 ## Test and build
 
-Verified locally on 2026-09-28: API and production frontend container builds pass; all 21 authentication/database tests and the local SMTP worker test pass. The Compose migration, restricted database role, real bootstrap login, forced security setup, logout, and clean database counts were checked. The real database initially contains one administrator, no schools, and no students. Browser visual verification was unavailable; HTTP and API checks passed. Frontend build warnings remain for the initial bundle size (715 kB against a 500 kB warning budget) and older Sass usage in retained prototypes.
+Verified locally on 2026-09-28: API and production frontend container builds pass; all 21 authentication/database tests and the SMTP worker test pass. The Compose migration, restricted database role, real bootstrap login, forced security setup, logout, and clean database counts were checked. The real database initially contains one administrator, no schools, and no students. Browser visual verification was unavailable; HTTP and API checks passed. Frontend build warnings remain for the initial bundle size (715 kB against a 500 kB warning budget) and older Sass usage in retained prototypes.
 
 Backend build:
 
@@ -110,9 +110,9 @@ node --env-file=.env --test apps/api/test/auth.test.cjs
 node --env-file=.env --test apps/api/test/worker.test.cjs
 ```
 
-Tests cover sessions, password replacement, MFA/recovery/replay protection, CSRF origin rejection, tenant isolation, role escalation prevention, all-role account acceptance/login, idempotency including concurrent requests, student enrollment atomicity, teacher/student visibility, invitation expiry/resend/revocation, existing-user acceptance, password recovery, session revocation, rate limiting, and delivery through local SMTP.
+Tests cover sessions, password replacement, MFA/recovery/replay protection, CSRF origin rejection, tenant isolation, role escalation prevention, all-role account acceptance/login, idempotency including concurrent requests, student enrollment atomicity, teacher/student visibility, invitation expiry/resend/revocation, existing-user acceptance, password recovery, session revocation, rate limiting, and SMTP delivery.
 
-The worker test requires the local SMTP viewer on ports 1025/8025. Test accounts belong only to the disposable test database. The real application database should contain only the bootstrap administrator until the owner begins onboarding schools.
+Test accounts belong only to the disposable test database. The real application database should contain only the bootstrap administrator until the owner begins onboarding schools.
 
 ## Important operational details
 
@@ -123,5 +123,5 @@ The worker test requires the local SMTP viewer on ports 1025/8025. Test accounts
 - Never run `docker compose down -v` unless deliberately deleting the local database. Ordinary restart/up preserves records.
 - Browser storage is not an authentication credential store. Cookies are HttpOnly; the API rechecks current user and school permissions.
 - Back up both the database and secret encryption key securely. Losing the encryption key prevents reading stored authenticator secrets and pending outbox contents.
-- Account security setup and legitimate login work without SMTP. Invitations and password recovery require either the local email viewer or a working external provider.
+- Account security setup and legitimate login work without SMTP. Invitations and password recovery require a working external provider.
 - System-wide MFA recovery/rotation policy, production penetration review, full OpenAPI publication, and load/restore tests remain production-hardening work. Passing integration tests is not a security certification.

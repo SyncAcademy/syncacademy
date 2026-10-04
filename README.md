@@ -12,7 +12,7 @@ docker compose build
 docker compose up -d
 ```
 
-Do not regenerate an existing `.env`. Open http://localhost:8080/auth/login. Local invitation emails appear at http://localhost:8025.
+Do not regenerate an existing `.env`. Open http://localhost:8080/auth/login. Email delivery uses the SMTP settings in `.env`.
 
 See [authentication setup and admin bootstrap](docs/AUTHENTICATION_IMPLEMENTED.md) for creating the first administrator, Gmail configuration, tests, and remaining work. The [backend handoff](docs/BACKEND_AGENT_HANDOFF.md) describes the wider implementation plan.
 

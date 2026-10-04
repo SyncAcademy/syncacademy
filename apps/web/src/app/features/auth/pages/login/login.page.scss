@@ -21,7 +21,7 @@
 
 .role-card {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 18px;
+  grid-template-columns: 38px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   min-width: 0;
@@ -61,7 +61,6 @@
 .role-card__copy { display: grid; min-width: 0; gap: 4px; }
 .role-card__copy strong { overflow-wrap: anywhere; font-size: 0.95rem; line-height: 1.25; }
 .role-card__copy small { color: #657571; font-size: 0.78rem; line-height: 1.35; }
-.role-card__arrow { color: #287a68; font-size: 1.1rem; text-align: right; }
 .role-picker-note { margin-top: 22px; }
 
 @media (max-width: 540px) {

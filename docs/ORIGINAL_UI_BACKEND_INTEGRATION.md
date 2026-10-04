@@ -28,7 +28,7 @@ Marks, assessments, subject configuration, attendance, roster confirmation, repo
 
 The PostgreSQL integration suite passes 21 tests, including school provisioning, invitations, all-role login, session/MFA controls, tenant isolation, student registration and the restored portal API projections. API compilation and the production frontend build pass. Frontend bundle-size and existing Sass warnings remain. Browser visual verification was unavailable in this session; do not claim a completed visual comparison.
 
-Rebuild with `docker compose build`, then run `docker compose up -d`. The migration service applies schema changes before API startup. Do not run `down -v`. Preserve the private `.env`, encryption keys and existing database volume. SMTP is currently local Mailpit unless separately configured; real-address delivery still requires working SMTP credentials.
+Rebuild with `docker compose build`, then run `docker compose up -d`. The migration service applies schema changes before API startup. Do not run `down -v`. Preserve the private `.env`, encryption keys and existing database volume. SMTP uses the configured provider and requires working SMTP credentials.
 
 For visual review, check desktop and mobile sign-in/security scrolling, Super Admin school creation, school navigation, staff invitation dialogs, class/year creation, student registration and teacher roster visibility. Keep this review within the former UI.
 

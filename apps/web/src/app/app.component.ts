@@ -10,8 +10,15 @@ import { CommonModule } from '@angular/common';
   imports: [RouterOutlet, CommonModule]
 })
 export class AppComponent implements OnInit {
-  showPreloader = false;
+  showPreloader = true;
   fadePreloader = false;
 
-  ngOnInit() {}
+  ngOnInit(): void {
+    window.setTimeout(() => {
+      this.fadePreloader = true;
+      window.setTimeout(() => {
+        this.showPreloader = false;
+      }, 800);
+    }, 1800);
+  }
 }

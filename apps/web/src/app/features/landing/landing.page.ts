@@ -50,8 +50,8 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
   private countersAnimated = false;
 
   readonly statCounters = signal<StatCounter[]>([
-    { id: 'schools', label: 'Partner Schools', sublabel: 'Campuses in system', target: 50, current: 0, suffix: '+' },
-    { id: 'students', label: 'Active Students', sublabel: 'Managed profiles', target: 15000, current: 0, suffix: '+' },
+    { id: 'schools', label: 'Partner Schools', sublabel: 'Campuses in system', target: 7, current: 0, suffix: '+' },
+    { id: 'students', label: 'Active Students', sublabel: 'Managed profiles', target: 3200, current: 0, suffix: '+' },
     { id: 'attendance', label: 'Daily Attendance', sublabel: 'Recorded digitally', target: 99.4, current: 0, suffix: '%', decimals: 1 },
     { id: 'financials', label: 'Fee Reconciled', sublabel: 'Audit-ready tracking', target: 100, current: 0, suffix: '%' }
   ]);

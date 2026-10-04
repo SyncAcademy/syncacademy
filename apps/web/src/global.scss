@@ -36,6 +36,30 @@ body {
   background-color: $body-bg;
 }
 
+/* Give every freshly rendered route a gentle top-to-bottom entrance. */
+router-outlet + * {
+  position: relative;
+  animation: routeDropIn 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: opacity, top;
+}
+
+@keyframes routeDropIn {
+  from {
+    opacity: 0;
+    top: -28px;
+  }
+  to {
+    opacity: 1;
+    top: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  router-outlet + * {
+    animation: none;
+  }
+}
+
 html.landing-route,
 body.landing-route,
 html:has(.auth-layout, .auth-screen),
@@ -57,6 +81,26 @@ body:has(.auth-layout, .auth-screen) app-root {
   display: block;
   height: auto;
   min-height: 100%;
+}
+
+/* The public landing page is one document. Prevent the Ionic shell from
+   creating a second vertical scroll container over the hero image. */
+html.landing-route,
+body.landing-route,
+body.landing-route ion-app,
+body.landing-route app-root,
+body.landing-route app-landing {
+  height: auto !important;
+  min-height: 100%;
+  overflow-y: visible !important;
+}
+
+html.landing-route {
+  overflow-y: auto !important;
+}
+
+body.landing-route {
+  overflow-x: clip !important;
 }
 
 html,
@@ -257,7 +301,6 @@ ion-menu app-sidebar {
     display: none !important;
   }
 }
-
 
 
 

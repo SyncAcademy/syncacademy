@@ -126,7 +126,7 @@
 
 /* 2. Floating Navbar */
 .floating-navbar {
-  position: fixed;
+  position: fixed !important;
   top: 1rem;
   left: 2rem;
   right: 2rem;
@@ -138,7 +138,7 @@
   backdrop-filter: blur(12px);
   border-radius: 2rem;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-  z-index: 999;
+  z-index: 1100;
   
   .logo {
     display: flex;
@@ -378,8 +378,12 @@
         h1 { font-size: 2.5rem; }
         p { font-size: 1.1rem; }
       }
-      .hero-actions { flex-direction: column; }
     }
+  }
+
+  // Keep iPad Mini/tablet CTAs at their desktop size; stack only on phones.
+  @media (max-width: 600px) {
+    .hero-content .hero-actions { flex-direction: column; }
   }
 
   @media (max-width: 420px) {
@@ -988,7 +992,9 @@
 
   @media (max-width: 768px) {
     overflow-x: auto;
+    overflow-y: hidden;
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
 
     &::-webkit-scrollbar {
       display: none;

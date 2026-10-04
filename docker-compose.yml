@@ -37,12 +37,6 @@ services:
       timeout: 3s
       retries: 20
     restart: unless-stopped
-  mail:
-    image: axllent/mailpit:v1.29
-    ports:
-      - "127.0.0.1:8025:8025"
-      - "127.0.0.1:1025:1025"
-    restart: unless-stopped
   migrate:
     <<: *app
     command: ["sh", "-c", "npx prisma migrate deploy && node dist/provision-runtime.js"]
@@ -68,13 +62,12 @@ services:
     command: ["node", "dist/worker.js"]
     depends_on:
       migrate: { condition: service_completed_successfully }
-      mail: { condition: service_started }
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
     depends_on:
       api: { condition: service_healthy }
     restart: unless-stopped
