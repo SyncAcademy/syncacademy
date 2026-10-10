@@ -1,8 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { teacherEnrollmentScope, validateSubjects } from './registry-support';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { z } from 'zod';
 import { PlatformService } from './platform.service';
+import { termsForYear, termsInput, validateTerms } from './academic-terms';
 
 const email = z.string().trim().email().max(254).transform(v => v.toLowerCase());
 const name = z.string().trim().min(2).max(150);
@@ -20,6 +22,15 @@ const schoolId = (id: string) => parse(uuid, id);
 const managers: Role[] = ['HEADMASTER'];
 const registrars: Role[] = ['HEADMASTER', 'REGISTRAR'];
 const academics: Role[] = ['HEADMASTER', 'ACADEMIC'];
+const leadFields = z.object({ schoolName: name, contactName: name, contactEmail: email,
+  contactPhone: z.string().trim().max(40).default(''), location: name,
+  source: z.enum(['website', 'referral', 'social', 'event', 'cold-outreach']),
+  status: z.enum(['new', 'contacted', 'demo-scheduled', 'demo-done', 'negotiation', 'won', 'lost']),
+  studentCount: z.coerce.number().int().min(0).max(1000000),
+  notes: z.string().trim().max(2000).default(''), owner: z.string().trim().max(150).default(''),
+  followUp: z.union([date, z.literal('')]).default('') }).strict();
+const listPage = z.coerce.number().int().min(1).max(100000).default(1);
+const listSize = z.coerce.number().int().min(1).max(100).default(25);
 @Controller('api/v1')
 export class ApiController {
   constructor(private readonly svc: PlatformService) {}
@@ -27,24 +38,118 @@ export class ApiController {
   @Get('health/ready') async ready() { await this.svc.db.$queryRaw`SELECT 1`; return { status: 'ready' }; }
   @Get('platform/summary') async platformSummary(@Req() req: Request) {
     await this.svc.administrator(req);
-    const [schools, activeSchools, students, staff, pendingInvitations, admins] = await this.svc.db.$transaction([
+    const [schools, activeSchools, students, staff, pendingInvitations, admins, newLeads] = await this.svc.db.$transaction([
       this.svc.db.school.count(), this.svc.db.school.count({ where: { active: true } }), this.svc.db.student.count(),
       this.svc.db.membership.count({ where: { active: true, role: { notIn: ['STUDENT', 'PARENT'] } } }),
       this.svc.db.invitation.count({ where: { acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } } }),
       this.svc.db.user.findMany({ where: { platformAdmin: true }, select: { id: true, name: true, email: true, enabled: true }, orderBy: { createdAt: 'asc' } }),
+      this.svc.db.platformLead.count({ where: { status: 'new' } }),
     ]);
-    return { schools, activeSchools, students, staff, pendingInvitations, admins };
+    return { schools, activeSchools, students, staff, pendingInvitations, admins, newLeads };
   }
-  @Get('platform/invitations') async platformInvitations(@Req() req: Request) {
+  @Get('platform/leads') async platformLeads(@Req() req: Request, @Query() query: unknown) {
     await this.svc.administrator(req);
-    const invitations = await this.svc.db.invitation.findMany({ where: { platformAdmin: true, schoolId: null }, select: { id: true, name: true, email: true, expiresInMinutes: true, createdAt: true, expiresAt: true, acceptedAt: true, revokedAt: true }, orderBy: { createdAt: 'desc' }, take: 100 });
-    return invitations.map(invitation => ({ ...invitation, role: 'SUPER_ADMIN' }));
+    const q = parse(z.object({ page: listPage, pageSize: listSize, q: z.string().trim().max(200).default(''), status: z.string().max(40).default(''), source: z.string().max(40).default('') }).strict(), query);
+    const where: Prisma.PlatformLeadWhereInput = { ...(q.q ? { OR: [{ schoolName: { contains: q.q, mode: 'insensitive' } }, { contactName: { contains: q.q, mode: 'insensitive' } }, { contactEmail: { contains: q.q, mode: 'insensitive' } }, { location: { contains: q.q, mode: 'insensitive' } }] } : {}), ...(q.status ? { status: q.status } : {}), ...(q.source ? { source: q.source } : {}) };
+    const [items, total, groups] = await this.svc.db.$transaction([
+      this.svc.db.platformLead.findMany({ where, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
+      this.svc.db.platformLead.count({ where }),
+      this.svc.db.platformLead.groupBy({ by: ['status'], _count: true, orderBy: { status: 'asc' } }),
+    ]);
+    return { items, total, page: q.page, pageSize: q.pageSize, stages: Object.fromEntries(groups.map(group => [group.status, group._count])) };
+  }
+  @Post('platform/leads') async createPlatformLead(@Req() req: Request, @Body() body: unknown) {
+    const actor = await this.svc.administrator(req); const b = parse(leadFields, body);
+    return this.svc.idempotent(actor.id + ':platform-lead', key(req), b, async tx => {
+      const lead = await tx.platformLead.create({ data: b });
+      await tx.auditEvent.create({ data: { actorId: actor.id, action: 'PLATFORM_LEAD_CREATED', target: lead.id } });
+      return lead;
+    });
+  }
+  @Patch('platform/leads/:leadId') async updatePlatformLead(@Req() req: Request, @Param('leadId') leadId: string, @Body() body: unknown) {
+    const actor = await this.svc.administrator(req); parse(uuid, leadId); const b = parse(leadFields, body);
+    return this.svc.atomic(async tx => {
+      const prior = await tx.platformLead.findUnique({ where: { id: leadId } });
+      if (!prior) throw new BadRequestException('Lead not found.');
+      if (prior.convertedSchoolId && (b.status !== 'won' || b.schoolName !== prior.schoolName || b.contactEmail !== prior.contactEmail)) throw new ConflictException('A converted lead cannot change its school, contact email or stage.');
+      const lead = await tx.platformLead.update({ where: { id: leadId }, data: b });
+      await tx.auditEvent.create({ data: { actorId: actor.id, action: 'PLATFORM_LEAD_UPDATED', target: lead.id } });
+      return lead;
+    });
+  }
+  @Post('platform/leads/:leadId/convert') async convertPlatformLead(@Req() req: Request, @Param('leadId') leadId: string, @Body() body: unknown) {
+    const actor = await this.svc.administrator(req); parse(uuid, leadId);
+    const b = parse(z.object({ code: z.string().trim().regex(/^[A-Za-z0-9-]{2,30}$/).transform(v => v.toUpperCase()), expiresInMinutes: invitationExpiry.default(2880) }).strict(), body);
+    return this.svc.idempotent(actor.id + ':convert-lead:' + leadId, key(req), b, async tx => {
+      const lead = await tx.platformLead.findUnique({ where: { id: leadId } });
+      if (!lead || lead.status !== 'won' || lead.convertedSchoolId) throw new ConflictException('Only an unconverted won lead can become a school.');
+      if (await tx.school.findUnique({ where: { code: b.code } })) throw new ConflictException('School code is already in use.');
+      const school = await tx.school.create({ data: { name: lead.schoolName, code: b.code, region: lead.location, phone: lead.contactPhone, email: lead.contactEmail } });
+      const invitation = await this.svc.createInvitation(tx, actor.id, school.id, { name: lead.contactName, email: lead.contactEmail, role: 'HEADMASTER', expiresInMinutes: b.expiresInMinutes });
+      await tx.platformLead.update({ where: { id: leadId }, data: { convertedSchoolId: school.id } });
+      await tx.auditEvent.create({ data: { actorId: actor.id, schoolId: school.id, action: 'PLATFORM_LEAD_CONVERTED', target: leadId } });
+      return { school, invitation };
+    });
+  }
+  @Get('platform/settings') async platformSettings(@Req() req: Request) {
+    await this.svc.administrator(req);
+    return (await this.svc.db.platformSetting.findUnique({ where: { id: 1 } })) ?? { platformName: 'SyncAcademy', supportEmail: '', maintenanceMessage: '' };
+  }
+  @Get('platform/health') async platformHealth(@Req() req: Request) {
+    await this.svc.administrator(req);
+    await this.svc.db.$queryRaw`SELECT 1`;
+    const [queued, failed, sent] = await this.svc.db.$transaction([
+      this.svc.db.outbox.count({ where: { sentAt: null, failedAt: null, cancelledAt: null } }),
+      this.svc.db.outbox.count({ where: { failedAt: { not: null }, cancelledAt: null } }),
+      this.svc.db.outbox.count({ where: { sentAt: { not: null } } }),
+    ]);
+    return { status: 'ready', checkedAt: new Date(), mail: { queued, failed, sent } };
+  }
+  @Get('platform/search') async platformSearch(@Req() req: Request, @Query('q') query?: string) {
+    await this.svc.administrator(req);
+    const q = parse(z.string().trim().min(2).max(100), query);
+    const [schools, leads] = await this.svc.db.$transaction([
+      this.svc.db.school.findMany({ where: { OR: [{ name: { contains: q, mode: 'insensitive' } }, { code: { contains: q, mode: 'insensitive' } }] }, select: { id: true, name: true }, take: 5, orderBy: { name: 'asc' } }),
+      this.svc.db.platformLead.findMany({ where: { OR: [{ schoolName: { contains: q, mode: 'insensitive' } }, { contactName: { contains: q, mode: 'insensitive' } }] }, select: { id: true, schoolName: true }, take: 5, orderBy: { schoolName: 'asc' } }),
+    ]);
+    return { schools, leads };
+  }
+  @Patch('platform/settings') async updatePlatformSettings(@Req() req: Request, @Body() body: unknown) {
+    const actor = await this.svc.administrator(req);
+    const b = parse(z.object({ platformName: name, supportEmail: z.union([email, z.literal('')]), maintenanceMessage: z.string().trim().max(500) }).strict(), body);
+    return this.svc.atomic(async tx => {
+      const settings = await tx.platformSetting.upsert({ where: { id: 1 }, create: { id: 1, ...b }, update: b });
+      await tx.auditEvent.create({ data: { actorId: actor.id, action: 'PLATFORM_SETTINGS_UPDATED', target: 'platform' } });
+      return settings;
+    });
+  }
+  @Get('platform/invitations') async platformInvitations(@Req() req: Request, @Query() query: unknown) {
+    await this.svc.administrator(req);
+    const q = parse(z.object({ page: listPage, pageSize: listSize, q: z.string().trim().max(200).default('') }).strict(), query);
+    const where: Prisma.InvitationWhereInput = { platformAdmin: true, schoolId: null, ...(q.q ? { OR: [{ name: { contains: q.q, mode: 'insensitive' } }, { email: { contains: q.q, mode: 'insensitive' } }] } : {}) };
+    const [invitations, total] = await this.svc.db.$transaction([
+      this.svc.db.invitation.findMany({ where, select: { id: true, name: true, email: true, expiresInMinutes: true, createdAt: true, expiresAt: true, acceptedAt: true, revokedAt: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
+      this.svc.db.invitation.count({ where }),
+    ]);
+    return { items: invitations.map(invitation => ({ ...invitation, role: 'SUPER_ADMIN' })), total, page: q.page, pageSize: q.pageSize };
   }
   @Post('platform/invitations') async invitePlatformAdmin(@Req() req: Request, @Body() body: unknown) {
     const actor = await this.svc.administrator(req);
     await this.svc.rate('platform-invite-create:' + actor.id, 20, 3600);
     const invitation = parse(z.object({ name, email, expiresInMinutes: invitationExpiry.default(2880) }).strict(), body);
     return this.svc.idempotent(actor.id + ':platform-invitation', key(req), invitation, tx => this.svc.createPlatformInvitation(tx, actor.id, invitation));
+  }
+  @Patch('platform/admins/:userId') async platformAdminRole(@Req() req: Request, @Param('userId') userId: string, @Body() body: unknown) {
+    const actor = await this.svc.administrator(req); parse(uuid, userId); const { enabled } = parse(z.object({ enabled: z.boolean() }).strict(), body);
+    if (actor.id === userId) throw new ForbiddenException('You cannot suspend your own Super Admin access.');
+    return this.svc.atomic(async tx => {
+      const target = await tx.user.findFirst({ where: { id: userId, platformAdmin: true } });
+      if (!target) throw new BadRequestException('Super Admin account not found.');
+      if (!enabled && await tx.user.count({ where: { platformAdmin: true, enabled: true } }) <= 1) throw new ConflictException('At least one active Super Admin must remain.');
+      await tx.user.update({ where: { id: userId }, data: { platformAdmin: enabled, sessionVersion: { increment: 1 } } });
+      await tx.auditEvent.create({ data: { actorId: actor.id, action: enabled ? 'PLATFORM_ADMIN_REACTIVATED' : 'PLATFORM_ADMIN_SUSPENDED', target: userId } });
+      return { message: enabled ? 'Super Admin access reactivated.' : 'Super Admin access suspended. School roles and records remain.' };
+    });
   }
   @Post('platform/invitations/:invitationId/:action') async managePlatformInvitation(@Req() req: Request, @Param('invitationId') invitationId: string, @Param('action') action: string) {
     const actor = await this.svc.administrator(req); parse(uuid, invitationId); parse(z.enum(['resend', 'revoke']), action);
@@ -69,13 +174,16 @@ export class ApiController {
   @Post('auth/mfa/verify') mfa(@Req() req: Request, @Body() body: unknown) { const b = parse(z.object({ code: z.string().regex(/^\d{6}$/), setup: z.boolean().default(false) }).strict(), body); return this.svc.verifyMfa(req, b.code, b.setup); }
   @Post('auth/mfa/recovery') recoveryCode(@Req() req: Request, @Body() body: unknown) { return this.svc.recoverMfa(req, parse(z.object({ code: z.string().min(20).max(20) }).strict(), body).code); }
   @Post('auth/recover') recover(@Req() req: Request, @Body() body: unknown) { return this.svc.recover(req, parse(z.object({ email }).strict(), body).email); }
+  @Post('auth/reset/validate') validateReset(@Req() req: Request, @Body() body: unknown) { return this.svc.validateReset(req, parse(z.object({ token }).strict(), body).token); }
   @Post('auth/reset') reset(@Req() req: Request, @Body() body: unknown) { const b = parse(z.object({ token, password }).strict(), body); return this.svc.reset(req, b.token, b.password); }
   @Post('invitations/preview') preview(@Req() req: Request, @Body() body: unknown) { return this.svc.invitationInfo(req, parse(z.object({ token }).strict(), body).token); }
   @Post('invitations/accept') accept(@Req() req: Request, @Body() body: unknown) { const b = parse(z.object({ token, password: z.string().min(1).max(128).optional() }).strict(), body); return this.svc.accept(req, b.token, b.password); }
-  @Get('schools') async schools(@Req() req: Request, @Query('page') page?: string) {
-    await this.svc.administrator(req); const skip = (parse(z.coerce.number().int().min(1).max(100000).default(1), page) - 1) * 25;
-    const [items, total] = await this.svc.db.$transaction([this.svc.db.school.findMany({ skip, take: 25, orderBy: { createdAt: 'desc' }, include: { _count: { select: { memberships: {where:{role:{notIn:['STUDENT','PARENT']}}}, students: true } } } }), this.svc.db.school.count()]);
-    return { items, total };
+  @Get('schools') async schools(@Req() req: Request, @Query() query: unknown) {
+    await this.svc.administrator(req);
+    const q = parse(z.object({ page: listPage, pageSize: listSize, q: z.string().trim().max(200).default(''), status: z.enum(['active', 'suspended']).optional() }).strict(), query);
+    const where: Prisma.SchoolWhereInput = { ...(q.status ? { active: q.status === 'active' } : {}), ...(q.q ? { OR: [{ name: { contains: q.q, mode: 'insensitive' } }, { code: { contains: q.q, mode: 'insensitive' } }, { region: { contains: q.q, mode: 'insensitive' } }, { email: { contains: q.q, mode: 'insensitive' } }, { phone: { contains: q.q, mode: 'insensitive' } }] } : {}) };
+    const [items, total] = await this.svc.db.$transaction([this.svc.db.school.findMany({ where, skip: (q.page - 1) * q.pageSize, take: q.pageSize, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], include: { _count: { select: { memberships: {where:{role:{notIn:['STUDENT','PARENT']}}}, students: true } } } }), this.svc.db.school.count({ where })]);
+    return { items, total, page: q.page, pageSize: q.pageSize };
   }
   @Post('schools') async createSchool(@Req() req: Request, @Body() body: unknown) {
     const actor = await this.svc.administrator(req);
@@ -94,25 +202,85 @@ export class ApiController {
       await tx.auditEvent.create({ data: { actorId: actor.id, schoolId: id, action: b.active ? 'SCHOOL_REACTIVATED' : 'SCHOOL_SUSPENDED', target: id + ': ' + b.reason } }); return school;
     });
   }
-  @Get('schools/:id/workspace') async workspace(@Req() req: Request, @Param('id') id: string) {
+  @Patch('schools/:id/profile') async schoolProfile(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
+    const { user } = await this.svc.authorize(req, schoolId(id), managers);
+    const b = parse(z.object({ name, region: name, schoolType: z.string().trim().max(80), address: z.string().trim().max(500), phone: z.string().trim().max(40), email: z.union([email,z.literal('')]), website: z.string().trim().max(200) }).strict(), body);
+    return this.svc.atomic(async tx => {
+      const school = await tx.school.update({ where: { id }, data: b });
+      await tx.auditEvent.create({ data: { actorId: user.id, schoolId: id, action: 'SCHOOL_PROFILE_UPDATED', target: id } });
+      return { id: school.id, name: school.name, code: school.code, region: school.region, schoolType: school.schoolType, address: school.address, phone: school.phone, email: school.email, website: school.website };
+    });
+  }
+  @Get('schools/:id/workspace') async workspace(@Req() req: Request, @Param('id') id: string, @Query() query: unknown) {
+    const { page, pageSize } = parse(z.object({ page: listPage.optional(), pageSize: listSize.optional() }).strict(), query);
     const { user, memberships } = await this.svc.authorize(req, schoolId(id));
     const roles = memberships.map(m => m.role); const staffManager = user.platformAdmin || roles.includes('HEADMASTER');
     const registrar = staffManager || roles.includes('REGISTRAR'); const academic = staffManager || roles.includes('ACADEMIC');
+    const bursar = user.platformAdmin || roles.includes('HEADMASTER') || roles.includes('BURSAR');
     const teacher = roles.includes('TEACHER');
-    const classroomWhere = { schoolId: id, ...(!registrar && !academic ? { OR: [ ...(teacher ? [{ assignments: { some: { membership: { userId: user.id, active: true } } } }] : []), { enrollments: { some: { student: { userId: user.id } } } }] } : {}) };
-    const studentWhere = { schoolId: id, ...(!registrar && !academic ? { OR: [{ userId: user.id }, ...(teacher ? [{ enrollments: { some: { classroom: { assignments: { some: { membership: { userId: user.id, active: true } } } } } } }] : [])] } : {}) };
+    const teacherScope = teacher ? await teacherEnrollmentScope(this.svc.db, id, user.id) : {};
+    const visibleEnrollments = !registrar && !academic && !bursar ? teacherScope : {};
+    const classroomWhere = { schoolId: id, ...(!registrar && !academic && !bursar ? { OR: [ ...(teacher ? [{ assignments: { some: { membership: { userId: user.id, active: true } } } }] : []), { enrollments: { some: { status: 'active', student: { userId: user.id } } } }] } : {}) };
+    const studentWhere = { schoolId: id, ...(!registrar && !academic && !bursar ? { OR: [{ userId: user.id }, ...(teacher ? [{ enrollments: { some: teacherScope } }] : [])] } : {}) };
     const [school, years, classes, students, studentCount, members, invitations, assignments] = await Promise.all([
-      this.svc.db.school.findUnique({ where: { id }, select: { id: true, name: true, code: true, region: true } }),
-      this.svc.db.academicYear.findMany({ where: { schoolId: id, ...(!registrar && !academic ? { classes: { some: classroomWhere } } : {}) }, orderBy: { startsAt: 'desc' }, take: 100 }),
-      this.svc.db.classroom.findMany({ where: classroomWhere, include: { year: { select: { name: true, closed: true } }, _count: { select: { enrollments: true } } }, orderBy: { name: 'asc' }, take: 100 }),
-      this.svc.db.student.findMany({ where: studentWhere, select: { id: true, name: true, admissionNumber: true, dateOfBirth: registrar ? true : false, gender: true, address: registrar ? true : false, userId: true, enrollments: { select: { id: true, classroomId: true, createdAt: true, classroom: { select: { name: true, yearId: true, year: { select: { name: true } } } } } } }, orderBy: { createdAt: 'desc' }, take: 100 }),
+      this.svc.db.school.findUnique({ where: { id }, select: { id: true, name: true, code: true, region: true, schoolType: true, address: true, phone: true, email: true, website: true } }),
+      this.svc.db.academicYear.findMany({ where: { schoolId: id, ...(!registrar && !academic && !bursar ? { classes: { some: classroomWhere } } : {}) }, orderBy: { startsAt: 'desc' } }),
+      this.svc.db.classroom.findMany({ where: classroomWhere, include: { year: { select: { name: true, closed: true } }, _count: { select: { enrollments: { where: { status: 'active' } } } } }, orderBy: { name: 'asc' } }),
+      this.svc.db.student.findMany({ where: studentWhere, select: { id: true, name: true, admissionNumber: true, dateOfBirth: registrar ? true : false, gender: true, address: registrar ? true : false, userId: true, enrollments: { orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], where: { ...visibleEnrollments, ...(!registrar && !academic && !bursar ? { classroom: classroomWhere } : {}) }, select: { id: true, classroomId: true, createdAt: true, status: true, version: true, subjects: { select: { subjectId: true } }, classroom: { select: { name: true, yearId: true, year: { select: { name: true } } } } } } }, orderBy: { createdAt: 'desc' }, ...(page ? { skip: (page - 1) * (pageSize ?? 25), take: pageSize ?? 25 } : {}) }),
       this.svc.db.student.count({ where: studentWhere }),
-      staffManager || academic ? this.svc.db.membership.findMany({ where: { schoolId: id }, select: { id: true, role: true, active: true, createdAt: true, user: { select: { id: true, name: true, email: true } } }, take: 100, orderBy: { createdAt: 'desc' } }) : [],
-      staffManager || academic ? this.svc.db.invitation.findMany({ where: { schoolId: id, ...(staffManager ? {} : { role: 'TEACHER' }) }, select: { id: true, name: true, email: true, role: true, createdAt: true, expiresAt: true, expiresInMinutes: true, acceptedAt: true, revokedAt: true }, orderBy: { createdAt: 'desc' }, take: 100 }) : [],
-      staffManager || academic || teacher ? this.svc.db.teachingAssignment.findMany({ where: { schoolId: id, ...(!staffManager && !academic ? { membership: { userId: user.id, active: true } } : {}) }, select: { id: true, classroomId: true, membershipId: true, membership: { select: { active: true, user: { select: { id: true, name: true } } } }, classroom: { select: { name: true, yearId: true, year: { select: { name: true } }, _count: { select: { enrollments: true } } } } }, take: 100 }) : [],
+      staffManager || academic ? this.svc.db.membership.findMany({ where: { schoolId: id }, select: { id: true, role: true, active: true, createdAt: true, user: { select: { id: true, name: true, email: true, enabled: true } } }, orderBy: { createdAt: 'desc' } }) : [],
+      staffManager || academic ? this.svc.db.invitation.findMany({ where: { schoolId: id, ...(staffManager ? {} : { role: 'TEACHER' }) }, select: { id: true, name: true, email: true, role: true, createdAt: true, expiresAt: true, expiresInMinutes: true, acceptedAt: true, revokedAt: true }, orderBy: { createdAt: 'desc' } }) : [],
+      staffManager || academic || teacher ? this.svc.db.teachingAssignment.findMany({ where: { schoolId: id, ...(!staffManager && !academic ? { membership: { userId: user.id, active: true } } : {}) }, select: { id: true, classroomId: true, membershipId: true, subjectId: true, subject: true, confirmedAt: true, membership: { select: { active: true, user: { select: { id: true, name: true, enabled: true } } } }, classroom: { select: { name: true, yearId: true, year: { select: { name: true } }, _count: { select: { enrollments: { where: { status: 'active' } } } } } } } }) : [],
     ]);
-    const audit = staffManager ? await this.svc.db.auditEvent.findMany({ where: {schoolId:id}, orderBy:{createdAt:'desc'},take:100 }) : [];
-    return { school, years, classes, students, studentCount, members, invitations, assignments, audit, permissions: { staffManager, registrar, academic } };
+    const registryAdmissions = registrar ? await this.svc.db.admission.findMany({ where: { schoolId: id }, select: { id: true, yearId: true, status: true } }) : [];
+    const registryIssues = registrar || academic ? await this.svc.db.rosterIssue.findMany({ where: { schoolId: id, status: 'open' }, select: { id: true, assignment: { select: { classroom: { select: { yearId: true } } } } } }) : [];
+    const auditEvents = staffManager ? await this.svc.db.auditEvent.findMany({ where: { schoolId: id }, orderBy: { createdAt: 'desc' }, take: 100 }) : [];
+    const auditActorIds = [...new Set(auditEvents.flatMap(event => event.actorId ? [event.actorId] : []))];
+    const [auditActors, auditMemberships] = auditActorIds.length
+      ? await Promise.all([
+        this.svc.db.user.findMany({ where: { id: { in: auditActorIds } }, select: { id: true, name: true } }),
+        this.svc.db.membership.findMany({ where: { schoolId: id, userId: { in: auditActorIds } }, select: { userId: true, role: true } }),
+      ])
+      : [[], []];
+    const audit = auditEvents.map(event => ({
+      ...event,
+      actor: auditActors.find(actor => actor.id === event.actorId) ?? null,
+      role: auditMemberships.find(membership => membership.userId === event.actorId)?.role ?? null,
+    }));
+    const subjects = registrar || academic ? await this.svc.db.subject.findMany({ where: { schoolId: id }, orderBy: { name: 'asc' } }) : [];
+    const classSubjects = registrar || academic ? await this.svc.db.classSubject.findMany({ where: { schoolId: id }, include: { subject: true } }) : [];
+
+    let financeSummaryData = null;
+    if (bursar) {
+      const [{ _count: feesCount }, { _sum: chargedSum }, { _sum: paidSum }, { _sum: adjSum }] = await Promise.all([
+        this.svc.db.feeStructure.aggregate({ where: { schoolId: id }, _count: true }),
+        this.svc.db.studentCharge.aggregate({ where: { schoolId: id }, _sum: { amount: true } }),
+        this.svc.db.payment.aggregate({ where: { schoolId: id, voidAt: null }, _sum: { amount: true } }),
+        this.svc.db.adjustment.aggregate({ where: { schoolId: id }, _sum: { amount: true } })
+      ]);
+      // simple student owing count approximation
+      const owingStudents = await this.svc.db.$queryRaw<Array<{ count: number }>>`
+        SELECT COUNT(DISTINCT "studentId")::int as count
+        FROM (
+          SELECT "studentId",
+                 SUM(amount) as charges,
+                 COALESCE((SELECT SUM(amount) FROM "Payment" p WHERE p."studentId" = c."studentId" AND p."schoolId" = ${id}::uuid AND p."voidAt" IS NULL), 0) as paid,
+                 COALESCE((SELECT SUM(amount) FROM "Adjustment" a WHERE a."studentId" = c."studentId" AND a."schoolId" = ${id}::uuid), 0) as adjustments
+          FROM "StudentCharge" c
+          WHERE c."schoolId" = ${id}::uuid
+          GROUP BY "studentId"
+        ) AS s
+        WHERE charges + adjustments - paid > 0
+      `;
+      financeSummaryData = {
+        fees: feesCount || 0,
+        charged: chargedSum.amount || 0,
+        paid: paidSum.amount || 0,
+        adjustments: adjSum.amount || 0,
+        studentsOwing: owingStudents[0]?.count ?? 0
+      };
+    }
+    return { school, years: years.map(year => ({ ...year, terms: termsForYear(year) })), classes, students, studentCount, registryAdmissions, registryIssues, subjects, classSubjects, members, invitations, assignments, audit, financeSummary: bursar ? financeSummaryData : null, permissions: { staffManager, registrar, academic, bursar } };
   }
   @Post('schools/:id/invitations') async invite(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
     const { user, memberships } = await this.svc.authorize(req, schoolId(id));
@@ -122,7 +290,7 @@ export class ApiController {
     await this.svc.rate('invite-create:' + user.id, 50, 3600);
     const b = parse(z.object({ name, email, role: schoolRole, expiresInMinutes: invitationExpiry.default(2880) }).strict(), body);
     if (academic && !manager && b.role !== 'TEACHER') throw new ForbiddenException('Academic Masters can invite teachers only.');
-    if (b.role === 'HEADMASTER' && !user.platformAdmin) throw new ForbiddenException('Only platform administrators assign Headmasters.');
+    if (b.role === 'HEADMASTER' && !manager) throw new ForbiddenException('Only Headmasters or platform administrators assign Headmasters.');
     return this.svc.idempotent(user.id + ':invite:' + id, key(req), b, async tx => {
       return this.svc.createInvitation(tx, user.id, id, b);
     });
@@ -133,7 +301,7 @@ export class ApiController {
     const { randomToken, digest } = await import('./security');
     return this.svc.atomic(async tx => {
       const invitation = await tx.invitation.findFirst({ where: { id: invitationId, schoolId: id, acceptedAt: null, revokedAt: null } });
-      if (!invitation || (invitation.role === 'HEADMASTER' && !user.platformAdmin)) throw new ForbiddenException('Invitation is unavailable.');
+      if (!invitation) throw new ForbiddenException('Invitation is unavailable.');
       await tx.outbox.updateMany({ where: { invitationId, sentAt: null, cancelledAt: null }, data: { cancelledAt: new Date(), payload: '' } });
       const token = randomToken();
       const updated = await tx.invitation.update({ where: { id: invitationId }, data: action === 'revoke' ? { revokedAt: new Date() } : { tokenHash: digest(token), expiresAt: new Date(Date.now() + invitation.expiresInMinutes * 60000), generation: { increment: 1 } } });
@@ -142,31 +310,91 @@ export class ApiController {
     });
   }
   @Patch('schools/:id/members/:membershipId') async member(@Req() req: Request, @Param('id') id: string, @Param('membershipId') membershipId: string, @Body() body: unknown) {
-    const { user } = await this.svc.authorize(req, schoolId(id), managers); parse(uuid, membershipId); const b = parse(z.object({ active: z.boolean() }).strict(), body);
+    const { user, memberships } = await this.svc.authorize(req, schoolId(id), ['HEADMASTER','ACADEMIC']); parse(uuid, membershipId); const b = parse(z.object({ active: z.boolean() }).strict(), body);
     return this.svc.atomic(async tx => {
       const member = await tx.membership.findFirst({ where: { id: membershipId, schoolId: id } });
-      if (!member || member.userId === user.id || (member.role === 'HEADMASTER' && !user.platformAdmin)) throw new ForbiddenException('You cannot change this membership.');
+      const selectedRole = (req.session as any).selectedRole;
+      if (!member || (member.userId === user.id && member.role === selectedRole) || (member.role === 'HEADMASTER' && !user.platformAdmin) || (memberships.some(m => m.role === 'ACADEMIC') && !user.platformAdmin && member.role !== 'TEACHER')) throw new ForbiddenException('You cannot change this membership.');
       await tx.membership.update({ where: { id: member.id }, data: { active: b.active } });
       await tx.user.update({ where: { id: member.userId }, data: { sessionVersion: { increment: 1 } } });
       await tx.auditEvent.create({ data: { actorId: user.id, schoolId: id, action: b.active ? 'MEMBER_REACTIVATED' : 'MEMBER_SUSPENDED', target: member.id } }); return { message: 'Access updated. Existing sessions revoked.' };
     });
   }
+  @Delete('schools/:id/members/:membershipId') async removeMemberRole(@Req() req: Request, @Param('id') id: string, @Param('membershipId') membershipId: string) {
+    const { user, memberships } = await this.svc.authorize(req, schoolId(id)); parse(uuid, membershipId);
+    const canManage = user.platformAdmin || memberships.some(m => m.role === 'HEADMASTER' || m.role === 'ACADEMIC');
+    if (!canManage) throw new ForbiddenException('You cannot remove school roles.');
+    return this.svc.atomic(async tx => {
+      const member = await tx.membership.findFirst({ where: { id: membershipId, schoolId: id } });
+      const selectedRole = (req.session as any).selectedRole;
+      if (!member || (member.userId === user.id && member.role === selectedRole) || (member.role === 'HEADMASTER' && !user.platformAdmin) || (memberships.some(m => m.role === 'ACADEMIC') && !user.platformAdmin && member.role !== 'TEACHER')) throw new ForbiddenException('You cannot remove this role.');
+      if (await tx.teachingAssignment.findFirst({ where: { schoolId: id, membershipId: member.id } })) throw new ConflictException('This role has teaching or class-teacher history. Deactivate it to preserve academic records.');
+      await tx.membership.delete({ where: { id: member.id } });
+      await tx.user.update({ where: { id: member.userId }, data: { sessionVersion: { increment: 1 } } });
+      await tx.auditEvent.create({ data: { actorId: user.id, schoolId: id, action: 'MEMBER_ROLE_REMOVED', target: member.id } });
+      return { message: 'School role removed.' };
+    });
+  }
   @Post('schools/:id/years') async year(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
     const { user } = await this.svc.authorize(req, schoolId(id), academics);
-    const b = parse(z.object({ name, startsAt: date, endsAt: date }).strict().refine(v => v.endsAt > v.startsAt, 'End date must follow start date.'), body);
-    return this.svc.idempotent(user.id + ':year:' + id, key(req), b, tx => tx.academicYear.create({ data: { schoolId: id, name: b.name, startsAt: new Date(b.startsAt), endsAt: new Date(b.endsAt) } }));
+    const b = parse(z.object({ name, startsAt: date, endsAt: date, terms: termsInput.optional() }).strict().refine(v => v.endsAt > v.startsAt, 'End date must follow start date.'), body);
+    if (b.terms) validateTerms(b.terms, b.startsAt, b.endsAt);
+    return this.svc.idempotent(user.id + ':year:' + id, key(req), b, tx => tx.academicYear.create({ data: { schoolId: id, name: b.name, startsAt: new Date(b.startsAt), endsAt: new Date(b.endsAt), terms: b.terms ?? termsForYear({ startsAt: new Date(b.startsAt), endsAt: new Date(b.endsAt) }) } }));
+  }
+  @Patch('schools/:id/years/:yearId') async updateYear(@Req() req: Request, @Param('id') id: string, @Param('yearId') yearId: string, @Body() body: unknown) {
+    const { user } = await this.svc.authorize(req, schoolId(id), academics); parse(uuid, yearId);
+    const b = parse(z.union([
+      z.object({ name, startsAt: date, endsAt: date, terms: termsInput.optional() }).strict().refine(v => v.endsAt > v.startsAt, 'End date must follow start date.'),
+      z.object({ closed: z.boolean() }).strict(),
+    ]), body);
+    return this.svc.atomic(async tx => {
+      const year = await tx.academicYear.findFirst({ where: { id: yearId, schoolId: id } });
+      if (!year) throw new BadRequestException('Academic year not found.');
+      if ('closed' in b) {
+        if (req.session.selectedRole !== 'HEADMASTER') throw new ForbiddenException('Headmaster access required to close or reopen a year.');
+        if (year.closed === b.closed) return year;
+        if (b.closed) {
+          const workspace = await tx.academicWorkspace.findUnique({ where: { yearId } });
+          const assessments = ((workspace?.data as any)?.assessments ?? []) as any[];
+          const submissions = ((workspace?.data as any)?.submissions ?? []) as any[];
+          if (assessments.some(a => a.status !== 'closed')) throw new BadRequestException('Close all assessments before closing the academic year.');
+          if (submissions.some(s => s.assessmentProgress?.status !== 'approved')) throw new BadRequestException('Review all assessment submissions before closing the year.');
+        }
+      } else {
+        const terms = b.terms ?? termsForYear(year);
+        validateTerms(terms, b.startsAt, b.endsAt);
+        const removed = termsForYear(year).filter(term => !terms.some(next => next.key === term.key)).map(term => term.key);
+        if (removed.length) {
+          const workspace = await tx.academicWorkspace.findUnique({ where: { yearId } });
+          const assessments = ((workspace?.data as any)?.assessments ?? []) as any[];
+          const usedInAssessment = assessments.some(assessment => removed.includes(assessment.term));
+          const [fees, charges, payments, adjustments] = await Promise.all([
+            tx.feeStructure.count({ where: { yearId, term: { in: removed } } }),
+            tx.studentCharge.count({ where: { yearId, term: { in: removed } } }),
+            tx.payment.count({ where: { yearId, term: { in: removed } } }),
+            tx.adjustment.count({ where: { yearId, term: { in: removed } } }),
+          ]);
+          if (usedInAssessment || fees || charges || payments || adjustments) throw new BadRequestException('A term with assessments or finance records cannot be removed. Rename it or keep it in this year.');
+        }
+      }
+      const updated = await tx.academicYear.update({ where: { id: yearId }, data: 'closed' in b ? { closed: b.closed } : { name: b.name, startsAt: new Date(b.startsAt), endsAt: new Date(b.endsAt), terms: b.terms ?? termsForYear(year) } });
+      await tx.auditEvent.create({ data: { actorId: user.id, schoolId: id, action: 'closed' in b ? (b.closed ? 'ACADEMIC_YEAR_CLOSED' : 'ACADEMIC_YEAR_REOPENED') : 'ACADEMIC_YEAR_UPDATED', target: yearId } });
+      return updated;
+    });
   }
   @Post('schools/:id/classes') async classroom(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
     const { user } = await this.svc.authorize(req, schoolId(id), academics); const b = parse(z.object({ name, yearId: uuid }).strict(), body);
     return this.svc.idempotent(user.id + ':class:' + id, key(req), b, async tx => {
-      if (!await tx.academicYear.findFirst({ where: { id: b.yearId, schoolId: id, closed: false } })) throw new BadRequestException('Select an open academic year.');
+      if (!await tx.academicYear.findFirst({ where: { id: b.yearId, schoolId: id } })) throw new BadRequestException('Select an academic year.');
       return tx.classroom.create({ data: { ...b, schoolId: id } });
     });
   }
   @Post('schools/:id/assignments') async assignment(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
-    const { user } = await this.svc.authorize(req, schoolId(id), academics); const b = parse(z.object({ membershipId: uuid, classroomId: uuid }).strict(), body);
+    const { user } = await this.svc.authorize(req, schoolId(id), academics); const b = parse(z.object({ membershipId: uuid, classroomId: uuid, subjectId: uuid.nullable().default(null) }).strict(), body);
     return this.svc.idempotent(user.id + ':assignment:' + id, key(req), b, async tx => {
-      if (!await tx.membership.findFirst({ where: { id: b.membershipId, schoolId: id, role: 'TEACHER', active: true } }) || !await tx.classroom.findFirst({ where: { id: b.classroomId, schoolId: id, year: { closed: false } } })) throw new BadRequestException('Choose an active teacher and an open class in this school.');
+      if (!await tx.membership.findFirst({ where: { id: b.membershipId, schoolId: id, role: 'TEACHER', active: true, user: { enabled: true } } }) || !await tx.classroom.findFirst({ where: { id: b.classroomId, schoolId: id } })) throw new BadRequestException('Choose an active teacher and a class in this school.');
+      if (b.subjectId) await validateSubjects(tx, id, b.classroomId, [b.subjectId]);
+      if (await tx.teachingAssignment.findFirst({ where: { schoolId: id, ...b } })) throw new ConflictException('This teacher assignment already exists.');
       const assignment = await tx.teachingAssignment.create({ data: { ...b, schoolId: id } });
       await tx.auditEvent.create({ data: { actorId: user.id, schoolId: id, action: 'TEACHER_ASSIGNED', target: assignment.id } }); return assignment;
     });
@@ -175,14 +403,68 @@ export class ApiController {
     const { user } = await this.svc.authorize(req, schoolId(id), registrars);
     const b = parse(z.object({ name, admissionNumber: z.string().trim().min(1).max(40), classroomId: uuid, dateOfBirth: date.optional(), gender: z.enum(['M','F']).optional(), address: z.string().trim().max(500).optional() }).strict().refine(v => !v.dateOfBirth || v.dateOfBirth <= new Date().toISOString().slice(0,10), 'Date of birth cannot be in the future.'), body);
     return this.svc.idempotent(user.id + ':student:' + id, key(req), b, async tx => {
-      if (!await tx.classroom.findFirst({ where: { id: b.classroomId, schoolId: id, year: { closed: false } } })) throw new BadRequestException('Select a class in an open academic year.');
+      if (!await tx.classroom.findFirst({ where: { id: b.classroomId, schoolId: id } })) throw new BadRequestException('Select a class in an open academic year.');
       const student = await tx.student.create({ data: { schoolId: id, name: b.name, admissionNumber: b.admissionNumber, gender: b.gender, address: b.address, dateOfBirth: b.dateOfBirth ? new Date(b.dateOfBirth) : undefined } });
       await tx.enrollment.create({ data: { schoolId: id, studentId: student.id, classroomId: b.classroomId } });
       await tx.auditEvent.create({ data: { actorId: user.id, schoolId: id, action: 'STUDENT_ENROLLED', target: student.id } }); return student;
     });
   }
-  @Get('audit') async audit(@Req() req: Request, @Query('schoolId') id?: string) {
-    if (id) await this.svc.authorize(req, schoolId(id), managers); else await this.svc.administrator(req);
-    return this.svc.db.auditEvent.findMany({ where: id ? { schoolId: id } : {}, orderBy: { createdAt: 'desc' }, take: 100 });
+  @Get('audit') async audit(@Req() req: Request, @Query() query: unknown) {
+    const q = parse(z.object({ schoolId: uuid.optional(), page: listPage, pageSize: listSize, q: z.string().trim().max(200).default(''), actor: z.string().trim().max(200).default(''), action: z.string().trim().max(100).default(''), from: date.optional(), to: date.optional() }).strict(), query);
+    if (q.schoolId) await this.svc.authorize(req, q.schoolId, managers); else await this.svc.administrator(req);
+    const actorMatches = q.actor ? await this.svc.db.user.findMany({ where: { OR: [{ name: { contains: q.actor, mode: 'insensitive' } }, { email: { contains: q.actor, mode: 'insensitive' } }] }, select: { id: true } }) : [];
+    const searchActors = q.q ? await this.svc.db.user.findMany({ where: { OR: [{ name: { contains: q.q, mode: 'insensitive' } }, { email: { contains: q.q, mode: 'insensitive' } }] }, select: { id: true } }) : [];
+    const where: Prisma.AuditEventWhereInput = { ...(q.schoolId ? { schoolId: q.schoolId } : {}), ...(q.action ? { action: { contains: q.action, mode: 'insensitive' } } : {}), ...(q.actor ? { actorId: { in: actorMatches.map(actor => actor.id) } } : {}), ...(q.q ? { OR: [{ action: { contains: q.q, mode: 'insensitive' } }, { target: { contains: q.q, mode: 'insensitive' } }, { actorId: { in: searchActors.map(actor => actor.id) } }] } : {}), ...(q.from || q.to ? { createdAt: { ...(q.from ? { gte: new Date(q.from + 'T00:00:00.000Z') } : {}), ...(q.to ? { lt: new Date(new Date(q.to + 'T00:00:00.000Z').getTime() + 86400000) } : {}) } } : {}) };
+    const [events, total] = await this.svc.db.$transaction([
+      this.svc.db.auditEvent.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
+      this.svc.db.auditEvent.count({ where }),
+    ]);
+    const actorIds = [...new Set(events.flatMap(event => event.actorId ? [event.actorId] : []))];
+    const [actors, memberships] = actorIds.length
+      ? await Promise.all([
+        this.svc.db.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, name: true } }),
+        this.svc.db.membership.findMany({ where: { userId: { in: actorIds }, ...(q.schoolId ? { schoolId: q.schoolId } : {}) }, select: { userId: true, schoolId: true, role: true } }),
+      ])
+      : [[], []];
+    return { items: events.map(event => ({
+      ...event,
+      actor: actors.find(actor => actor.id === event.actorId) ?? null,
+      role: memberships.find(membership => membership.userId === event.actorId && membership.schoolId === event.schoolId)?.role ?? null,
+    })), total, page: q.page, pageSize: q.pageSize };
+  }
+  @Post('contact') async contactForm(@Req() req: Request, @Body() body: unknown) {
+    const b = parse(z.object({
+      fullName: z.string().trim().min(2).max(100),
+      emailAddress: email,
+      phoneNumber: z.string().trim().max(30).optional(),
+      subject: z.string().trim().max(100),
+      message: z.string().trim().min(10).max(2000)
+    }).strict(), body);
+
+    await this.svc.rate('contact:' + b.emailAddress, 3, 86400);
+    await this.svc.rate('contact-ip:' + req.ip, 10, 86400);
+
+    const { buildContactInquiryEmail } = await import('./communication/email/email-templates');
+    const mail = buildContactInquiryEmail({
+      fullName: b.fullName,
+      emailAddress: b.emailAddress,
+      phoneNumber: b.phoneNumber,
+      subject: b.subject,
+      message: b.message,
+    });
+    const { encrypt } = await import('./security');
+
+    await this.svc.db.outbox.create({
+      data: {
+        payload: encrypt(JSON.stringify({
+          to: 'stanlymbilinyi@gmail.com',
+          subject: mail.subject,
+          text: mail.text,
+          html: mail.html,
+        }))
+      }
+    });
+
+    return { message: 'Thank you for reaching out! Your message has been sent successfully.' };
   }
 }

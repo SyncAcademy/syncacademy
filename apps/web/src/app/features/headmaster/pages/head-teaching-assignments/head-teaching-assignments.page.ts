@@ -1,6 +1,6 @@
 import { DialogFocusDirective } from '../../../../shared/directives/dialog-focus.directive';
 import { inject } from '@angular/core';
-import { HeadDemoStore } from '../../head-demo.store';
+import { HeadStore } from '../../head.store';
 import { Component, OnInit, computed, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -17,14 +17,6 @@ import {
   Subject,
   TeachingAssignment,
 } from '../../head.models';
-import {
-  MOCK_ACADEMIC_YEARS,
-  MOCK_CLASSES,
-  MOCK_STAFF,
-  MOCK_SUBJECTS,
-  MOCK_TEACHING_ASSIGNMENTS,
-} from '../../head-mock-data';
-
 @Component({
   selector: 'app-head-teaching-assignments',
   standalone: true,
@@ -42,7 +34,7 @@ import {
   styleUrls: ['./head-teaching-assignments.page.scss'],
 })
 export class HeadTeachingAssignmentsPage implements OnInit {
-  store = inject(HeadDemoStore);
+  store = inject(HeadStore);
   // Loading & Data signals
   readonly loading = signal<boolean>(true);
   readonly assignments = this.store.assignments;
@@ -54,6 +46,8 @@ export class HeadTeachingAssignmentsPage implements OnInit {
   readonly subjectFilter = signal<string>('');
   readonly yearFilter = signal<string>('');
   readonly searchQuery = signal<string>('');
+  readonly page = signal(1);
+  readonly pageSize = 25;
 
   // Dialog & Modal signals
   readonly showDialog = signal<boolean>(false);
@@ -82,7 +76,6 @@ export class HeadTeachingAssignmentsPage implements OnInit {
   constructor() { effect(() => { this.store.selectedYear(); this.clearFilters(); this.closeDialog(); this.cancelDelete(); }); }
   changeClass(id: string): void { this.formClassId.set(id); this.formSubjectId.set(''); }
 
-  // Filter options derived from unique values in mock / active assignments
   readonly teacherOptions = computed(() => {
     const source = this.store.yearAssignments();
     const names = new Set(source.map(a => a.teacherName));
@@ -153,6 +146,8 @@ export class HeadTeachingAssignmentsPage implements OnInit {
       return true;
     });
   });
+  readonly pages = computed(() => Math.max(1, Math.ceil(this.filteredAssignments().length / this.pageSize)));
+  readonly pageAssignments = computed(() => this.filteredAssignments().slice((this.page() - 1) * this.pageSize, this.page() * this.pageSize));
 
   ngOnInit(): void {
     this.loadAssignments();
@@ -163,7 +158,6 @@ export class HeadTeachingAssignmentsPage implements OnInit {
     this.errorMessage.set(null);
     setTimeout(() => {
       try {
-        // Retain the shared frontend demo state.
         this.loading.set(false);
       } catch {
         this.errorMessage.set('Failed to load teaching assignments. Please retry.');
@@ -174,9 +168,11 @@ export class HeadTeachingAssignmentsPage implements OnInit {
 
   onSearchChange(value: string): void {
     this.searchQuery.set(value);
+    this.page.set(1);
   }
 
   clearFilters(): void {
+    this.page.set(1);
     this.teacherFilter.set('');
     this.classFilter.set('');
     this.subjectFilter.set('');

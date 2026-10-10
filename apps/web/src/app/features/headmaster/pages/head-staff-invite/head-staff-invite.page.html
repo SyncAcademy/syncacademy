@@ -1,159 +1,55 @@
-<p *ngIf="copyError()" role="alert" class="portal-field-error">
-  {{copyError()}}
-</p>
-<div class="back-link">
-  <a routerLink="/head/staff" queryParamsHandling="preserve"
-    >← Back to Staff Directory</a
-  >
-</div>
-
-<app-head-page-header
-  title="Invite Staff"
-  description="Send a secure email invitation to a school user."
-></app-head-page-header>
+<p *ngIf="copyError()" role="alert" class="portal-field-error">{{ copyError() }}</p>
+<div class="back-link"><a routerLink="/head/staff" queryParamsHandling="preserve">&#8592; Back to Staff Directory</a></div>
+<app-head-page-header title="Invite Staff" description="Send a secure email invitation to a school user."></app-head-page-header>
 
 <div class="invite-container">
   <div class="step-card" *ngIf="!isGenerated()">
-    <h3 class="step-title">1. Select Role</h3>
+    <h3 class="step-title">1. Select role</h3>
+    <p class="role-hint">You can invite multiple staff members to the same role.</p>
     <div class="role-grid" role="radiogroup" aria-label="Invitation role">
-      <div
-        class="role-card"
-        role="radio"
-        tabindex="0"
-        [attr.aria-checked]="selectedRole() === role"
-        (keydown.enter)="selectRole(role)"
-        (keydown.space)="$event.preventDefault(); selectRole(role)"
-        *ngFor="let role of selectableRoles"
-        [class.selected]="selectedRole() === role"
-        (click)="selectRole(role)"
-      >
-        <div class="role-card__header">
-          <div class="radio-circle"></div>
-          <h4>{{ roleLabels[role] }}</h4>
-        </div>
+      <div class="role-card" role="radio" tabindex="0" [attr.aria-checked]="selectedRole() === role" [class.selected]="selectedRole() === role" (keydown.enter)="selectRole(role)" (keydown.space)="$event.preventDefault(); selectRole(role)" (click)="selectRole(role)" *ngFor="let role of selectableRoles">
+        <div class="role-card__header"><div class="radio-circle"></div><h4>{{ roleLabels[role] }}</h4></div>
         <p class="role-card__desc">{{ getRoleDescription(role) }}</p>
       </div>
     </div>
 
-    <h3 class="step-title" style="margin-top: 32px">
-      2. Recipient and link expiry
-    </h3>
+    <h3 class="step-title recipient-title">2. Recipient and link expiry</h3>
     <div class="expiry-selector">
-      <label
-        >Full name<input
-          class="sa-input"
-          [ngModel]="name()"
-          (ngModelChange)="name.set($event)"
-          autocomplete="name"
-          required /></label
-      ><label
-        >Email<input
-          class="sa-input"
-          type="email"
-          [ngModel]="email()"
-          (ngModelChange)="email.set($event)"
-          autocomplete="email"
-          required
-      /></label>
-      <label for="invitation-expiry">Invitation link expires after</label>
-      <select
-        id="invitation-expiry"
-        aria-label="Invitation expiry"
-        class="sa-select"
-        [ngModel]="selectedExpiry()"
-        (ngModelChange)="selectedExpiry.set($event)"
-      >
-        <option *ngFor="let opt of expiryOptions" [ngValue]="opt.minutes">
-          {{ opt.label }}
-        </option>
-      </select>
-      <p class="help-text">
-        The recipient chooses their own password. This link expires after {{
-        selectedExpiryLabel }}.
-      </p>
+      <label class="invite-field">Full name<input class="sa-input" [ngModel]="name()" (ngModelChange)="name.set($event)" autocomplete="name" required></label>
+      <label class="invite-field">Email<input class="sa-input" type="email" [ngModel]="email()" (ngModelChange)="email.set($event)" autocomplete="email" required></label>
+      <label class="invite-field invite-field--expiry" for="invitation-expiry">Invitation link expires after
+        <select id="invitation-expiry" class="sa-select" [ngModel]="selectedExpiry()" (ngModelChange)="selectedExpiry.set($event)">
+          <option *ngFor="let opt of expiryOptions" [ngValue]="opt.minutes">{{ opt.label }}</option>
+        </select>
+      </label>
+      <p class="help-text">The recipient chooses their own password. This link expires after {{ selectedExpiryLabel }}.</p>
     </div>
-
-    <div class="form-actions">
-      <button
-        class="sa-btn--primary generate-btn"
-        [disabled]="!selectedRole() || !name().trim() || !email().trim() || busy()"
-        (click)="generate()"
-      >
-        Send Invitation
-      </button>
-    </div>
+    <div class="form-actions"><button class="sa-btn--primary generate-btn" [disabled]="!selectedRole() || !name().trim() || !email().trim() || busy()" (click)="generate()">{{ busy() ? 'Sending...' : 'Send invitation' }}</button></div>
   </div>
 
   <div class="success-card" *ngIf="isGenerated()">
-    <div class="success-icon">
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-        <polyline points="22 4 12 14.01 9 11.01"></polyline>
-      </svg>
-    </div>
-
+    <div class="success-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></div>
     <h3 class="success-title">Invitation queued</h3>
-    <p class="success-desc">
-      An invitation for {{email()}} is queued for email delivery.
-    </p>
-
+    <p class="success-desc">An invitation for {{ email() }} is queued for email delivery.</p>
     <p class="help-text">Expires {{ expiresAt() | date:'d MMM y, HH:mm' }}</p>
-    <p *ngIf="copyError()" role="alert" class="portal-field-error">
-      {{ copyError() }}
-    </p>
-    <div class="form-actions" style="justify-content: center; margin-top: 32px">
-      <button class="action-btn" (click)="reset()">Generate Another</button>
-    </div>
+    <div class="form-actions form-actions--success"><button class="action-btn" (click)="reset()">Invite another staff member</button></div>
   </div>
 </div>
 
-<section class="invitation-history" *ngIf="store.invitations().length">
-  <h3>Recent invitations</h3>
-  <div
-    class="portal-history-row"
-    *ngFor="let invitation of store.invitations()"
-  >
-    <div>
-      <strong>{{ roleLabels[invitation.role] }}</strong>
-      <p>
-        {{ invitation.name }} · {{ invitation.email }} &middot; Expires {{
-        invitation.expiresAt | date:'d MMM y, HH:mm' }}
-      </p>
-    </div>
-    <span class="portal-pill"
-      >{{ invitationStatus(invitation) | titlecase }}</span
-    >
-    <button
-      *ngIf="invitationStatus(invitation) === 'active'"
-      class="action-btn action-btn--danger"
-      (click)="revoke(invitation.id)"
-    >
-      Revoke invitation
-    </button>
-  </div>
-  <button
-    class="action-btn"
-    [disabled]="busy()"
-    *ngFor="let invitation of store.invitations()"
-    [hidden]="invitation.status !== 'active'"
-    (click)="resend(invitation.id)"
-  >
-    Resend to {{invitation.email}}
-  </button>
+<section class="invitation-history">
+  <div class="invitation-history__heading"><div><h3>Recent invitations</h3><p>Track invitation status and manage links from this table.</p></div><span class="history-count">{{ recentInvitations().length }} total</span></div>
+  <div class="invitation-table-scroll"><table class="invitation-table"><thead><tr><th scope="col">Recipient</th><th scope="col">Role</th><th scope="col">Sent</th><th scope="col">Expires</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead><tbody>
+    <tr *ngFor="let invitation of visibleInvitations()">
+      <td data-label="Recipient"><span class="recipient-info"><strong>{{ invitation.name || 'Staff member' }}</strong><span class="recipient-email">{{ invitation.email }}</span></span></td>
+      <td data-label="Role">{{ roleLabels[invitation.role] }}</td>
+      <td data-label="Sent">{{ invitation.createdAt | date:'d MMM y, HH:mm' }}</td>
+      <td data-label="Expires">{{ invitation.expiresAt | date:'d MMM y, HH:mm' }}</td>
+      <td data-label="Status"><span class="invitation-status" [attr.data-status]="invitationStatus(invitation)">{{ invitationStatus(invitation) | titlecase }}</span></td>
+      <td data-label="Actions"><div class="invitation-actions" *ngIf="invitationStatus(invitation) === 'active' || invitationStatus(invitation) === 'expired'; else noActions"><button type="button" class="action-btn" [disabled]="busy()" (click)="resend(invitation.id)">Resend</button><button type="button" class="action-btn action-btn--danger" [disabled]="busy()" (click)="revoke(invitation.id)">Revoke</button></div><ng-template #noActions><span class="muted">—</span></ng-template></td>
+    </tr>
+    <tr *ngIf="!recentInvitations().length"><td colspan="6" class="invitation-empty">No invitations have been sent yet.</td></tr>
+  </tbody></table></div>
+  <div class="invitation-pagination" *ngIf="recentInvitations().length > invitationPageSize"><span>Page {{ invitationPage() > invitationPages() ? invitationPages() : invitationPage() }} of {{ invitationPages() }}</span><div><button type="button" class="action-btn" [disabled]="invitationPage() <= 1" (click)="invitationPage.set(invitationPage() - 1)">Previous</button><button type="button" class="action-btn" [disabled]="invitationPage() >= invitationPages()" (click)="invitationPage.set(invitationPage() + 1)">Next</button></div></div>
 </section>
 
-<app-confirm-dialog
-  [open]="!!revokeId()"
-  title="Revoke invitation?"
-  message="Invalidate this invitation link. It will remain in your invitation history."
-  confirmLabel="Revoke invitation"
-  (confirmed)="confirmRevoke()"
-  (cancelled)="revokeId.set(null)"
-></app-confirm-dialog>
+<app-confirm-dialog [open]="!!revokeId()" title="Revoke invitation" message="Invalidate this invitation link. It will remain in your invitation history." confirmLabel="Revoke invitation" (confirmed)="confirmRevoke()" (cancelled)="revokeId.set(null)"></app-confirm-dialog>

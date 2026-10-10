@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, ElementRef, OnInit, ViewChild, signal, inject, computed } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild, signal, inject, computed, effect } from '@angular/core';
 import { Router, RouterOutlet, RouterLink, NavigationEnd, ActivatedRoute } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import {
@@ -11,6 +11,8 @@ import {
 } from '@ionic/angular/standalone';
 import { SuperAdminSidebarComponent } from './components/super-admin-sidebar/super-admin-sidebar.component';
 import { SuperAdminStore } from './super-admin.store';
+import { NotificationBellComponent } from '../../shared/notifications/notification-bell.component';
+import { LoadingSkeletonComponent } from '../../shared/loading-skeleton.component';
 
 @Component({
   selector: 'app-super-admin-layout',
@@ -19,6 +21,8 @@ import { SuperAdminStore } from './super-admin.store';
   templateUrl: './super-admin.layout.html',
   styleUrls: ['./super-admin.layout.scss'],
   imports: [
+    NotificationBellComponent,
+    LoadingSkeletonComponent,
     IonApp,
     IonSplitPane,
     IonMenu,
@@ -40,11 +44,8 @@ export class SuperAdminLayout implements OnInit {
   showNotifications = signal(false);
 
   search = signal('');
-  searchResults = computed(() => {
-    const q = this.search().trim().toLowerCase();
-    if (!q) return [];
-    return [...this.store.schools().filter(s => s.name.toLowerCase().includes(q) || s.contactName.toLowerCase().includes(q)).map(s => ({ id: s.id, label: s.name, type: 'School', route: '/super-admin/schools' })), ...this.store.leads().filter(l => l.schoolName.toLowerCase().includes(q) || l.contactName.toLowerCase().includes(q)).map(l => ({ id: l.id, label: l.schoolName, type: 'Lead', route: '/super-admin/leads' }))].slice(0, 8);
-  });
+  searchResults = signal<{id:string;label:string;type:string;route:string}[]>([]);
+  private searchSeq=0;
 
   alertCount = computed(() => {
     return this.store.attention().length;
@@ -53,13 +54,17 @@ export class SuperAdminLayout implements OnInit {
   constructor(
     private router: Router,
     private activatedRoute: ActivatedRoute,
-  ) {}
+  ) {effect(()=>{const q=this.search().trim();const seq=++this.searchSeq;this.searchResults.set([]);if(q.length<2)return;setTimeout(async()=>{if(seq!==this.searchSeq)return;try{const result=await this.store.auth.request('GET','platform/search?q='+encodeURIComponent(q));if(seq===this.searchSeq)this.searchResults.set([...result.schools.map((school:any)=>({id:school.id,label:school.name,type:'School',route:'/super-admin/schools'})),...result.leads.map((lead:any)=>({id:lead.id,label:lead.schoolName,type:'Lead',route:'/super-admin/leads'}))]);}catch{if(seq===this.searchSeq)this.searchResults.set([]);}},250);});}
 
   ngOnInit(): void { void this.store.load();
     this.updateTitle();
     this.router.events
       .pipe(filter(event => event instanceof NavigationEnd))
-      .subscribe(() => this.updateTitle());
+      .subscribe(() => {
+        this.updateTitle();
+        this.saContent?.nativeElement.scrollTo({ top: 0, behavior: 'instant' });
+        this.showScrollTop.set(false);
+      });
   }
 
   private updateTitle(): void {

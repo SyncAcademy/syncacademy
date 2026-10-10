@@ -3,12 +3,13 @@
  <a class="stat-card" routerLink="/super-admin/schools" queryParamsHandling="preserve"><span class="stat-card__label">Active schools</span><strong class="stat-card__value">{{store.summary()?.activeSchools ?? '—'}}</strong><small>{{store.summary()?.schools ?? '—'}} total schools</small></a>
  <a class="stat-card" routerLink="/super-admin/schools" queryParamsHandling="preserve"><span class="stat-card__label">Students</span><strong class="stat-card__value">{{store.summary()?.students ?? '—'}}</strong><small>Registered student records</small></a>
  <a class="stat-card" routerLink="/super-admin/schools" queryParamsHandling="preserve"><span class="stat-card__label">Active staff</span><strong class="stat-card__value">{{store.summary()?.staff ?? '—'}}</strong><small>School staff memberships</small></a>
- <a class="stat-card" routerLink="/super-admin/schools" queryParamsHandling="preserve"><span class="stat-card__label">Pending invitations</span><strong class="stat-card__value">{{store.summary()?.pendingInvitations ?? '—'}}</strong><small>Awaiting account acceptance</small></a></div>
+ <a class="stat-card" routerLink="/super-admin/schools" queryParamsHandling="preserve"><span class="stat-card__label">Pending invitations</span><strong class="stat-card__value">{{store.summary()?.pendingInvitations ?? '—'}}</strong><small>Awaiting account acceptance</small></a>
+ <a class="stat-card" routerLink="/super-admin/leads" [queryParams]="{status:'new'}"><span class="stat-card__label">New leads</span><strong class="stat-card__value">{{store.summary()?.newLeads ?? '—'}}</strong><small>Awaiting follow-up</small></a></div>
   <section class="panel">
     <div class="panel-heading"><h3>Needs attention</h3><span>{{ store.attention().length }} items</span></div>
     @for (item of store.attention(); track item.id) {
       <div class="activity"><div><strong>{{ item.title }}</strong><p>{{ item.detail }}</p></div><a class="action-btn" [routerLink]="item.route" [queryParams]="item.query">{{ item.action }}</a></div>
-    } @empty { <p class="empty">You're all caught up. No outstanding alerts.</p> }
+    } @empty { <p class="empty">{{ store.loading() ? 'Loading platform alerts...' : !store.summary() || store.summaryError() ? 'Platform alerts could not be loaded. Retry loading to check.' : "You're all caught up. No outstanding alerts." }}</p> }
   </section>
   <div class="two-column">
     <section class="panel">
@@ -20,7 +21,7 @@
     <section class="panel">
       <div class="panel-heading"><h3>Recent platform activity</h3><a class="action-btn" routerLink="/super-admin/audit-log" queryParamsHandling="preserve">View all</a></div>
       @for (a of store.recentActivity().slice(0, 5); track a.id) {
-        <div class="activity"><div><span class="badge">{{ a.action }}</span><strong>{{ a.target }}</strong><p>{{ a.details }}</p><time [title]="(a.timestamp | date:'medium') || ''">{{ timeSince(a.timestamp) }}</time></div></div>
+        <div class="activity"><div><span class="badge">{{ activityLabel(a.action) }}</span><time [title]="(a.timestamp | date:'medium') || ''">{{ timeSince(a.timestamp) }}</time></div></div>
       } @empty { <p class="empty">No platform activity recorded.</p> }
     </section>
   </div>

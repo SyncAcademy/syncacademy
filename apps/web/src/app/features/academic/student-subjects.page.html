@@ -1,0 +1,50 @@
+<app-head-page-header [title]="title()" [description]="description()"></app-head-page-header>
+
+<div class="subjects-context"><span class="subjects-context__icon" aria-hidden="true">S</span><div><strong>{{ year()?.label || 'No academic year selected' }}</strong><span>Class subjects are assigned to enrolled students automatically. Edit individual selections when needed.</span></div>@if (readOnly()) { <span class="badge closed">Read-only</span> }</div>
+@if (error()) { <p class="portal-notice portal-notice--error" role="alert">{{ error() }}</p> }
+@if (notice()) { <p class="portal-notice" role="status">{{ notice() }}</p> }
+
+@if (!selectedClass()) {
+  <section class="panel subjects-panel">
+    <div class="subjects-heading"><div><span class="subjects-eyebrow">Student subjects</span><h2>Choose a class</h2><p>Open a class to view its students and subject selections.</p></div><span class="subjects-count">{{ classes().length }} classes</span></div>
+    <div class="subjects-tools"><label class="subjects-search"><span class="sr-only">Search classes or subjects</span><input type="search" placeholder="Search classes or subjects" [ngModel]="classSearch()" (ngModelChange)="classSearch.set($event)"></label></div>
+    @if (loadingClasses()) { <app-loading-skeleton label="Loading classes…" /> }
+    @else { <div class="subject-class-grid">
+      @for (classroom of filteredClasses(); track classroom.id) {
+        <button type="button" class="subject-class-card" (click)="openClass(classroom.id)">
+          <div class="subject-class-card__top"><span class="subject-class-card__number">{{ classroom.studentCount }} students</span><span aria-hidden="true">&#8599;</span></div>
+          <strong>{{ classroom.name }}</strong><span class="subject-class-card__meta">{{ classroom.subjects.length }} class subjects</span>
+          <span class="subject-class-card__subjects">
+            @for (subject of visibleSubjects(classroom); track subject.id) { <span class="class-subject-preview">{{ subject.name }}</span> }
+            @if (remainingSubjectCount(classroom)) { <span class="class-subject-preview class-subject-preview--more">+{{ remainingSubjectCount(classroom) }} more</span> }
+            @if (!classroom.subjects.length) { <span class="subject-class-card__empty">No subjects offered yet</span> }
+          </span><span class="subject-class-card__action">View students <span aria-hidden="true">&#8594;</span></span>
+        </button>
+      } @empty { <p class="subjects-empty">{{ classSearch() ? 'No classes match your search.' : 'No classes are available for this academic year.' }}</p> }
+    </div> }
+  </section>
+} @else {
+  <section class="panel subjects-panel">
+    <div class="subjects-heading"><div><button type="button" class="subjects-back" (click)="backToClasses()">&#8592; All classes</button><h2>{{ selectedClass()?.name }} students</h2><p>{{ students().length }} active students &middot; {{ selectedClass()?.subjects?.length || 0 }} class subjects</p></div><span class="subjects-count">{{ filteredStudents().length }} shown</span></div>
+    <div class="subjects-tools subjects-tools--roster"><p>Review each student below. Class offerings are their default subjects.</p><label class="subjects-search"><span class="sr-only">Search student name or number</span><input type="search" placeholder="Search student or number" [ngModel]="search()" (ngModelChange)="search.set($event)"></label></div>
+    @if (!selectedClass()?.subjects?.length) { <p class="portal-notice">This class has no subject offerings. Set its subjects in Subject Setup first.</p> }
+    @if (loadingStudents()) { <app-loading-skeleton label="Loading student subjects…" /> }
+    @else { <div class="subject-student-list">
+      @for (student of visibleStudents(); track student.enrollmentId) {
+        <article class="subject-student-card">
+          <div class="subject-student-card__identity"><span class="student-avatar" aria-hidden="true">{{ student.name.charAt(0) }}</span><div class="student-name"><strong>{{ student.name }}</strong><span>{{ student.admissionNumber }}</span></div>@if (!readOnly() && editingEnrollmentId() !== student.enrollmentId) { <button type="button" class="action-btn subject-edit-button" [disabled]="busy()" (click)="startEditing(student)">Edit subjects</button> }</div>
+          @if (editingEnrollmentId() === student.enrollmentId) {
+            <fieldset class="subject-editor"><legend>Choose subjects for {{ student.name }}</legend><p>{{ editingSubjects().length }} of {{ selectedClass()?.subjects?.length || 0 }} class subjects selected</p>
+              <div class="subject-choice-grid">@for (subject of selectedClass()?.subjects || []; track subject.id) { <label class="subject-choice" [class.is-selected]="editingSubjects().includes(subject.id)"><input type="checkbox" [checked]="editingSubjects().includes(subject.id)" (change)="toggleSubject(subject.id)" [disabled]="busy() || readOnly()"><span><strong>{{ subject.name }}</strong><small>{{ subject.code }}</small></span></label> }</div>
+              <div class="subject-editor-actions"><button type="button" class="action-btn action-btn--primary" [disabled]="busy() || readOnly()" (click)="saveSubjects(student)">{{ busy() ? 'Saving...' : 'Save subjects' }}</button><button type="button" class="action-btn" [disabled]="busy()" (click)="cancelEditing()">Cancel</button></div>
+            </fieldset>
+          } @else {
+            <div class="student-subjects"><span class="subject-caption">Taking {{ student.subjectIds.length }} subjects</span><div class="student-subject-grid">@for (subject of selectedSubjects(student); track subject.id) { <span class="student-subject">{{ subject.name }} <small>{{ subject.code }}</small></span> }@if (!student.subjectIds.length) { <span class="subject-empty">No subjects selected</span> }</div></div>
+          }
+        </article>
+      } @empty { <p class="subjects-empty">{{ search() ? 'No students match your search.' : 'No active students are enrolled in this class.' }}</p> }
+    </div>
+    @if (filteredStudents().length) { <div class="subject-pagination" role="navigation" aria-label="Class student pages"><span>{{ filteredStudents().length }} students &middot; Page {{ page() }} of {{ pages() }}</span><div class="subject-pagination__actions"><button type="button" class="action-btn" [disabled]="page() <= 1" (click)="changePage(page() - 1)">Previous</button><button type="button" class="action-btn" [disabled]="page() >= pages()" (click)="changePage(page() + 1)">Next</button></div></div> }
+    }
+  </section>
+}

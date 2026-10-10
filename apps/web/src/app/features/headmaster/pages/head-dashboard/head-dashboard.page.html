@@ -5,7 +5,6 @@
   </app-head-page-header>
 
   <div class="portal-context"><strong>{{ currentYear() }}</strong><span>School overview</span></div>
-  <div class="portal-filters"><a routerLink="/head/reports" class="action-btn action-btn--primary" queryParamsHandling="preserve">Review reports</a><a routerLink="/head/reports/delivery" class="action-btn" queryParamsHandling="preserve">Resolve delivery issues</a><a routerLink="/head/staff/pending" class="action-btn" queryParamsHandling="preserve">Review staff approvals</a></div>
   <!-- Loading Skeleton State -->
   <div *ngIf="loading()" class="skeleton-container" aria-busy="true" aria-label="Loading dashboard">
     <div class="stats-grid">
@@ -92,7 +91,7 @@
           </div>
         </div>
         <div class="stat-card__value">{{ data.verifiedGuardians | number }}</div>
-        <span class="stat-card__sub">Verified contacts in report sample</span>
+        <span class="stat-card__sub">Report contacts</span>
       </div>
 
       <div class="stat-card">
@@ -237,7 +236,7 @@
               <span class="alert-card__tag">Active License</span>
             </div>
             <p class="alert-card__text">
-              Sample subscription: Standard plan. Communication and billing are demonstrated with local data during frontend development.
+              Subscriptions and payments are not part of this system.
             </p>
           </div>
         </div>

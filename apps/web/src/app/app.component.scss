@@ -10,7 +10,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.8s ease-in-out, visibility 0.8s ease-in-out;
+  transition: opacity 0.25s ease-out, visibility 0.25s ease-out;
 
   &.fade-out {
     opacity: 0;
@@ -25,6 +25,11 @@
   text-align: center;
   color: #E87E24; /* Orange color requested */
 }
+.entry-slow { max-width: 320px; margin: 18px 20px 0; color: #475569; font-size: .9rem; line-height: 1.5; }
+.network-progress { position: fixed; inset: 0 0 auto; height: 3px; z-index: 100000; overflow: hidden; background: #fff4e8; pointer-events: none; }
+.network-progress span { display: block; width: 38%; height: 100%; background: #e87e24; animation: networkTravel 1.2s ease-in-out infinite alternate; }
+.network-wait { position: fixed; inset: auto 16px 16px auto; z-index: 100000; max-width: min(320px, calc(100vw - 32px)); padding: 10px 14px; border: 1px solid #fed7aa; border-radius: 10px; background: #fffaf5; color: #7c2d12; box-shadow: 0 8px 24px #1723381a; font-size: .8rem; }
+@keyframes networkTravel { from { transform: translateX(-100%); } to { transform: translateX(270%); } }
 
 .logo-container {
   /* Enlarge the SVG significantly and make it adapt to screen size using clamp */
@@ -49,18 +54,18 @@
 
 .logo-fill {
   opacity: 0;
-  animation: logoFillIn 0.45s ease-out 1.55s forwards;
+  animation: logoFillIn 0.2s ease-out .4s forwards;
 }
 
 .logo-outline {
   fill: none;
   stroke: currentColor;
-  stroke-width: 0.9;
+  stroke-width: 0.35;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 100;
   stroke-dashoffset: 100;
-  animation: drawLogo 1.7s ease-in-out forwards;
+  animation: drawLogo .55s ease-in-out forwards;
 }
 
 .brand-name {
@@ -76,7 +81,7 @@
 .brand-name-text {
   display: inline-block;
   clip-path: inset(0 100% 0 0); /* Hides text from the right */
-  animation: writeText 1s linear 0.2s forwards;
+  animation: writeText .4s linear .1s forwards;
   
   .text-black {
     color: #000000 !important;
@@ -96,7 +101,7 @@
   
   display: inline-block;
   clip-path: inset(0 100% 0 0); /* Hides text from the right */
-  animation: writeText 1.2s linear 1.2s forwards; /* Starts right after the name */
+  animation: writeText .3s linear .3s forwards;
 }
 
 @keyframes drawLogo {
@@ -111,4 +116,12 @@
   to {
     clip-path: inset(0 0 0 0);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-fill { opacity: 1; animation: none; }
+  .logo-outline { stroke-dashoffset: 0; animation: none; }
+  .brand-name-text, .brand-tagline { clip-path: none; animation: none; }
+  .network-progress span { width: 100%; animation: none; }
+  .preloader-overlay { transition: none; }
 }

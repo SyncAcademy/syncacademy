@@ -1,6 +1,6 @@
 import { DialogFocusDirective } from '../../../../shared/directives/dialog-focus.directive';
 import { inject } from '@angular/core';
-import { HeadDemoStore } from '../../head-demo.store';
+import { HeadStore } from '../../head.store';
 import { Component, OnInit, signal, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -10,8 +10,6 @@ import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { RecordCardComponent } from '../../shared/record-card.component';
 import { SchoolClass, Subject, ClassSubjectMapping } from '../../head.models';
-import { MOCK_CLASSES, MOCK_SUBJECTS, MOCK_CLASS_SUBJECT_MAPPINGS } from '../../head-mock-data';
-
 export type ClassesSubjectsTab = 'classes' | 'subjects' | 'mappings';
 export type DialogMode = 'class' | 'subject' | 'mapping';
 
@@ -32,7 +30,7 @@ export type DialogMode = 'class' | 'subject' | 'mapping';
   styleUrls: ['./head-classes-subjects.page.scss'],
 })
 export class HeadClassesSubjectsPage implements OnInit {
-  store = inject(HeadDemoStore);
+  store = inject(HeadStore);
   // Required signals
   mappingToRemove = signal<string | null>(null);
   mappingNotice = signal('');
@@ -47,6 +45,8 @@ export class HeadClassesSubjectsPage implements OnInit {
 
   // Supporting state signals
   searchQuery = signal<string>('');
+  page = signal(1);
+  readonly pageSize = 25;
   error = signal<string | null>(null);
   isEditing = signal<boolean>(false);
   editingId = signal<string | null>(null);
@@ -103,6 +103,11 @@ export class HeadClassesSubjectsPage implements OnInit {
         m.subjectName.toLowerCase().includes(q)
     );
   });
+  activeCount = computed(() => this.activeTab() === 'classes' ? this.filteredClasses().length : this.activeTab() === 'subjects' ? this.filteredSubjects().length : this.filteredMappings().length);
+  pages = computed(() => Math.max(1, Math.ceil(this.activeCount() / this.pageSize)));
+  pageClasses = computed(() => this.filteredClasses().slice((this.page() - 1) * this.pageSize, this.page() * this.pageSize));
+  pageSubjects = computed(() => this.filteredSubjects().slice((this.page() - 1) * this.pageSize, this.page() * this.pageSize));
+  pageMappings = computed(() => this.filteredMappings().slice((this.page() - 1) * this.pageSize, this.page() * this.pageSize));
 
   ngOnInit(): void {
     this.loadData();
@@ -113,9 +118,6 @@ export class HeadClassesSubjectsPage implements OnInit {
     this.error.set(null);
     setTimeout(() => {
       try {
-        // Retain the shared frontend demo state.
-        // Retain the shared frontend demo state.
-        // Retain the shared frontend demo state.
         this.loading.set(false);
       } catch (err) {
         this.error.set('Failed to load classes and subjects data.');
@@ -136,10 +138,12 @@ export class HeadClassesSubjectsPage implements OnInit {
   setActiveTab(tab: ClassesSubjectsTab): void {
     this.activeTab.set(tab);
     this.searchQuery.set('');
+    this.page.set(1);
   }
 
   onSearchChange(query: string): void {
     this.searchQuery.set(query);
+    this.page.set(1);
   }
 
   get searchPlaceholder(): string {

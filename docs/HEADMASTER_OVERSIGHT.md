@@ -1,26 +1,25 @@
-﻿# Headmaster oversight
+# Headmaster dashboard
 
-The headmaster monitors staff-maintained records through the shared stores. No copies of the finance ledger or academic results are entered by the headmaster.
+Open `/head/dashboard` and choose an academic year from the header. The selected year changes the Headmaster's view; it does not change another staff member's selected year. Closed years remain readable.
 
-## Pages
+## School management
 
-- `/head/dashboard`: collected and outstanding fees, overdue balance, approved-result average, submissions awaiting academic review, student enrolment and admission counts, pending staff approvals, prepared reports, and recent staff activity.
-- `/head/finance`: year/term/class filters, collection graphs, student balances, fee structures, payment receipts and void reasons, adjustments/scholarships, and CSV balance export. Amounts and overdue calculations use the same functions as the bursar dashboard. Unapplied fee structures do not contribute to expected charges.
-- `/head/academic-results`: assessment/class/subject/status filters, class and subject graphs, individual marks and grades, and CSV export. Approved results are the default; other statuses are labelled provisional. Grades and pass rates use each assessment's grading scheme/snapshot.
-- `/head/academic-progress`: assessments, deadlines, teacher submission status, syllabus coverage, support plans, and exam timetable.
-- `/head/activity`: recorded fee charges, payments/voids, adjustments, academic actions, teacher submissions, and registry events, with source-workflow and search filters. This is not a complete identity audit trail; existing records without action timestamps cannot reconstruct every historical edit.
-- `/head/classes-subjects` and `/head/teaching-assignments`: view-only projections of Academic Master setup and Registrar enrolment data. Entry forms remain in the responsible staff portal.
+- **Overview:** active enrollments, staff, approved academic average, submissions awaiting review, current year finance totals, outstanding invitations, reports awaiting review, and recent activity.
+- **Academic Years:** create or edit a year's name and dates, close a completed year, and reopen one when a correction is needed. Closure requires every assessment to be closed and every submission approved. Closed years reject academic changes while preserving their history.
+- **School Settings and Setup:** edit the registered school name, region, type, address, phone, email and website; review the fixed school code; and set grading bands and pass mark for the selected year. Submitted marks keep their earlier grading snapshot.
+- **Staff:** invite a Registrar, Academic Master, teacher or Bursar; track, resend and revoke pending invitations; search the staff directory and activate or deactivate membership. Deactivation revokes existing sessions while retaining records for successors.
+- **Students and classes:** review class lists, student records, imports, admissions, enrollment reports, roster issues, subjects and teaching responsibilities through the shared Registrar and Academic Master records.
 
-Headmaster academic-year management, staff approval, and report-release controls remain available. Monitoring pages contain no fee/payment/mark entry, void, or academic review actions.
+## Oversight
 
-Each monitoring page uses the headmaster's selected year. The read APIs do not select a year on the bursar, teacher, academic, or registrar dashboard. Historical views remain accessible without altering source records.
+- **Finance Overview** at `/head/finance`: expected, collected, outstanding and overdue totals, student balances, fee structures, payments and finance activity. The Headmaster can create or apply fee structures using the shared Bursar workflow. The overview links and export use the selected academic year.
+- **Academic Results** at `/head/academic-results`: filter assessment marks by class, subject and status. Approved marks are shown by default; provisional statuses are labelled. Class and subject summaries use each submission's captured grading policy.
+- **Academic Progress** at `/head/academic-progress`: attendance, assessment deadlines, teacher submission progress, syllabus updates, support plans and exam timetable.
+- **Staff Activity** at `/head/activity`: recent school audit events and academic actions for the selected year. School audit events are a recent history, not a complete reconstructed record of every past edit.
+- **Student Reports** at `/head/reports`: review, approve and print reports prepared from approved subject results. Sending reports to guardians remains outside the agreed scope.
 
-## Frontend scope
+The backend authorizes all changes for the selected school and role. The academic and finance records persist on the server, so incoming staff can read the earlier records relevant to their assignments.
 
-Updates are reactive within the same browser session/application, matching the existing demo architecture. Session storage is not cross-user synchronization. Production needs a shared backend, authenticated role permissions, durable audit identities/timestamps, and server-side authorization. The UI separation is not a security boundary.
+## Verification
 
-## Validation
-
-`npm.cmd run test:head-oversight --workspace=apps/web`
-
-Checks live source-to-head updates for charges, payments, voids, adjustments, academic review, and enrolment changes; verifies shared grades, term filtering, year isolation across roles, historical empty states, and non-mutating reads. Existing bursar and academic regression checks also run.
+The isolated API integration suite covers Headmaster profile editing, year editing and closure, role restrictions, report approval, academic handover and finance permissions. Browser checks in `apps/web/scripts/check-head-browser.mjs` cover year editing, grading, school profile and invitations at desktop and mobile widths. Run the API and web production builds before updating containers.

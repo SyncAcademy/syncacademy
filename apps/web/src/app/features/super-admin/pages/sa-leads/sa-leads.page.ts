@@ -17,21 +17,18 @@ export class SaLeadsPage {
   store = inject(SuperAdminStore);
   readonly timeSince = this.store.timeSince.bind(this.store);
 
-  search = signal(inject(ActivatedRoute).snapshot.queryParamMap.get('q') || '');
-  statusFilter = signal('');
-  sourceFilter = signal('');
+  search = this.store.leadSearch;
+  statusFilter = this.store.leadStatus;
+  sourceFilter = this.store.leadSource;
 
-  readonly filtered = computed(() => {
-    let leads = this.store.leads();
-    const q = this.search().toLowerCase();
-    if (q) leads = leads.filter(l => l.schoolName.toLowerCase().includes(q) || l.contactName.toLowerCase().includes(q));
-    if (this.statusFilter()) leads = leads.filter(l => l.status === this.statusFilter());
-    if (this.sourceFilter()) leads = leads.filter(l => l.source === this.sourceFilter());
-    return leads;
-  });
+  readonly filtered = computed(() => this.store.leads());
+  readonly pageCount = computed(() => Math.max(1, Math.ceil(this.store.leadTotal() / 25)));
+  private searchTimer?:ReturnType<typeof setTimeout>;
+  filter(value:string,kind:'search'|'status'|'source'){(kind==='search'?this.search:kind==='status'?this.statusFilter:this.sourceFilter).set(value);this.store.leadPage.set(1);clearTimeout(this.searchTimer);this.searchTimer=setTimeout(()=>void this.store.loadLeads().catch(e=>this.error=this.store.auth.error(e)),kind==='search'?250:0);}
+  async page(change:number){this.store.leadPage.update(page=>Math.max(1,page+change));try{await this.store.loadLeads();}catch(e){this.error=this.store.auth.error(e);}}
 
   readonly pipelineSummary = computed(() => {
-    const leads = this.store.leads();
+    const totals = this.store.leadStages();
     const stages = [
       { key: 'new', label: 'New', count: 0 },
       { key: 'contacted', label: 'Contacted', count: 0 },
@@ -41,10 +38,7 @@ export class SaLeadsPage {
       { key: 'won', label: 'Won', count: 0 },
       { key: 'lost', label: 'Lost', count: 0 },
     ];
-    for (const l of leads) {
-      const stage = stages.find(s => s.key === l.status);
-      if (stage) stage.count++;
-    }
+    for (const stage of stages) stage.count = totals[stage.key] || 0;
     return stages;
   });
 
@@ -53,6 +47,10 @@ export class SaLeadsPage {
   }
 
   editingId = '';
+  convertingId = '';
+  busy = false;
+  error = '';
+  notice = '';
   editor: Record<string, any> | null = null;
   fields: EditorField[] = [
     { key: 'schoolName', label: 'School name', required: true }, { key: 'contactName', label: 'Contact name', required: true },
@@ -60,15 +58,16 @@ export class SaLeadsPage {
     { key: 'location', label: 'Region', required: true }, { key: 'studentCount', label: 'Estimated students', type: 'number', min: 0, required: true },
     { key: 'source', label: 'Source', options: ['website', 'referral', 'social', 'event', 'cold-outreach'] },
     { key: 'status', label: 'Stage', options: ['new', 'contacted', 'demo-scheduled', 'demo-done', 'negotiation', 'won', 'lost'] },
-    { key: 'owner', label: 'Follow-up owner', required: true }, { key: 'followUp', label: 'Next follow-up', type: 'date' }, { key: 'notes', label: 'Notes' },
+    { key: 'owner', label: 'Follow-up owner' }, { key: 'followUp', label: 'Next follow-up', type: 'date' }, { key: 'notes', label: 'Notes' },
   ];
-  openLead(lead?: PlatformLead): void { this.editingId = lead?.id || ''; this.editor = lead ? { ...lead } : { source: 'website', status: 'new', studentCount: 0, owner: 'Admin Juma', notes: '' }; }
-  save(values: Record<string, any>): void { this.store.saveLead(values, this.editingId || undefined); this.editor = null; }
+  conversionFields: EditorField[] = [{ key: 'code', label: 'Unique school code', required: true }, { key: 'expiresInMinutes', label: 'Headmaster invitation expires after', choices: [{value:'1440',label:'24 hours'},{value:'2880',label:'48 hours'},{value:'10080',label:'7 days'}], required: true }];
+  openLead(lead?: PlatformLead): void { this.error='';this.convertingId='';this.editingId = lead?.id || ''; this.editor = lead ? { schoolName:lead.schoolName,contactName:lead.contactName,contactEmail:lead.contactEmail,contactPhone:lead.contactPhone,location:lead.location,studentCount:lead.studentCount,source:lead.source,status:lead.status,owner:lead.owner,followUp:lead.followUp,notes:lead.notes } : { source: 'website', status: 'new', studentCount: 0, owner: '', followUp:'',notes: '',contactPhone:'' }; }
+  openConversion(lead: PlatformLead): void {this.error='';this.convertingId=lead.id;this.editor={code:'',expiresInMinutes:'2880'};}
+  async save(values: Record<string, any>): Promise<void> { if(this.busy)return;this.busy=true;this.error='';try{if(this.convertingId){await this.store.convertLead(this.convertingId,values['code'],Number(values['expiresInMinutes']));this.notice='School created and Headmaster invitation queued.';}else{await this.store.saveLead(values,this.editingId||undefined);this.notice=this.editingId?'Lead updated.':'Lead added.';}this.editor=null;}catch(e){this.error=this.store.auth.error(e);}finally{this.busy=false;} }
   constructor() {
     inject(ActivatedRoute).queryParamMap.pipe(takeUntilDestroyed()).subscribe(params => {
-      this.search.set(params.get('q') || '');
-      this.statusFilter.set(params.get('status') || '');
-      this.sourceFilter.set('');
+      const q=params.get('q')||'',status=params.get('status')||'';
+      if(q!==this.search()||status!==this.statusFilter()){this.search.set(q);this.statusFilter.set(status);this.store.leadPage.set(1);void this.store.loadLeads().catch(e=>this.error=this.store.auth.error(e));}
 
     });
   }

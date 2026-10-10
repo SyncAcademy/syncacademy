@@ -92,7 +92,7 @@
           Remember me
         </label>
         <a routerLink="/auth/forgot-password" class="forgot-link"
-          >Forgot password?</a
+          >Reset password</a
         >
       </div>
 
@@ -100,6 +100,7 @@
         type="submit"
         class="sa-btn sa-btn--primary"
         [disabled]="loginForm.invalid || busy()"
+        [attr.aria-busy]="busy()"
       >
         {{ busy() ? 'Signing in...' : 'Sign in as ' + role.label }}
       </button>

@@ -1,5 +1,7 @@
 # Registrar portal
 
+Historical frontend notes below. The persisted implementation and current scope are documented in [Registrar workflows](REGISTRAR_WORKFLOWS.md), updated 2026-10-05.
+
 Entry point: `/register/page`. `/register` and `/register/dashboard` redirect to it. The portal uses the existing compact header, academic-year selector, sidebar, mobile menu, and shared portal styling.
 
 ## Pages and workflows

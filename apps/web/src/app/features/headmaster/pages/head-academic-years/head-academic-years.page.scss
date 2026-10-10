@@ -270,7 +270,7 @@
   background: #fff;
   border-radius: $radius-lg;
   width: 100%;
-  max-width: 500px;
+  max-width: 860px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
@@ -315,6 +315,19 @@
 .dialog-form {
   padding: 24px;
 }
+
+.term-editor { margin-top: 8px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; }
+.term-editor__heading { display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; }
+.term-editor__heading h4 { margin: 0 0 4px; font-size: 1rem; color: #172338; }
+.term-editor__heading p { margin: 0; font-size: .85rem; color: #64748b; line-height: 1.5; }
+.term-editor__divide { margin-top: 8px; border: 0; background: transparent; padding: 0; color: #c35c10; font-weight: 600; cursor: pointer; }
+.term-editor__divide:disabled { color: #94a3b8; cursor: default; }
+.term-editor__heading label { min-width: 145px; }
+.term-editor__list { display: grid; gap: 10px; }
+.term-editor__row { display: grid; grid-template-columns: 32px minmax(150px, 1.5fr) repeat(2, minmax(135px, 1fr)); gap: 12px; align-items: end; padding: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; }
+.term-editor__row label { display: grid; gap: 5px; min-width: 0; }
+.term-editor__number { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #fff1e6; color: #c35c10; font-weight: 700; margin-bottom: 5px; }
+@media (max-width: 650px) { .term-editor__row { grid-template-columns: 32px minmax(0,1fr); } .term-editor__row label:not(:first-of-type) { grid-column: 2; } }
 
 .form-grid {
   display: grid;

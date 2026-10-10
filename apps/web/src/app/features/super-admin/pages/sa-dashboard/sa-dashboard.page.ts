@@ -15,5 +15,6 @@ export class SaDashboardPage {
 
   readonly money = this.store.money.bind(this.store);
   readonly timeSince = this.store.timeSince.bind(this.store);
+  activityLabel(action: string): string { return action.replace(/[_:.]+/g, ' ').trim().toLowerCase().replace(/\b\w/g, letter => letter.toUpperCase()); }
 
 }

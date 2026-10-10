@@ -30,7 +30,7 @@ ion-split-pane {
 
 .bursar-page > ion-header {
   display: block;
-  flex: 0 0 64px;
+  flex: 0 0 auto;
   width: 100%;
   min-width: 0;
 }
@@ -50,7 +50,7 @@ ion-split-pane {
   min-width: 0;
   box-sizing: border-box;
   min-height: 64px;
-  flex: 0 0 64px;
+  flex: 0 0 auto;
   background-color: #FFFFFF;
   border-bottom: 1px solid $input-border;
   display: flex;
@@ -139,6 +139,7 @@ ion-split-pane {
 }
 
 .bursar-content-inner {
+  box-sizing: border-box;
   min-height: 100%;
   padding: 24px;
 
@@ -219,8 +220,8 @@ router-outlet + * {
 
 .bursar-header { gap: 12px; }
 @media (max-width: 600px) {
-  .bursar-header { gap: 8px; }
+  .bursar-header { gap: 12px; flex-wrap: wrap; padding-block: 12px; }
   .bursar-header__left { gap: 4px; }
-  .bursar-header__right { gap: 8px; }
+  .bursar-header__right { gap: 8px; width: 100%; justify-content: space-between; flex-wrap: wrap; }
   .bursar-header .global-page-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }

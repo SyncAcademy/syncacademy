@@ -6,6 +6,7 @@ export const SUPER_ADMIN_ROUTES: Routes = [
     path: '',
     component: SuperAdminLayout,
     children: [
+      { path: 'notifications', loadComponent: () => import('../../shared/notifications/notifications.page').then(m => m.NotificationsPage), data: { title: 'Notifications', breadcrumb: 'Super Admin / Notifications', audience: 'super-admin' } },
       {
         path: '',
         loadComponent: () =>

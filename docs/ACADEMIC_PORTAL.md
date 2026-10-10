@@ -1,46 +1,45 @@
-# Academic Master portal
+# Academic Master and Teacher workflows
 
-Open `/academic/dashboard`. `/academic` and `/academic/page` redirect there. The shell follows the existing headmaster/teacher sidebar, compact header, mobile menu, sidebar resizing, and page spacing.
+The Academic Master works under `/academic/dashboard`; teachers use `/teacher/dashboard`. The selected academic year scopes every page. Authorized staff can read earlier years, including records entered by a predecessor. A closed year cannot be edited.
 
-## Pages
+## Set up the academic year
 
-- `/academic/marks-review`: inspect marks; approve complete, roster-confirmed submissions; return submissions with correction feedback. Updates the shared teacher store and notifications.
-- `/academic/assessments`: create/edit assessments, open them, allocate established class rosters, and close after all submissions are approved. New allocations contain blank marks and retain student identities.
-- `/academic/timetable`: schedule exams, reject overlapping class/invigilator/room bookings, remove slots, and export CSV.
-- `/academic/teaching-assignments`: search teaching responsibilities and assign an active teacher to a subject offered by the class. Shares the headmaster assignment store.
-- `/academic/curriculum`: plan topics and track completion by teaching assignment.
-- `/academic/academic-reports`: class and subject averages, pass rates, grade distribution, student results, CSV export, and print layout. Filters use academic year, assessment, class, subject, and approved/provisional scope. Missing or invalid marks are excluded, never treated as zero. Averages are weighted by recorded student-subject entries, not averages of class averages.
-- `/academic/student-reports`: compile approved assigned subjects, require matching student numbers across subjects, preview results, and hand off to the headmaster store without duplicate reports. Guardians are not invented: new reports have no recipients and cannot be delivered until recipient verification is implemented.
-- `/academic/roster-issues`: record a resolution and notify the reporting teacher. This records the outcome; it does not modify enrolment records.
-- `/academic/interventions`: review approved scores below 50%, create support plans, and track completion.
-- `/academic/settings`: reference grading bands and the approval workflow. Grading policy is currently fixed, matching the teacher demo scale.
+1. Open **Classes & Subjects**. Create or copy classes for the year, set capacities, and choose each class's offered subjects. Create missing school subjects first.
+2. Class offerings are assigned automatically to new students and to active students when you add an offering. Use **Student Subjects** to open a class card, review every active student, and adjust individual selections. The Registrar can also make these adjustments, but does not have to choose subjects during registration. Assessment rosters use the saved student selections.
+3. Add teachers through the staff approval process, then use **Teaching Assignments** to assign each class subject to a teacher. Assign a class teacher when attendance and class oversight are needed.
+4. Set the grading bands and pass mark under **Settings**. Submitted marks retain the policy that applied at submission, so later policy changes do not rewrite old results.
 
-## State and boundaries
+## Assessments and marks
 
-This is a frontend demo, consistent with the existing portals. Records persist in session storage. The Academic Master's year selection is independent of the teacher and headmaster. Closed years reject mutations. Demo school-wide English/Kiswahili submissions are seeded once; they are excluded from the current demo teacher's assignment list.
+1. In **Assessments**, create an assessment with a term and deadline, open it, then choose the existing classes that will take it. Select one class for a class exam or several for a shared assessment. Allocation creates draft subject submissions only for the selected classes; other classes can be added later.
+2. The assigned teacher opens the assessment from the teacher dashboard, checks the student roster, and confirms it. A roster issue must be resolved through the registrar before marks can be submitted.
+3. On **Enter Marks**, record marks from 0 to 100 and save the draft. A blank mark is incomplete. The page warns about unsaved changes and protects a valid draft during in-app navigation. It also offers **Discard local changes** when an older browser draft conflicts with a newer server version.
+4. Submit complete marks. The teacher cannot edit a submitted or approved record. The Academic Master reviews each submission in **Marks Review**, then approves it or returns it with a reason. A returned submission can be corrected and submitted again.
+5. Close the assessment after its assigned submissions are approved. Prepared student reports include only approved marks and the subjects enrolled by each student. Academic Master and Headmaster can open reports by class; the Headmaster can review, approve, and print them at `/head/reports`. Class teachers can view prepared reports for their assigned classes under **My Class / Student Reports**.
 
-Established submission rosters are used when allocating a new assessment. Creating a staffing assignment does not fabricate a new official enrolment roster. All-subject report readiness means all subjects assigned to that assessment; production integration should also reconcile the official curriculum.
+Marks, approval decisions, roster snapshots, report results, revisions, and audit entries are stored on the server for the school and academic year. New teachers can see the relevant previous records for their assigned class and subject. Concurrent edits use revisions to reject stale saves.
 
-Authentication, server-side role/teacher/school authorization, official enrolment integration, durable database storage, configurable grading, and external notifications/delivery remain backend integration work. These screens do not send email, SMS, or WhatsApp messages.
+## Other pages
 
-## Validation
+- **Timetable:** create exam slots with clash checks for class, room, and invigilator; remove an open slot and export the schedule.
+- **Curriculum / Teacher Planner:** assign syllabus topics and let the subject teacher mark their own topics complete. The teacher planner also shows upcoming assessments and timetable slots.
+- **Interventions:** record support plans for enrolled students and mark completed actions.
+- **Academic Reports:** inspect results, averages, pass rates, and grade distributions with year, class, subject, and assessment filters.
+- **Class Teacher:** a designated class teacher can record daily attendance, view class performance and results, and inspect prepared student reports by class. Corrected attendance retains a revision history and requires a reason.
+- **Student Subjects:** the class teacher can review and edit subject selections for active students in their assigned class. Other teachers cannot change that class's selections. Closed years are read-only.
+- **Notifications:** teachers receive saved review outcomes and can mark them read.
 
-From the repository root:
+Guardian records, phone verification, and report delivery to guardians remain outside this scope. Names and phone numbers can remain on student records where the registrar needs them.
+
+## Verification
+
+From the repository root, run the API test suite with the isolated `syncacademy_auth_test` database, then run:
 
 ```powershell
-npm.cmd run test:academic-workflow --workspace=apps/web
-npm.cmd run test:academic-years --workspace=apps/web
-npm.cmd run build --workspace=apps/web -- --configuration development
+node apps/web/scripts/check-academic-workflow.mjs
+node apps/web/scripts/check-academic-browser.mjs
+npm.cmd run build -w @syncacademy/api
+npm.cmd run build -w syncacademy-web
 ```
 
-Workflow checks cover teacher ownership, analytics, approve/return decisions, feedback, report handoff and deduplication, scheduling conflicts and date validation, syllabus updates, issue resolution, assessment allocation, year isolation, closed-year guards, and session persistence.
-
-## Academic setup
-
-- `/academic/classes-subjects`: create classes with capacity, subjects, and Draft/Open/Closed enrolment status. Only unused drafts can be deleted. Classes with records retain their names and subject mappings. Copy next-year structures as drafts, then select that year and open them.
-- `/academic/teachers`: create teacher profiles in the headmaster approval queue and record manual contact checks. Approved staff become available to teaching assignments.
-- `/academic/settings`: edit year-specific grade bands and pass marks. Draft/returned marks use current settings; submission captures a grading snapshot. Historical submitted/approved records retain the default scheme if they predate snapshots. Analytics and reports use each result's scheme.
-
-Registrar registration requires an open class with capacity and creates the profile and enrolment together. Data remains in frontend session storage; production requires server authorization and transactional persistence.
-
-Headmaster views at `/head/academic-results` and `/head/academic-progress` read these same records. Headmaster class and teaching-assignment routes are view-only; Academic Master entry routes remain available. See [headmaster oversight](HEADMASTER_OVERSIGHT.md).
+The browser check uses an isolated Chrome profile and checks the assessment editor and teacher marks workflow at desktop and mobile widths.

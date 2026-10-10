@@ -1,1 +1,958 @@
-<app-head-page-header title="Overview" description="Your school account is active."/><section class="panel"><h3>School access</h3><p>Non-payment Bursar workflows have not been configured yet.</p><a class="action-btn" href="/auth/security">Account security</a></section>
+<app-head-page-header [title]="title()" [description]="store.year()?.label || 'Select an academic year'" />
+
+@if (store.loadError()) { <div class="portal-notice portal-notice--error" role="alert">{{ store.loadError() }} <button type="button" class="action-btn" [disabled]="store.loading()" (click)="loadData(store.year()?.id || '')">Retry loading</button></div> }
+
+
+
+@if (store.loading() && !store.hasCurrentYearData()) { <app-loading-skeleton label="Loading finance records…" /> }
+
+@if (notice()) { <p class="portal-notice" role="status">{{ notice() }}</p> }
+
+@if (store.readOnly()) { <p class="portal-notice">Select an academic year to work with school finance records.</p> }
+
+@if (!store.loading() || store.hasCurrentYearData()) {
+@switch(section()) {
+
+  @case('page') {
+
+    <div class="stats-grid">
+
+      <div class="stat-card"><h3>Expected Fees</h3><div class="stat-value">{{ money(totals().expected) }}</div></div>
+
+      <div class="stat-card"><h3>Collected</h3><div class="stat-value">{{ money(totals().paid) }}</div></div>
+
+      <div class="stat-card"><h3>Outstanding</h3><div class="stat-value">{{ money(totals().balance) }}</div></div>
+
+      <div class="stat-card"><h3>Overdue</h3><div class="stat-value">{{ money(totals().overdue) }}</div></div>
+
+    </div>
+
+
+
+    <div class="panel">
+
+      <div class="panel-heading">
+
+        <div><h3>Recent payments by class</h3><p>Choose a class to view its recent student payments.</p></div>
+
+      </div>
+
+      @if (!dashboardClassId()) {
+        <div class="finance-class-grid">
+          @for (c of classSummaries(); track c.id) {
+            <article class="finance-class-card"><div><h4>{{ c.name }}</h4><span>{{ c.studentCount }} students · {{ c.paymentCount }} payments</span></div><strong>{{ money(c.paid) }}</strong><button type="button" class="action-btn" (click)="dashboardClassId.set(c.id)">View</button></article>
+          } @empty { <p class="empty">No classes are available in this academic year.</p> }
+        </div>
+      } @else {
+      <div class="panel-heading"><h3>{{ store.className(dashboardClassId()) }} · latest payments</h3><div class="actions"><button type="button" class="action-btn" (click)="dashboardClassId.set('')">All classes</button><a class="action-btn" routerLink="../payments" [queryParams]="{class: dashboardClassId()}">View class payments</a></div></div>
+      <div class="table-scroll">
+
+        <table>
+
+          <thead>
+
+            <tr><th>Receipt</th><th>Student</th><th>Term</th><th>Date</th><th>Amount</th></tr>
+
+          </thead>
+
+          <tbody>
+
+            @for(p of dashboardPayments(); track p.id) {
+
+              <tr>
+
+                <td>{{ p.receipt }}</td>
+
+                <td>{{ p.student }} <span class="badge">{{ p.number }}</span></td>
+
+                <td>{{ store.termName(p.term) }}<small class="payment-fee-caption">{{ store.paymentFee(p) }}</small></td>
+
+                <td>{{ p.date }}</td>
+
+                <td>{{ money(p.amount) }}</td>
+
+              </tr>
+
+            }
+
+            @if(!dashboardPayments().length) {
+
+              <tr><td colspan="5" class="empty">No recent payments</td></tr>
+
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+      }
+
+    </div>
+
+  }
+
+
+
+  @case('fees') {
+
+    <div class="filters">
+      <input type="search" aria-label="Search fee structures" placeholder="Search fee or class" [ngModel]="search()" (ngModelChange)="search.set($event)" />
+
+      <select aria-label="Filter by term" [ngModel]="term()" (ngModelChange)="term.set($event)">
+
+        <option value="">All periods</option>
+
+        @for(t of terms(); track t) { <option [value]="t">{{ store.termName(t) }}</option> }
+
+      </select>
+
+      <select aria-label="Filter by class" [ngModel]="classId()" (ngModelChange)="classId.set($event)">
+
+        <option value="">All Classes</option>
+
+        @for(c of store.classes(); track c.id) { <option [value]="c.id">{{ c.name }}</option> }
+
+      </select>
+
+      <div style="flex-grow:1"></div>
+
+      <button type="button" class="action-btn" [disabled]="store.readOnly() || busy() || store.loading()" (click)="open('fee')">Create Fee</button>
+
+    </div>
+
+
+
+    <div class="table-panel">
+
+      <div class="table-scroll">
+
+        <table>
+
+          <thead>
+
+            <tr><th>Name</th><th>Class</th><th>Term</th><th>Amount</th><th>Due Date</th><th>Actions</th></tr>
+
+          </thead>
+
+          <tbody>
+
+            @for(f of visibleFees(); track f.id) {
+
+              <tr>
+
+                <td>{{ f.name }}</td>
+
+                <td>{{ store.className(f.classId) }}</td>
+
+                <td>{{ store.termName(f.term) }}</td>
+
+                <td>{{ money(f.amount) }}</td>
+
+                <td>{{ f.due }}</td>
+
+                <td>
+
+                  <div class="actions">
+
+                    <button type="button" class="text-btn" [disabled]="store.readOnly() || busy() || store.loading() || !!f.locked" (click)="open('fee', f.id)">Edit</button>
+
+                    <button type="button" class="text-btn" [disabled]="store.readOnly() || busy() || store.loading()" (click)="open('apply', f.id)">Apply</button>
+
+                  </div>
+
+                </td>
+
+              </tr>
+
+            }
+
+            @if(!fees().length) {
+
+              <tr><td colspan="6" class="empty">No fee structures match the current filters.</td></tr>
+
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+      <div class="pagination"><button type="button" class="text-btn" [disabled]="recordPage() <= 1" (click)="recordPage.set(recordPage()-1)">Previous</button><span>Page {{recordPage()}} of {{recordPages()}} · {{fees().length}} fees</span><button type="button" class="text-btn" [disabled]="recordPage() >= recordPages()" (click)="recordPage.set(recordPage()+1)">Next</button></div>
+    </div>
+
+  }
+
+
+
+  @case('accounts') {
+    @if (!classId()) {
+      <section class="panel"><div class="panel-heading"><div><h3>Choose a class</h3><p>Student balances are shown one class at a time.</p></div></div><div class="finance-class-grid">
+        @for (c of classSummaries(); track c.id) { <article class="finance-class-card"><div><h4>{{ c.name }}</h4><span>{{ c.studentCount }} student accounts</span></div><strong>{{ money(c.balance) }}<small> outstanding</small></strong><button type="button" class="action-btn action-btn--primary" (click)="classId.set(c.id)">View accounts</button></article> }
+        @empty { <p class="empty">No classes are available in this academic year.</p> }
+      </div></section>
+    } @else {
+    <div class="class-view-toolbar"><div><span class="eyebrow">Student accounts</span><h3>{{ store.className(classId()) }}</h3></div><button type="button" class="action-btn" (click)="classId.set(''); search.set(''); page.set(1)">All classes</button></div>
+    <div class="filters accounts-filters">
+
+      <input type="search" aria-label="Search records" placeholder="Search students..." [ngModel]="search()" (ngModelChange)="search.set($event)" />
+
+      <select aria-label="Change class" [ngModel]="classId()" (ngModelChange)="classId.set($event)">@for(c of store.classes(); track c.id) { <option [value]="c.id">{{ c.name }}</option> }</select>
+
+      <select aria-label="Filter by term" [ngModel]="term()" (ngModelChange)="term.set($event)">
+
+        <option value="">All periods</option>
+
+        @for(t of terms(); track t) { <option [value]="t">{{ store.termName(t) }}</option> }
+
+      </select>
+
+      <label class="check-label"><input type="checkbox" [ngModel]="owingOnly()" (ngModelChange)="owingOnly.set($event)" /> Owing only</label>
+
+
+
+      <button type="button" class="action-btn" (click)="exportAccounts()">Export CSV</button>
+
+    </div>
+
+
+
+    <div class="table-panel">
+
+      <div class="table-scroll accounts-table-scroll" tabindex="0" role="region" aria-label="Student accounts table, scroll horizontally for all columns">
+
+        <table class="accounts-table">
+
+          <thead>
+
+            <tr><th>Number</th><th>Name</th><th>Class</th><th>Expected</th><th>Paid</th><th>Balance</th><th>Overdue</th><th>Actions</th></tr>
+
+          </thead>
+
+          <tbody>
+
+            @for(a of visibleAccounts(); track a.id) {
+
+              <tr>
+
+                <td>{{ a.number }}</td>
+
+                <td>{{ a.name }}</td>
+
+                <td>{{ store.className(a.classId) }}</td>
+
+                <td class="amount">{{ money(a.expected) }}</td>
+
+                <td class="amount">{{ money(a.paid) }}</td>
+
+                <td class="amount">{{ money(a.balance) }}</td>
+
+                <td class="amount" [class.error-text]="a.overdue > 0">{{ money(a.overdue) }}</td>
+
+                <td>
+
+                  <div class="actions account-row-actions">
+
+                    <button type="button" class="text-btn" (click)="open('account', a.id)">Ledger</button>
+
+                    <button type="button" class="text-btn" [disabled]="store.readOnly() || busy() || store.loading()" (click)="open('payment', a.id)">Pay</button>
+
+                  </div>
+
+                </td>
+
+              </tr>
+
+            }
+
+            @if(!visibleAccounts().length) {
+
+              <tr><td colspan="8" class="empty">No student accounts match the current filters.</td></tr>
+
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+      @if(pageCount() > 1) {
+
+        <div class="pagination">
+
+          <button type="button" class="text-btn" [disabled]="page() <= 1" (click)="page.set(page() - 1)">Previous</button>
+
+          <span>Page {{ page() }} of {{ pageCount() }}</span>
+
+          <button type="button" class="text-btn" [disabled]="page() >= pageCount()" (click)="page.set(page() + 1)">Next</button>
+
+        </div>
+
+      }
+
+    </div>
+    }
+
+  }
+
+
+
+  @case('payments') {
+    @if (!classId()) {
+      <section class="panel"><div class="panel-heading"><div><h3>Choose a class</h3><p>Receipts and payments are grouped by class.</p></div></div><div class="finance-class-grid">
+        @for (c of classSummaries(); track c.id) { <article class="finance-class-card"><div><h4>{{ c.name }}</h4><span>{{ c.paymentCount }} payment records · {{ c.studentCount }} student accounts</span></div><strong>{{ money(c.paid) }}<small> collected</small></strong><button type="button" class="action-btn action-btn--primary" (click)="classId.set(c.id)">View payments</button></article> }
+        @empty { <p class="empty">No classes are available in this academic year.</p> }
+      </div></section>
+    } @else {
+    <div class="class-view-toolbar"><div><span class="eyebrow">Payments and receipts</span><h3>{{ store.className(classId()) }}</h3></div><button type="button" class="action-btn" (click)="classId.set(''); search.set(''); recordPage.set(1)">All classes</button></div>
+    <div class="filters">
+
+      <input type="search" aria-label="Search records" placeholder="Search payments..." [ngModel]="search()" (ngModelChange)="search.set($event)" />
+
+      <select aria-label="Filter by class" [ngModel]="classId()" (ngModelChange)="classId.set($event)">
+
+        @for(c of store.classes(); track c.id) { <option [value]="c.id">{{ c.name }}</option> }
+
+      </select>
+
+      <select aria-label="Filter by term" [ngModel]="term()" (ngModelChange)="term.set($event)">
+
+        <option value="">All periods</option>
+
+        @for(t of terms(); track t) { <option [value]="t">{{ store.termName(t) }}</option> }
+
+      </select>
+
+      <div style="flex-grow:1"></div>
+
+      <button type="button" class="action-btn" [disabled]="store.readOnly() || busy() || store.loading()" (click)="open('payment')">Record Payment</button>
+
+      <button type="button" class="action-btn" (click)="exportPayments()">Export CSV</button>
+
+    </div>
+
+
+
+    <div class="table-panel">
+
+      <div class="table-scroll payments-table-scroll" tabindex="0" role="region" aria-label="Payments and receipts table; scroll horizontally to see all columns">
+
+        <table class="payments-table">
+
+          <thead>
+
+            <tr><th>Receipt</th><th>Student</th><th>Term</th><th>Date</th><th>Method</th><th>Reference</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+
+          </thead>
+
+          <tbody>
+
+            @for(p of visiblePayments(); track p.id) {
+
+              <tr [class.faded]="p.voidAt">
+
+                <td>{{ p.receipt }}</td>
+
+                <td>{{ p.student }} <span class="badge">{{ p.number }}</span></td>
+
+                <td>{{ store.termName(p.term) }}<small class="payment-fee-caption">{{ store.paymentFee(p) }}</small></td>
+
+                <td>{{ p.date }}</td>
+
+                <td>{{ p.method }}</td>
+
+                <td>{{ p.reference }}</td>
+
+                <td>{{ money(p.amount) }}</td>
+
+                <td>
+
+                  @if(p.voidAt) { <span class="badge error">{{ p.voidReason?.startsWith('Corrected by ') ? 'Corrected' : 'Voided' }}</span> }
+
+                  @else { <span class="badge success">Valid</span> }
+
+                </td>
+
+                <td>
+
+                  <div class="actions payment-row-actions">
+
+                    <button type="button" class="text-btn" (click)="open('receipt', p.id)">View</button>
+
+                    @if(!p.voidAt) { <button type="button" class="text-btn" [disabled]="store.readOnly() || busy() || store.loading()" (click)="editPayment(p.id)">Edit</button> }
+                    @if(!p.voidAt && store.api.role() !== 'REGISTRAR') { <button type="button" class="text-btn" [disabled]="store.readOnly() || busy() || store.loading()" (click)="open('void', p.id)">Void</button> }
+
+                  </div>
+
+                </td>
+
+              </tr>
+
+            }
+
+            @if(!payments().length) {
+
+              <tr><td colspan="9" class="empty">No payments match the current filters.</td></tr>
+
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+      <div class="pagination"><button type="button" class="text-btn" [disabled]="recordPage() <= 1" (click)="recordPage.set(recordPage()-1)">Previous</button><span>Page {{recordPage()}} of {{recordPages()}} · {{payments().length}} payments</span><button type="button" class="text-btn" [disabled]="recordPage() >= recordPages()" (click)="recordPage.set(recordPage()+1)">Next</button></div>
+    </div>
+
+    }
+  }
+
+
+
+  @case('adjustments') {
+    @if (!classId()) {
+      <section class="panel"><div class="panel-heading"><div><h3>Choose a class</h3><p>Student adjustments are grouped by class.</p></div></div><div class="finance-class-grid">
+        @for (c of classSummaries(); track c.id) { <article class="finance-class-card"><div><h4>{{ c.name }}</h4><span>{{ c.adjustmentCount }} adjustments · {{ c.studentCount }} student accounts</span></div><strong>{{ money(c.balance) }}<small> outstanding</small></strong><button type="button" class="action-btn action-btn--primary" (click)="classId.set(c.id)">View adjustments</button></article> }
+        @empty { <p class="empty">No classes are available in this academic year.</p> }
+      </div></section>
+    } @else {
+    <div class="class-view-toolbar"><div><span class="eyebrow">Adjustments</span><h3>{{ store.className(classId()) }}</h3></div><button type="button" class="action-btn" (click)="classId.set(''); search.set(''); recordPage.set(1)">All classes</button></div>
+    <div class="filters">
+      <input type="search" aria-label="Search adjustments" placeholder="Search student or reason" [ngModel]="search()" (ngModelChange)="search.set($event)" />
+
+      <select aria-label="Filter by class" [ngModel]="classId()" (ngModelChange)="classId.set($event)">
+
+        @for(c of store.classes(); track c.id) { <option [value]="c.id">{{ c.name }}</option> }
+
+      </select>
+
+      <select aria-label="Filter by term" [ngModel]="term()" (ngModelChange)="term.set($event)">
+
+        <option value="">All periods</option>
+
+        @for(t of terms(); track t) { <option [value]="t">{{ store.termName(t) }}</option> }
+
+      </select>
+
+      <div style="flex-grow:1"></div>
+
+      <button type="button" class="action-btn" [disabled]="store.readOnly() || busy() || store.loading()" (click)="open('adjustment')">Record Adjustment</button>
+
+    </div>
+
+
+
+    <div class="table-panel">
+
+      <div class="table-scroll">
+
+        <table>
+
+          <thead>
+
+            <tr><th>Student</th><th>Term</th><th>Type</th><th>Amount</th><th>Reason</th><th>Date</th></tr>
+
+          </thead>
+
+          <tbody>
+
+            @for(a of visibleAdjustments(); track a.id) {
+
+              <tr>
+
+                <td>{{ studentName(a.studentId) }}</td>
+
+                <td>{{ store.termName(a.term) }}</td>
+
+                <td>{{ a.kind }}</td>
+
+                <td>{{ money(a.amount) }}</td>
+
+                <td>{{ a.reason }}</td>
+
+                <td>{{ a.at | date }}</td>
+
+              </tr>
+
+            }
+
+            @if(!adjustments().length) {
+
+              <tr><td colspan="6" class="empty">No adjustments recorded.</td></tr>
+
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+      <div class="pagination"><button type="button" class="text-btn" [disabled]="recordPage() <= 1" (click)="recordPage.set(recordPage()-1)">Previous</button><span>Page {{recordPage()}} of {{recordPages()}} · {{adjustments().length}} adjustments</span><button type="button" class="text-btn" [disabled]="recordPage() >= recordPages()" (click)="recordPage.set(recordPage()+1)">Next</button></div>
+    </div>
+
+    }
+  }
+
+
+
+  @case('reports') {
+
+    <div class="table-panel">
+
+      <div class="panel-heading">
+
+        <h3>Class Summaries</h3>
+
+      </div>
+
+      <div class="table-scroll">
+
+        <table>
+
+          <thead>
+
+            <tr>
+
+              <th>Class</th>
+
+              <th>Students</th>
+
+              <th>Expected</th>
+
+              <th>Collected</th>
+
+              <th>Outstanding</th>
+
+              <th>Overdue</th>
+
+            </tr>
+
+          </thead>
+
+          <tbody>
+
+            @for(r of classReports(); track r.id) {
+
+              <tr>
+
+                <td>{{ r.name }}</td>
+
+                <td>{{ r.count }}</td>
+
+                <td>{{ money(r.expected) }}</td>
+
+                <td>{{ money(r.paid) }}</td>
+
+                <td>{{ money(r.balance) }}</td>
+
+                <td [class.error-text]="r.overdue > 0">{{ money(r.overdue) }}</td>
+
+              </tr>
+
+            }
+
+            @if(!classReports().length) {
+
+              <tr><td colspan="6" class="empty">No financial data available.</td></tr>
+
+            }
+
+          </tbody>
+
+          @if(classReports().length) {
+
+            <tfoot>
+
+              <tr>
+
+                <td><strong>Totals</strong></td>
+
+                <td><strong>{{ accounts().length }}</strong></td>
+
+                <td><strong>{{ money(totals().expected) }}</strong></td>
+
+                <td><strong>{{ money(totals().paid) }}</strong></td>
+
+                <td><strong>{{ money(totals().balance) }}</strong></td>
+
+                <td [class.error-text]="totals().overdue > 0"><strong>{{ money(totals().overdue) }}</strong></td>
+
+              </tr>
+
+            </tfoot>
+
+          }
+
+        </table>
+
+      </div>
+
+    </div>
+
+  }
+
+}
+
+
+
+}
+@if (dialog()) {
+
+<dialog class="modal-overlay" [class.printable]="['receipt', 'account'].includes(dialog())" (click)="close()">
+
+  <form class="modal-card" appDialogFocus [class.wide]="dialog() === 'account' || dialog() === 'payment'" role="dialog" aria-modal="true" aria-labelledby="finance-dialog-title" (click)="$event.stopPropagation()" (keydown.escape)="close()" (ngSubmit)="save()" #financeForm="ngForm">
+
+    <div class="panel-heading no-print"><h3 id="finance-dialog-title">{{ dialogTitle() }}</h3><button type="button" class="text-btn" [disabled]="busy()" aria-label="Close dialog" (click)="close()">✕</button></div>
+
+
+
+    @if(dialog() === 'fee') {
+      <p>Choose Full year for a charge billed once for the academic year. Record its payments under Full year; partial payments are allowed.</p>
+
+      @if (detailId()) { <p><strong>Class:</strong> {{ store.className(form['classId']) }}</p> }
+      @else {
+        <fieldset class="class-picker"><legend>Classes receiving this fee</legend>
+          <div class="actions"><button type="button" class="text-btn" (click)="selectedClasses.set(store.classes().map(classIdOf))">Select all</button><button type="button" class="text-btn" (click)="selectedClasses.set([])">Clear</button></div>
+          @for (c of store.classes(); track c.id) { <label class="check-label"><input type="checkbox" [checked]="selectedClasses().includes(c.id)" (change)="toggleClass(c.id)">{{ c.name }}</label> }
+          @empty { <p>No classes available in this academic year.</p> }
+          <p>{{ selectedClasses().length }} selected. The amount below is charged per student in each selected class after you apply the fee.</p>
+        </fieldset>
+      }
+
+      <div class="form-group">
+
+        <label for="finance-term">Term</label>
+
+        <select name="term" id="finance-term" required [(ngModel)]="form['term']">
+
+          @for(t of terms(); track t) { <option [value]="t">{{ store.termName(t) }}</option> }
+
+        </select>
+
+      </div>
+
+      <div class="form-group">
+
+        <label for="finance-name">Fee Name</label>
+
+        <input name="name" id="finance-name" required [(ngModel)]="form['name']" placeholder="e.g. Tuition Fee" />
+
+      </div>
+
+      <div class="form-group">
+
+        <label for="finance-amount">Amount (TZS)</label>
+
+        <input type="text" name="amount" id="finance-fee-amount" appThousandsSeparator inputmode="numeric" maxlength="13" autocomplete="off" required [(ngModel)]="form['amount']" />
+
+      </div>
+
+      <div class="form-group">
+
+        <label for="finance-due">Due Date</label>
+
+        <input type="date" name="due" id="finance-due" required [(ngModel)]="form['due']" />
+
+      </div>
+
+    }
+
+
+
+    @if(dialog() === 'apply') {
+
+      <p>This will apply the fee to all uncharged active students in {{ store.className(fee()?.classId || '') }}.</p>
+
+      <p><strong>{{ fee()?.name }}</strong> - {{ money(fee()?.amount || 0) }} for {{ store.termName(fee()?.term || '') }}</p>
+
+    }
+
+
+
+    @if(dialog() === 'payment') {
+      @if(originalPayment(); as original) { <div class="portal-notice">Correcting receipt <strong>{{ original.receipt }}</strong>. Saving will mark the original as corrected and issue a replacement receipt. Both records remain in the history.</div>
+        <div class="form-group"><label for="correction-reason">Reason for correction</label><textarea id="correction-reason" name="correctionReason" required minlength="10" maxlength="2000" [(ngModel)]="form['reason']" placeholder="Explain what was entered incorrectly"></textarea></div>
+      }
+      <p class="payment-intro">Find a student, choose an assigned fee, then record the amount received.</p>
+      @if (!paymentStudent()) {
+        <section class="student-picker" aria-labelledby="choose-student-title">
+          <h4 id="choose-student-title">1. Choose a student</h4>
+          <div class="payment-filters">
+            <div class="form-group"><label for="payment-search">Search students</label><input id="payment-search" type="search" name="studentSearch" placeholder="Student name or admission number" [ngModel]="paymentSearch()" (ngModelChange)="filterPaymentStudents($event)"></div>
+            <div class="form-group"><label for="payment-class">Class</label><select id="payment-class" name="paymentClass" required [ngModel]="paymentClass()" (ngModelChange)="filterPaymentStudents($event, true)"><option value="">Choose a class</option>@for(c of store.classes(); track c.id) { <option [value]="c.id">{{ c.name }}</option> }</select></div>
+          </div>
+          @if (!paymentClass()) { <p class="payment-empty">Choose a class to search its student accounts.</p> } @else {
+          <p class="picker-summary" aria-live="polite">{{ paymentStudents().length }} students · {{ store.className(paymentClass()) }}</p>
+          <div class="student-results">
+            @for(a of visiblePaymentStudents(); track a.id) {
+              @if ($first || a.classId !== visiblePaymentStudents()[$index - 1].classId) { <h5 class="student-class-heading">{{ store.className(a.classId) }}</h5> }
+              <button type="button" class="student-choice" (click)="selectPaymentStudent(a.id)"><span><strong>{{ a.name }}</strong><small>{{ a.number }} &middot; {{ store.className(a.classId) }}</small></span><span class="student-choice-balance">{{ money(a.balance) }}<small>Outstanding &middot; Select &rarr;</small></span></button>
+            } @empty { <div class="payment-empty">No students match your search in this class. Try another name or admission number.</div> }
+          </div>
+          @if(paymentPages() > 1) { <div class="pagination"><button type="button" class="text-btn" [disabled]="paymentPage() === 1" (click)="paymentPage.set(paymentPage()-1)">Previous</button><span>Page {{ paymentPage() }} of {{ paymentPages() }}</span><button type="button" class="text-btn" [disabled]="paymentPage() === paymentPages()" (click)="paymentPage.set(paymentPage()+1)">Next</button></div> }
+          }
+        </section>
+      } @else {
+        <section class="selected-student"><div><span class="step-label">1. Student selected</span><h4>{{ paymentStudent()?.name }}</h4><p>{{ paymentStudent()?.number }} &middot; {{ store.className(paymentStudent()?.classId || '') }}</p></div><button type="button" class="text-btn" [disabled]="busy()" (click)="selectPaymentStudent('')">Change student</button></section>
+        <fieldset class="payment-fees" [disabled]="busy()"><legend>2. Choose the fee being paid</legend>
+          @for(c of paymentCharges(); track c.id) {
+            <label class="fee-choice" [class.selected]="paymentChargeId() === c.id" [class.settled]="paymentAvailable(c) <= 0"><input type="radio" name="paymentFee" required [value]="c.id" [ngModel]="paymentChargeId()" (ngModelChange)="selectPaymentCharge($event)" [disabled]="paymentAvailable(c) <= 0"><span><strong>{{ c.name }}</strong><small>{{ store.termName(c.term) }} &middot; {{ store.className(c.classId) }} &middot; Due {{ c.due }}</small><small>Charged {{ money(c.amount) }} &middot; Paid to this fee {{ money(store.feePaid(c.id)) }}</small></span><span class="fee-choice-amount"><strong>{{ money(paymentAvailable(c)) }}</strong><small>{{ paymentAvailable(c) > 0 ? 'Available to pay' : 'No payment due' }}</small></span></label>
+          } @empty { <div class="payment-empty">No fees have been applied to this student. Ask the bursar or headmaster to apply the class fees first.</div> }
+        </fieldset>
+        <p class="payment-help">Available amounts also respect the period balance, including discounts and older payments. Older payments remain unallocated to an individual fee.</p>
+      }
+      @if (paymentCharge(); as selectedFee) {
+        <div class="payment-summary"><span>3. Record installment &middot; {{ selectedFee.name }} &middot; {{ store.termName(selectedFee.term) }}</span><strong>Up to {{ money(paymentAvailable(selectedFee)) }}</strong></div>
+      <div class="form-group">
+
+        <label for="finance-payment-amount">Installment amount (TZS)</label>
+
+        <input type="text" name="amount" id="finance-payment-amount" appThousandsSeparator inputmode="numeric" maxlength="13" autocomplete="off" required [(ngModel)]="form['amount']" />
+
+      </div>
+
+      <div class="form-group">
+
+        <label for="finance-date">Date</label>
+
+        <input type="date" name="date" id="finance-date" [min]="store.year()?.startDate" [max]="today" required [(ngModel)]="form['date']" />
+
+      </div>
+
+      <div class="form-group">
+
+        <label for="finance-method">Method</label>
+
+        <select name="method" id="finance-method" required [(ngModel)]="form['method']">
+
+          @for(m of methods; track m) { <option [value]="m">{{ m }}</option> }
+
+        </select>
+
+      </div>
+
+      <div class="form-group">
+
+        <label for="finance-reference">Reference</label>
+
+        <input name="reference" id="finance-reference" [required]="form['method'] !== 'Cash'" [(ngModel)]="form['reference']" placeholder="Bank or mobile money reference" />
+
+      </div>
+
+      }
+    }
+
+
+
+    @if(dialog() === 'void') {
+
+      <p>This will void receipt {{ receipt()?.receipt }}. The receipt will remain in the finance history.</p>
+
+      <div class="form-group">
+
+        <label for="finance-reason">Reason for voiding</label>
+
+        <textarea name="reason" id="finance-reason" required minlength="10" maxlength="2000" [(ngModel)]="form['reason']" placeholder="Explain why this receipt is being voided..."></textarea>
+
+      </div>
+
+    }
+
+
+
+    @if(dialog() === 'adjustment') {
+      <div class="form-group adjustment-student-picker">
+        <label for="adjustment-class">Student class</label>
+        <select id="adjustment-class" name="adjustmentClass" [ngModel]="adjustmentClass()" (ngModelChange)="adjustmentClass.set($event); form['studentId']=''" required><option value="">Choose a class first</option>@for(c of store.classes(); track c.id) { <option [value]="c.id">{{ c.name }}</option> }</select>
+        @if (adjustmentClass()) {
+          <input type="search" name="adjustmentSearch" aria-label="Search class students" placeholder="Search name or student number" [ngModel]="adjustmentSearch()" (ngModelChange)="adjustmentSearch.set($event)">
+          <div class="adjustment-student-list">
+            @for(a of visibleAdjustmentStudents(); track a.id) { <label class="adjustment-student-option" [class.selected]="form['studentId'] === a.id"><input type="radio" name="studentId" [value]="a.id" [(ngModel)]="form['studentId']" required><span><strong>{{ a.name }}</strong><small>{{ a.number }}</small></span></label> }
+            @empty { <p class="empty">No students match this class and search.</p> }
+          </div>
+          @if(adjustmentPages() > 1) { <div class="pagination"><button type="button" class="text-btn" [disabled]="adjustmentPage() <= 1" (click)="adjustmentPage.set(adjustmentPage()-1)">Previous</button><span>Page {{ adjustmentPage() }} of {{ adjustmentPages() }} · {{ adjustmentStudents().length }} students</span><button type="button" class="text-btn" [disabled]="adjustmentPage() >= adjustmentPages()" (click)="adjustmentPage.set(adjustmentPage()+1)">Next</button></div> }
+        } @else { <p class="muted">Choose a class to find the student.</p> }
+      </div>
+
+      <div class="form-group">
+
+        <label for="finance-term">Term</label>
+
+        <select name="term" id="finance-term" required [(ngModel)]="form['term']">
+
+          @for(t of terms(); track t) { <option [value]="t">{{ store.termName(t) }}</option> }
+
+        </select>
+
+      </div>
+
+      <div class="form-group">
+
+        <label for="finance-kind">Type</label>
+
+        <select name="kind" id="finance-kind" required [(ngModel)]="form['kind']">
+
+          <option value="Discount">Discount (Credit)</option>
+
+          <option value="Scholarship">Scholarship (Credit)</option>
+
+          <option value="Credit correction">Credit correction (Credit)</option>
+
+          <option value="Debit correction">Debit correction (Debit)</option>
+
+        </select>
+
+      </div>
+
+      <div class="form-group">
+
+        <label for="finance-amount">Amount (TZS)</label>
+
+        <input type="text" name="amount" id="finance-adjustment-amount" appThousandsSeparator inputmode="numeric" maxlength="13" autocomplete="off" required [(ngModel)]="form['amount']" />
+
+      </div>
+
+      <div class="form-group">
+
+        <label for="finance-reason">Reason</label>
+
+        <textarea name="reason" id="finance-reason" required minlength="10" maxlength="2000" [(ngModel)]="form['reason']" placeholder="Explain the reason for this adjustment"></textarea>
+
+      </div>
+
+    }
+
+
+
+    @if(dialog() === 'account') {
+      <div class="context-row">
+
+        <strong>{{ account()?.name }}</strong> · {{ store.year()?.label }} · All terms ({{ account()?.number }}) - {{ store.className(account()?.classId || '') }}
+
+      </div>
+
+      <h3>Assigned fees</h3><p>New installments are recorded against the selected fee. Older payments and adjustments remain at period level and are included in the period totals below.</p>
+      <div class="table-scroll"><table><thead><tr><th>Fee</th><th>Period</th><th>Class charged</th><th>Due</th><th>Amount</th><th>Paid to fee</th><th>Available to pay</th></tr></thead><tbody>
+      @for (charge of accountCharges(); track charge.id) { <tr><td>{{ charge.name }}</td><td>{{ store.termName(charge.term) }}</td><td>{{ store.className(charge.classId) }}</td><td>{{ charge.due }}</td><td>{{ money(charge.amount) }}</td><td>{{ money(store.feePaid(charge.id)) }}</td><td>{{ money(store.payable(charge)) }}</td></tr> }
+      @empty { <tr><td colspan="7" class="empty">No fees applied to this student yet.</td></tr> }
+      </tbody></table></div>
+      <h3>Installments and balances</h3><div class="table-scroll"><table><thead><tr><th>Period</th><th>Expected after adjustments</th><th>Paid</th><th>Remaining</th></tr></thead><tbody>
+      @for (period of accountPeriods(); track period.term) { <tr><td>{{ store.termName(period.term) }}</td><td>{{ money(period.expected) }}</td><td>{{ money(period.paid) }}</td><td>{{ money(period.balance) }}</td></tr> }
+      </tbody></table></div><h3>Transaction history</h3>
+
+
+
+
+      <div class="table-scroll" style="max-height: 400px; margin-top: 1rem;">
+
+        <table>
+
+          <thead>
+
+            <tr><th>Date</th><th>Term</th><th>Description</th><th>Debit</th><th>Credit</th></tr>
+
+          </thead>
+
+          <tbody>
+
+            @for(l of ledger(); track l.id) {
+
+              <tr>
+
+                <td>{{ l.at | date:'shortDate' }}</td>
+
+                <td>{{ store.termName(l.term) }}</td>
+
+                <td>{{ l.description }}</td>
+
+                <td>{{ l.debit ? money(l.debit) : '-' }}</td>
+
+                <td>{{ l.credit ? money(l.credit) : '-' }}</td>
+
+              </tr>
+
+            }
+
+            @if(!ledger().length) {
+
+              <tr><td colspan="5" class="empty">No transactions found.</td></tr>
+
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+      <div class="actions" style="margin-top: 1rem;">
+
+        <button type="button" class="action-btn" (click)="print()">Print / Save PDF</button>
+
+      </div>
+
+    }
+
+
+
+    @if(dialog() === 'receipt') {
+
+      <div class="receipt-content" style="padding: 1rem;">
+
+        <p>{{ store.api.schoolName() }} · {{ store.year()?.label }}</p><h2>Receipt: {{ receipt()?.receipt }}</h2>
+
+        @if(receipt()?.replacesId) { <p><strong>Corrects receipt:</strong> {{ correctionReceipt(receipt()?.replacesId) }}</p> }
+        <p><strong>Student:</strong> {{ receipt()?.student }} ({{ receipt()?.number }})</p>
+
+        <p><strong>Date:</strong> {{ receipt()?.date }}</p>
+
+        <p><strong>Term:</strong> {{ store.termName(receipt()?.term || '') }}</p>
+        @if(receipt(); as payment) { <p><strong>Fee:</strong> {{ store.paymentFee(payment) }}</p> }
+
+        <p><strong>Method:</strong> {{ receipt()?.method }} (Ref: {{ receipt()?.reference }})</p>
+
+        <p><strong>Amount:</strong> {{ money(receipt()?.amount || 0) }}</p>
+
+        @if(receipt()?.voidAt) {
+
+          <p class="error-text"><strong>VOIDED:</strong> {{ receipt()?.voidReason }}</p>
+
+        }
+
+      </div>
+
+      <div class="actions print-hidden">
+
+        <button type="button" class="action-btn" (click)="print()">Print Receipt</button>
+
+      </div>
+
+    }
+
+
+
+    @if (error()) { <p class="field-error" role="alert">{{ error() }}</p> }
+
+
+
+    @if(['fee', 'apply', 'payment', 'adjustment', 'void'].includes(dialog())) {
+
+      <div class="actions">
+
+        <button type="button" class="text-btn" [disabled]="busy()" aria-label="Close dialog" (click)="close()">Cancel</button>
+
+        <button type="submit" class="action-btn action-btn--primary" [disabled]="busy() || store.readOnly() || financeForm.invalid || (dialog() === 'payment' && !paymentValid()) || (dialog() === 'fee' && !detailId() && !selectedClasses().length)">{{ busy() ? 'Saving…' : dialog() === 'payment' ? (correctionId() ? 'Save correction & replace receipt' : 'Record payment & create receipt') : 'Save' }}</button>
+
+      </div>
+
+    }
+
+  </form>
+
+</dialog>
+
+}

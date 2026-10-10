@@ -810,14 +810,60 @@ table {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
+  flex-wrap: wrap;
   margin-top: 18px;
-  padding-top: 12px;
-  border-top: 1px solid #f1f5f9;
+  padding: 10px 12px;
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  background: #fff;
 
   span {
     font-size: 0.875rem;
     font-weight: 500;
     color: $text-secondary;
+    margin-right: auto;
+  }
+}
+
+.pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  button {
+    display: inline-flex;
+    min-width: 82px;
+    min-height: 38px;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    color: #334155;
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+
+    &:hover:not(:disabled) {
+      border-color: #b45309;
+      background: #fff7ed;
+      color: #92400e;
+    }
+
+    &:focus-visible {
+      outline: 3px solid rgba(180, 83, 9, 0.35);
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      border-color: #e2e8f0;
+      background: #f1f5f9;
+      color: #94a3b8;
+      cursor: not-allowed;
+    }
   }
 }
 
@@ -951,5 +997,82 @@ table {
 
   .panel {
     padding: 16px;
+  }
+}
+
+.audit-search {
+  display: block;
+  width: 100%;
+  max-width: 520px;
+  min-height: 46px;
+  box-sizing: border-box;
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  color: #172338;
+  font: inherit;
+  font-size: 0.9rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.audit-search::placeholder {
+  color: #64748b;
+}
+
+.audit-search:focus {
+  border-color: #b45309;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.14);
+}
+
+.school-search {
+  display: block;
+  width: min(100%, 420px);
+  min-height: 46px;
+  box-sizing: border-box;
+  margin: 4px 0 14px;
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background-color: #fff;
+  color: #172338;
+  font: inherit;
+  font-size: 0.9rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.school-search::placeholder {
+  color: #64748b;
+}
+
+.school-search:hover {
+  border-color: #94a3b8;
+}
+
+.school-search:focus {
+  border-color: #b45309;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.14);
+}
+
+@media (max-width: 600px) {
+  .pagination-bar {
+    justify-content: center;
+  }
+
+  .pagination-bar > span {
+    flex-basis: 100%;
+    text-align: center;
+  }
+
+  .audit-search,
+  .school-search {
+    width: 100%;
+    max-width: none;
+    margin-bottom: 14px;
   }
 }

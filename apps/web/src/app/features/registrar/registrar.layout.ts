@@ -3,7 +3,7 @@ import { PortalConnectionComponent } from '../../shared/components/portal-connec
 import { AcademicYearSelectorComponent } from '../../shared/components/academic-year-selector.component';
 import { RegistrarStore } from './registrar.store';
 import { Component, ElementRef, OnInit, ViewChild, signal, inject } from '@angular/core';
-import { Router, RouterOutlet, RouterLink, NavigationEnd, ActivatedRoute } from '@angular/router';
+import { Router, RouterOutlet, NavigationEnd, ActivatedRoute } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import {
   IonApp,
@@ -13,6 +13,8 @@ import {
   IonMenuButton,
 } from '@ionic/angular/standalone';
 import { RegistrarSidebarComponent } from './components/registrar-sidebar/registrar-sidebar.component';
+import { NotificationBellComponent } from '../../shared/notifications/notification-bell.component';
+import { LoadingSkeletonComponent } from '../../shared/loading-skeleton.component';
 
 @Component({
   selector: 'app-registrar-layout',
@@ -20,13 +22,12 @@ import { RegistrarSidebarComponent } from './components/registrar-sidebar/regist
   host: { class: 'portal-shell' },
   templateUrl: './registrar.layout.html',
   styleUrls: ['./registrar.layout.scss'],
-  imports: [PortalConnectionComponent,
+  imports: [PortalConnectionComponent, NotificationBellComponent, LoadingSkeletonComponent,
     AcademicYearSelectorComponent,
     IonApp,
     IonSplitPane,
     IonMenu,
     RouterOutlet,
-    RouterLink,
     IonHeader,
     IonMenuButton,
     RegistrarSidebarComponent,

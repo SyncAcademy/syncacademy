@@ -54,6 +54,17 @@ export class HeadSidebarComponent {
       ],
     },
     {
+      label: 'STUDENT MANAGEMENT',
+      items: [
+        { title: 'Student Directory', route: '/head/students', icon: 'students' },
+          { title: 'Bulk Import', route: '/head/import', icon: 'students' },
+        { title: 'Subject Setup', route: '/head/subjects', icon: 'academics' },
+        { title: 'Roster Issues', route: '/head/roster-issues', icon: 'communication' },
+        { title: 'Class Lists', route: '/head/class-lists', icon: 'classes' },
+        { title: 'Admissions', route: '/head/admissions', icon: 'invite' },
+      ],
+    },
+    {
       label: 'STAFF MANAGEMENT',
       items: [
         { title: 'Staff Directory', route: '/head/staff', icon: 'teachers' },
@@ -69,11 +80,10 @@ export class HeadSidebarComponent {
         { title: 'Teaching Assignments', route: '/head/teaching-assignments', icon: 'assignments' },
       ],
     },
+    { label: 'FINANCE', items: [{ title: 'Finance Overview', route: '/head/finance', icon: 'payments' }] },
     {
       label: 'REPORTS',
       items: [        { title: 'Reports Overview', route: '/head/reports', icon: 'reports' },
-        { title: 'Send Reports', route: '/head/reports/send', icon: 'communication' },
-        { title: 'Delivery Center', route: '/head/reports/delivery', icon: 'notifications' },
       ],
     },
     {

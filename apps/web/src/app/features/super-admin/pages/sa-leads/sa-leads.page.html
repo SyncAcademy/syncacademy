@@ -1,5 +1,7 @@
-<p class="portal-notice" role="status">Lead management is not available yet. No sample records are shown and changes cannot be saved.</p><div inert>
-<div class="page-header">
+@if (store.storageError()) { <p class="portal-notice portal-notice--error" role="alert">{{store.storageError()}}</p> }
+@if (error) { <p class="portal-notice portal-notice--error" role="alert">{{error}}</p> }
+@if (notice) { <p class="portal-notice" role="status">{{notice}}</p> }
+<div class="section-header">
   <div>
     <h2>Leads Pipeline</h2>
     <p>Track and manage prospective school signups.</p>
@@ -10,7 +12,7 @@
 <!-- Pipeline Funnel -->
 <div class="pipeline-funnel">
   @for (stage of pipelineSummary(); track stage.key) {
-    <button class="funnel-stage" [class.active]="statusFilter() === stage.key" (click)="statusFilter.set(statusFilter() === stage.key ? '' : stage.key)">
+    <button class="funnel-stage" [class.active]="statusFilter() === stage.key" (click)="filter(statusFilter() === stage.key ? '' : stage.key, 'status')">
       <strong>{{ stage.count }}</strong>
       <span>{{ stage.label }}</span>
     </button>
@@ -18,8 +20,8 @@
 </div>
 
 <div class="filters">
-  <input aria-label="Search leads..." placeholder="Search leads..." [ngModel]="search()" (ngModelChange)="search.set($event)" />
-  <select aria-label="Status" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+  <input aria-label="Search leads..." placeholder="Search leads..." [ngModel]="search()" (ngModelChange)="filter($event, 'search')" />
+  <select aria-label="Status" [ngModel]="statusFilter()" (ngModelChange)="filter($event, 'status')">
     <option value="">All statuses</option>
     <option value="new">New</option>
     <option value="contacted">Contacted</option>
@@ -29,7 +31,7 @@
     <option value="won">Won</option>
     <option value="lost">Lost</option>
   </select>
-  <select aria-label="Lead source" [ngModel]="sourceFilter()" (ngModelChange)="sourceFilter.set($event)">
+  <select aria-label="Lead source" [ngModel]="sourceFilter()" (ngModelChange)="filter($event, 'source')">
     <option value="">All sources</option>
     <option value="website">Website</option>
     <option value="referral">Referral</option>
@@ -64,7 +66,7 @@
             <td><span class="source-pill">{{ l.source }}</span></td>
             <td><span class="portal-pill" [attr.data-status]="l.status">{{ statusLabel(l.status) }}</span></td>
             <td class="notes-cell">{{ l.notes }}</td>
-            <td>{{ l.owner || 'Unassigned' }}<span class="cell-sub">{{ l.followUp || 'No follow-up set' }}</span></td><td><div class="row-actions"><button class="action-btn" (click)="openLead(l)">Edit</button>@if (l.status === 'won' && !l.convertedSchoolId) { <button class="action-btn" (click)="store.convertLead(l.id)">Create trial school</button> } @if (l.convertedSchoolId) { <span>School created</span> }</div></td>
+            <td>{{ l.owner || 'Unassigned' }}<span class="cell-sub">{{ l.followUp || 'No follow-up set' }}</span></td><td><div class="row-actions"><button class="action-btn" (click)="openLead(l)">Edit</button>@if (l.status === 'won' && !l.convertedSchoolId) { <button class="action-btn" (click)="openConversion(l)">Create school</button> } @if (l.convertedSchoolId) { <a [href]="'/workspace?school=' + l.convertedSchoolId">View school</a> }</div></td>
           </tr>
         } @empty {
           <tr><td colspan="9">No leads match your filters.</td></tr>
@@ -73,6 +75,6 @@
     </table>
   </div>
 </section>
+<div class="pagination-bar" role="navigation" aria-label="Leads pagination"><span>Page {{store.leadPage()}} of {{pageCount()}} · {{store.leadTotal()}} matching leads</span><div class="pagination-actions"><button class="action-btn" [disabled]="store.leadPage() <= 1" (click)="page(-1)">Previous</button><button class="action-btn" [disabled]="store.leadPage() >= pageCount()" (click)="page(1)">Next</button></div></div>
 
-@if (editor; as values) { <app-sa-editor [title]="editingId ? 'Edit lead' : 'Add lead'" [fields]="fields" [values]="values" (saved)="save($event)" (cancelled)="editor = null" /> }
-</div>
+@if (editor; as values) { <app-sa-editor [title]="convertingId ? 'Create school and invite Headmaster' : editingId ? 'Edit lead' : 'Add lead'" [description]="convertingId ? 'The contact will receive a Headmaster invitation. The new school starts active.' : 'Track this prospective school.'" [fields]="convertingId ? conversionFields : fields" [values]="values" [busy]="busy" [error]="error" (saved)="save($event)" (cancelled)="editor = null" /> }

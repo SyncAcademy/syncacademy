@@ -1,9 +1,10 @@
+import { AcademicDataService } from '../../core/services/academic-data.service';
 import { SchoolApiService } from '../../core/services/school-api.service';
 import { PortalConnectionComponent } from '../../shared/components/portal-connection.component';
 import { AcademicYearSelectorComponent } from '../../shared/components/academic-year-selector.component';
 import { AcademicStore } from './academic.store';
 import { Component, ElementRef, OnInit, ViewChild, signal, inject } from '@angular/core';
-import { Router, RouterOutlet, RouterLink, NavigationEnd, ActivatedRoute } from '@angular/router';
+import { Router, RouterOutlet, NavigationEnd, ActivatedRoute } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import {
   IonApp,
@@ -13,6 +14,8 @@ import {
   IonMenuButton,
 } from '@ionic/angular/standalone';
 import { AcademicSidebarComponent } from './components/academic-sidebar/academic-sidebar.component';
+import { NotificationBellComponent } from '../../shared/notifications/notification-bell.component';
+import { LoadingSkeletonComponent } from '../../shared/loading-skeleton.component';
 
 @Component({
   selector: 'app-academic-layout',
@@ -20,19 +23,19 @@ import { AcademicSidebarComponent } from './components/academic-sidebar/academic
   host: { class: 'portal-shell' },
   templateUrl: './academic.layout.html',
   styleUrls: ['./academic.layout.scss'],
-  imports: [PortalConnectionComponent,
+  imports: [PortalConnectionComponent, NotificationBellComponent, LoadingSkeletonComponent,
     AcademicYearSelectorComponent,
     IonApp,
     IonSplitPane,
     IonMenu,
     RouterOutlet,
-    RouterLink,
     IonHeader,
     IonMenuButton,
     AcademicSidebarComponent,
   ],
 })
 export class AcademicLayout implements OnInit {
+  readonly academicData=inject(AcademicDataService);
   readonly api=inject(SchoolApiService);
 
   store = inject(AcademicStore);

@@ -2,3 +2,54 @@
 .bounded { max-height:420px; overflow:auto; }
 .pagination { display:flex; gap:12px; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin:20px 0; }
 .pagination span { margin-right:auto; font-size:.875rem; }
+.head-activity { gap:8px; padding:9px 0; font-size:.8rem; line-height:1.35; }
+.head-activity > div { min-width:0; }
+.head-activity p { margin:3px 0; overflow-wrap:anywhere; }
+.head-activity .badge { padding:3px 7px; font-size:.7rem; }
+.head-activity .cell-sub, .head-activity time { font-size:.72rem; line-height:1.3; }
+.finance-class-grid, .oversight-class-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,235px),1fr)); gap:12px; }
+.finance-class-card, .oversight-class-card { min-width:0; display:grid; align-content:start; gap:10px; padding:15px; border:1px solid #e2e8f0; border-radius:11px; background:linear-gradient(145deg,#fff,#fbfcfe); box-shadow:0 3px 12px #17233808; }
+.finance-class-card h4 { margin:0 0 4px; font-size:.95rem; }
+.finance-class-card span, .finance-class-card small, .oversight-class-card > span { color:#64748b; font-size:.76rem; line-height:1.45; }
+.finance-class-card > strong, .oversight-class-card > strong { color:#27364b; font-size:1.05rem; font-variant-numeric:tabular-nums; }
+.finance-class-card > strong small, .oversight-class-card > strong small { color:#64748b; font-size:.72rem; font-weight:500; }
+.finance-class-card .action-btn, .oversight-class-card .action-btn { justify-self:start; min-height:34px; padding:7px 11px; text-decoration:none; }
+.class-view-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 14px; padding:14px 16px; border:1px solid #e2e8f0; border-radius:11px; background:#fff; }
+.class-view-toolbar h3 { margin:3px 0 0; font-size:1.05rem; }
+.class-view-toolbar .eyebrow { color:#64748b; font-size:.7rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+.fee-class-picker { display:grid; gap:12px; max-height:320px; overflow:auto; padding:18px; border:1px solid #e2e8f0; border-radius:10px; }
+.fee-class-picker legend { padding:0 6px; }
+.fee-class-picker__actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:4px 0 2px; }
+.fee-class-picker__actions .text-btn { flex:0 0 auto; min-height:40px; padding:8px 14px; }
+.fee-class-picker .check-label { display:flex; align-items:center; gap:10px; margin:0; }
+.fee-class-picker > p { margin:2px 0 0; }
+.oversight-class-card { appearance:none; color:#27364b; font:inherit; text-align:left; text-decoration:none; cursor:pointer; transition:border-color .15s ease, transform .15s ease, box-shadow .15s ease; }
+.oversight-class-card:hover { border-color:#d5a16a; transform:translateY(-1px); box-shadow:0 8px 20px #17233810; }
+.class-card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+.class-card-name { color:#172338; font-weight:700; overflow-wrap:anywhere; }
+.view-label { color:#92400e; font-size:.78rem; font-weight:650; }
+.oversight-class-card:focus-visible { outline:3px solid #c48b4d; outline-offset:3px; }
+
+.fee-action-cell {
+  min-width: 150px;
+}
+
+.fee-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.fee-actions .text-btn {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 480px) {
+  .fee-actions {
+    gap: 8px;
+  }
+}
+@media(max-width:520px) { .finance-class-grid, .oversight-class-grid { grid-template-columns:1fr; } .class-view-toolbar { align-items:flex-start; } }
+.standing-hint { margin:0 0 13px; color:#64748b; font-size:.8rem; }
+.oversight-class-card:is(a) { text-decoration:none; }

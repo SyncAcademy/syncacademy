@@ -5,6 +5,11 @@ import { AfterViewInit, Directive, ElementRef, HostListener, OnDestroy } from '@
 export class DialogFocusDirective implements AfterViewInit, OnDestroy {
   private previous = document.activeElement as HTMLElement | null;
   private timer?: ReturnType<typeof setTimeout>;
+  private dialog?: HTMLDialogElement;
+  private readonly cancel = (event: Event) => {
+    // The component's Escape handler owns dismissal (and any save-in-progress guard).
+    event.preventDefault();
+  };
   constructor(private element: ElementRef<HTMLElement>) {}
   private controls(): HTMLElement[] {
     return Array.from(this.element.nativeElement.querySelectorAll<HTMLElement>(
@@ -12,6 +17,12 @@ export class DialogFocusDirective implements AfterViewInit, OnDestroy {
     )).filter(el => el.getClientRects().length > 0);
   }
   ngAfterViewInit(): void {
+    this.dialog = this.element.nativeElement.closest('dialog') ?? undefined;
+    if (this.dialog) {
+      this.dialog.classList.add('portal-dialog-layer');
+      this.dialog.addEventListener('cancel', this.cancel);
+      if (!this.dialog.open) this.dialog.showModal();
+    }
     this.element.nativeElement.tabIndex = -1;
     this.timer = setTimeout(() => (this.controls()[0] ?? this.element.nativeElement).focus());
   }
@@ -27,5 +38,10 @@ export class DialogFocusDirective implements AfterViewInit, OnDestroy {
       event.preventDefault(); first.focus();
     }
   }
-  ngOnDestroy(): void { clearTimeout(this.timer); if (this.previous?.isConnected) this.previous.focus(); }
+  ngOnDestroy(): void {
+    clearTimeout(this.timer);
+    this.dialog?.removeEventListener('cancel', this.cancel);
+    this.dialog?.close();
+    if (this.previous?.isConnected) this.previous.focus();
+  }
 }

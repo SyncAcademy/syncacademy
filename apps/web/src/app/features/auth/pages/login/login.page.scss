@@ -62,6 +62,9 @@
 .role-card__copy strong { overflow-wrap: anywhere; font-size: 0.95rem; line-height: 1.25; }
 .role-card__copy small { color: #657571; font-size: 0.78rem; line-height: 1.35; }
 .role-picker-note { margin-top: 22px; }
+.role-picker-header { margin:24px 0; text-align:center; }
+.role-picker-header h1 { margin-bottom:10px; line-height:1.25; }
+.role-picker-header p { color:#596579; line-height:1.6; }
 
 @media (max-width: 540px) {
   .role-grid { grid-template-columns: minmax(0, 1fr); gap: 9px; }

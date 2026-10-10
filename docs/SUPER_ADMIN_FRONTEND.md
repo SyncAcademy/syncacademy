@@ -1,26 +1,11 @@
-# Super admin frontend
+﻿# Super Admin workflows
 
-The `/super-admin` area is a browser-local demo. It makes no backend requests, sends no invitations, collects no payments, and does not enforce the administrator roles shown in Settings.
+The active `/super-admin` routes use authenticated, platform-administrator-only API endpoints and PostgreSQL records. School registration creates a school and queues a single-use Headmaster invitation. The Schools directory supports paginated browsing and suspension/reactivation with an audit reason.
 
-## Available workflows
+The Leads pipeline saves prospective schools, follow-up dates, owners and stages. A won lead can be converted once by choosing a unique school code; conversion creates the school and queues a Headmaster invitation for the lead contact in one transaction. Converted leads link to the school workspace. Platform Settings saves the platform name, support email and administrator announcement, and manages Super Admin invitations. The Overview and Audit Log read live school counts and recent audit events. System Health checks database availability and counts queued, failed and sent invitation/password-reset emails.
 
-- Overview: active schools, normalized monthly recurring revenue, overdue invoices, trials ending within seven days, actionable alerts, onboarding, and newest-first activity.
-- Schools: register a trial school, open school details, edit contact and onboarding information, suspend/reactivate with a reason, prepare a simulated administrator invitation, and view billing. Region counts live here.
-- Subscriptions: change plan/billing cycle, extend trials, activate a trial and generate an invoice, view invoice/payment history, and record a simulated payment. School access status and invoice payments remain separate operations.
-- Leads: add/edit leads, assign a follow-up owner/date, change stages, and convert a won lead into a trial school once.
-- Audit log: search schools/actions/details, filter by actor/action/date, and export the filtered rows as CSV with exact timestamps.
-- Settings: save platform name, support email, default trial length, SMS alert threshold, and an admin announcement; prepare and manage simulated administrator access records.
-- Global search: find schools and leads, including from the page already open. Notifications use the same attention list as the overview.
-
-Changes persist in `localStorage` under `syncacademy-super-admin-v1`. A visible notice identifies demo data, and storage failures show a warning. System telemetry remains sample data; no live monitoring is claimed. Clearing this specific browser storage key restores the sample dataset on reload.
+Schools, leads, invitations, audit history, import history and school workspaces expose search and pagination. Schools can be filtered by status; leads by stage and source; audit events by actor, action and date. The platform header searches schools and leads across records beyond the current page. Audit CSV export fetches every matching page. School dashboards paginate their large record lists after filtering, while retaining full-year data for totals and mark drafts. The inactive subscription and billing prototype is not part of the live dashboard; platform billing awaits plan prices and a payment provider. Report delivery and provider-level monitoring are deferred.
 
 ## Verification
 
-From the repository root:
-
-```text
-npm.cmd run test:super-admin --workspace=apps/web
-npm.cmd run build --workspace=apps/web -- --configuration development
-```
-
-The workflow checks cover normalized revenue, payment idempotency, school and subscription transitions, trial extension, single lead conversion, duplicate administrator emails, audit ordering, and persistence/date restoration. Live authentication and backend authorization are deferred.
+`npm.cmd run test:super-admin -w syncacademy-web` checks the frontend store's lead and settings flow. `apps/api/test/platform-operations.cjs` runs within the isolated PostgreSQL integration suite and verifies authorization, conversion, settings persistence and health counts.

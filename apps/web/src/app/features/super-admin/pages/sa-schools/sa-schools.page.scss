@@ -1,13 +1,14 @@
 @use 'variables' as *;
 @use 'mixins' as *;
 
-.page-header {
+.section-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
   flex-wrap: wrap;
+  padding: 4px 0;
 
   h2 {
     margin: 0;
@@ -248,8 +249,12 @@ table {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 16px;
-  margin: 16px 0 28px;
-  padding: 0 2px;
+  margin: 0;
+  padding: 16px 18px;
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+  border-radius: 0;
+  background: #fff;
 
   .pagination-info {
     display: flex;
@@ -287,6 +292,13 @@ table {
     }
   }
 }
+
+:host { display: block; min-width: 0; }
+.number-cell { text-align: right; font-variant-numeric: tabular-nums; }
+.school-status { display: inline-flex; align-items: center; padding: 5px 9px; border-radius: 6px; background: #f1f5f9; font-size: .75rem; text-transform: capitalize; white-space: nowrap; }
+.school-status[data-status='active'] { color: #065f46; background: #ecfdf5; }
+.school-status[data-status='suspended'] { color: #991b1b; background: #fef2f2; }
+.table-scroll:focus-visible { outline: 2px solid #b45309; outline-offset: -2px; }
 
 .detail-panel {
   background: #fff;
@@ -373,7 +385,7 @@ table {
 /* Device Responsiveness */
 
 @media (max-width: 768px) {
-  .page-header {
+  .section-header {
     flex-direction: column;
     align-items: stretch;
     gap: 14px;

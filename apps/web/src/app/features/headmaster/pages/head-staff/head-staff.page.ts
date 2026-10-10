@@ -1,6 +1,6 @@
 import { inject } from '@angular/core';
-import { HeadDemoStore } from '../../head-demo.store';
-import { Component, OnInit, signal, computed } from '@angular/core';
+import { HeadStore } from '../../head.store';
+import { Component, OnInit, signal, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
@@ -11,8 +11,6 @@ import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { RecordCardComponent } from '../../shared/record-card.component';
 import { StaffMember, STAFF_ROLE_LABELS } from '../../head.models';
-import { MOCK_STAFF } from '../../head-mock-data';
-
 @Component({
   selector: 'app-head-staff',
   standalone: true,
@@ -31,15 +29,17 @@ import { MOCK_STAFF } from '../../head-mock-data';
   styleUrls: ['./head-staff.page.scss'],
 })
 export class HeadStaffPage implements OnInit {
-  store = inject(HeadDemoStore);
+  store = inject(HeadStore);
   loading = signal<boolean>(true);
   staff = this.store.staff;
   
   searchTerm = signal<string>('');
   roleFilter = signal<string>('all');
   statusFilter = signal<string>('all');
+  page=signal(1);
   
   showDeactivateDialog = signal<boolean>(false);
+  showRemoveRoleDialog = signal<boolean>(false);
   selectedStaff = signal<StaffMember | null>(null);
 
   staffRoleLabels = STAFF_ROLE_LABELS;
@@ -56,6 +56,9 @@ export class HeadStaffPage implements OnInit {
       return matchName && matchRole && matchStatus;
     });
   });
+  pageCount=computed(()=>Math.max(1,Math.ceil(this.filteredStaff().length/25)));
+  visibleStaff=computed(()=>this.filteredStaff().slice((this.page()-1)*25,this.page()*25));
+  constructor(){effect(()=>{this.searchTerm();this.roleFilter();this.statusFilter();this.page.set(1);});}
 
   ngOnInit():void { this.loading.set(false); }
 
@@ -67,6 +70,9 @@ export class HeadStaffPage implements OnInit {
     this.selectedStaff.set(s);
     this.showDeactivateDialog.set(true);
   }
+  canManage(s: StaffMember): boolean { const me=this.store.api.auth.identity(); return !!me && !(s.email === me.email && s.role === 'school_admin') && (s.role !== 'school_admin' || me.platformAdmin || me.selectedRole === 'HEADMASTER') && (me.platformAdmin || me.selectedRole === 'HEADMASTER' || (me.selectedRole === 'ACADEMIC' && s.role === 'teacher')); }
+  requestRemoveRole(s: StaffMember): void { this.selectedStaff.set(s); this.showRemoveRoleDialog.set(true); }
+  async confirmRemoveRole(): Promise<void> { const member=this.selectedStaff(); if(!member)return; try { await this.store.api.write('members/'+member.id,{},'DELETE'); this.showRemoveRoleDialog.set(false); this.selectedStaff.set(null); } catch(e) { this.store.api.error.set(this.store.api.auth.error(e)); } }
 
   async confirmDeactivate():Promise<void>{const member=this.selectedStaff();if(!member)return;try{await this.store.api.write('members/'+member.id,{active:member.status!=='active'},'PATCH');this.showDeactivateDialog.set(false);this.selectedStaff.set(null);}catch(e){this.store.api.error.set(this.store.api.auth.error(e));}}
 

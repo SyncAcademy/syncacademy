@@ -1,80 +1,20 @@
-import { inject } from '@angular/core';
-import { HeadDemoStore } from '../../head-demo.store';
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { HeadStore } from '../../head.store';
 import { HeadPageHeaderComponent } from '../../shared/head-page-header.component';
-import { StatusBadgeComponent } from '../../shared/status-badge.component';
-import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
-import { RecordCardComponent } from '../../shared/record-card.component';
-import { PendingStaffMember, STAFF_ROLE_LABELS } from '../../head.models';
-import { MOCK_PENDING_STAFF } from '../../head-mock-data';
+import { STAFF_ROLE_LABELS } from '../../head.models';
 
-@Component({
-  selector: 'app-head-staff-pending',
-  standalone: true,
-  imports: [
-    CommonModule,
-    RouterModule,
-    HeadPageHeaderComponent,
-    StatusBadgeComponent,
-    EmptyStateComponent,
-    ConfirmDialogComponent,
-    RecordCardComponent,
-  ],
-  templateUrl: './head-staff-pending.page.html',
-  styleUrls: ['./head-staff-pending.page.scss'],
-})
-export class HeadStaffPendingPage implements OnInit {
-  store = inject(HeadDemoStore);
-  loading = signal<boolean>(true);
-  pendingStaff = this.store.pending;
-  showApproveDialog = signal(false);
-  showRejectDialog = signal<boolean>(false);
-  selectedPending = signal<PendingStaffMember | null>(null);
-
-  staffRoleLabels = STAFF_ROLE_LABELS;
-
-  ngOnInit(): void {
-    setTimeout(() => {
-      // Retain the shared frontend demo state.
-      this.loading.set(false);
-    }, 500);
-  }
-
-  approve(person: PendingStaffMember): void {
-    if (!person.emailVerified && !person.phoneVerified) return;
-    this.selectedPending.set(person);
-    this.showApproveDialog.set(true);
-  }
-
-  confirmApprove(): void {
-    const person = this.selectedPending();
-    if (!person || (!person.phoneVerified && !person.emailVerified)) return;
-    this.store.staff.update(list => [...list, { id: person.id, fullName: person.fullName, email: person.email, phone: person.phone,
-      role: person.requestedRole, status: 'active', phoneVerified: person.phoneVerified, emailVerified: person.emailVerified, createdAt: new Date().toISOString() }]);
-    this.pendingStaff.update(list => list.filter(p => p.id !== person.id));
-    this.showApproveDialog.set(false);
-    this.store.notice.set(`${person.fullName} was added to the staff directory in this demo.`);
-    this.selectedPending.set(null);
-  }
-  openRejectDialog(person: PendingStaffMember): void {
-    this.selectedPending.set(person);
-    this.showRejectDialog.set(true);
-  }
-
-  confirmReject(): void {
-    const person = this.selectedPending();
-    if (person) {
-      this.pendingStaff.update(list => list.filter(p => p.id !== person.id));
-    }
-    this.showRejectDialog.set(false);
-    this.selectedPending.set(null);
-  }
-
-  cancelReject(): void {
-    this.showRejectDialog.set(false);
-    this.selectedPending.set(null);
-  }
+@Component({selector:'app-head-staff-pending',standalone:true,imports:[CommonModule,FormsModule,RouterLink,HeadPageHeaderComponent],templateUrl:'./head-staff-pending.page.html',styleUrls:['../../../academic/academic.page.scss','./head-staff-pending.page.scss']})
+export class HeadStaffPendingPage {
+ readonly store=inject(HeadStore);
+ readonly roles=STAFF_ROLE_LABELS;
+ readonly pending=computed(()=>this.store.invitations().filter(i=>i.status==='active'&&Date.parse(i.expiresAt)>Date.now()));
+ readonly search=signal('');readonly page=signal(1);
+ readonly filtered=computed(()=>this.pending().filter(i=>`${i.name} ${i.email} ${this.roles[i.role]}`.toLowerCase().includes(this.search().toLowerCase())));
+ readonly pages=computed(()=>Math.max(1,Math.ceil(this.filtered().length/25)));
+ readonly visible=computed(()=>this.filtered().slice((this.page()-1)*25,this.page()*25));
+ readonly busy=signal('');readonly error=signal('');readonly notice=signal('');
+ async action(id:string,kind:'resend'|'revoke'){if(this.busy())return;this.busy.set(id);this.error.set('');this.notice.set('');try{await this.store.api.write('invitations/'+id+'/'+kind,{});this.notice.set(kind==='resend'?'A fresh invitation was queued for email delivery.':'Invitation revoked.');}catch(e){this.error.set(this.store.api.auth.error(e));}finally{this.busy.set('');}}
 }

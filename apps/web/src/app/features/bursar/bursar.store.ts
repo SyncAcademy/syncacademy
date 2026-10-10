@@ -1,107 +1,278 @@
-﻿import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { AcademicYearService } from '../../core/services/academic-year.service';
 import { RegistrarStore } from '../registrar/registrar.store';
+import { SchoolApiService } from '../../core/services/school-api.service';
 
-export interface Fee { id: string; yearId: string; classId: string; term: string; name: string; amount: number; due: string; }
+export interface Fee { id: string; yearId: string; classId: string; term: string; name: string; amount: number; due: string; locked?: boolean; }
 export interface Charge { id: string; yearId: string; feeId: string; studentId: string; student: string; number: string; classId: string; term: string; name: string; amount: number; due: string; at: string; }
-export interface Payment { id: string; yearId: string; studentId: string; student: string; number: string; className: string; term: string; amount: number; method: string; reference: string; date: string; receipt: string; at: string; voidReason?: string; voidAt?: string; }
+export interface Payment { replacesId?: string; chargeId?: string; id: string; yearId: string; studentId: string; student: string; number: string; className: string; term: string; amount: number; method: string; reference: string; date: string; receipt: string; at: string; voidReason?: string; voidAt?: string; }
 export interface Adjustment { id: string; yearId: string; studentId: string; term: string; amount: number; kind: string; reason: string; at: string; }
-interface FinanceState { fees: Fee[]; charges: Charge[]; payments: Payment[]; adjustments: Adjustment[]; }
-export const TERMS = ['Term 1', 'Term 2', 'Term 3'];
+
+interface FinanceRecords {
+  fees: Fee[];
+  charges: Charge[];
+  payments: Payment[];
+  adjustments: Adjustment[];
+}
+
+const emptyRecords = (): FinanceRecords => ({ fees: [], charges: [], payments: [], adjustments: [] });
 export const METHODS = ['Cash', 'Bank transfer', 'Mobile money'];
 
 @Injectable({ providedIn: 'root' })
 export class BursarStore {
+  readonly api = inject(SchoolApiService);
   readonly years = inject(AcademicYearService);
   readonly registry = inject(RegistrarStore);
-  readonly year = this.years.bursarYear;
-  readonly readOnly = computed(() => this.years.readOnly('bursar'));
-  readonly storageAvailable = signal(true);
-  private readonly state = signal<FinanceState>(this.restore());
+  private readonly recordsByYear = signal<Record<string, FinanceRecords>>({});
+  private readonly loadedYears = new Set<string>();
+  private readonly loadingYears = new Map<string, Promise<void>>();
+  readonly loadError = signal('');
+
+  readonly year = computed(() => this.api.role() === 'REGISTRAR' ? this.years.registerYear() : this.years.bursarYear());
+  readonly terms = computed(() => [...(this.year()?.terms.map(term => term.key) ?? []), 'Full year']);
+  termName(key: string): string { return this.year()?.terms.find(term => term.key === key)?.name ?? key; }
+  readonly readOnly = computed(() => this.years.readOnly(this.api.role() === 'REGISTRAR' ? 'register' : 'bursar'));
   readonly classes = computed(() => this.registry.classesFor(this.year()?.id ?? ''));
   readonly enrolments = computed(() => this.registry.enrolmentsFor(this.year()?.id ?? ''));
-  readonly fees = computed(() => this.state().fees.filter(f => f.yearId === this.year()?.id));
-  readonly charges = computed(() => this.state().charges.filter(f => f.yearId === this.year()?.id));
-  readonly payments = computed(() => this.state().payments.filter(f => f.yearId === this.year()?.id));
-  readonly adjustments = computed(() => this.state().adjustments.filter(f => f.yearId === this.year()?.id));
+  private readonly currentRecords = computed(() => this.forYear(this.year()?.id ?? ''));
+  readonly hasCurrentYearData = computed(() => !!this.recordsByYear()[this.cacheKey(this.year()?.id ?? '')]);
+
+  readonly fees = computed(() => this.currentRecords().fees);
+  readonly charges = computed(() => this.currentRecords().charges);
+  readonly payments = computed(() => this.currentRecords().payments);
+  readonly adjustments = computed(() => this.currentRecords().adjustments);
   readonly accounts = computed(() => this.accountsFor(this.year()?.id ?? ''));
-  forYear(yearId: string) {
-    const s = this.state();
-    return { fees: s.fees.filter(r => r.yearId === yearId), charges: s.charges.filter(r => r.yearId === yearId), payments: s.payments.filter(r => r.yearId === yearId), adjustments: s.adjustments.filter(r => r.yearId === yearId) };
-  }
-  accountsFor(yearId: string, term?: string) {
-    const { charges } = this.forYear(yearId); const enrolments = this.registry.enrolmentsFor(yearId);
-    const ids = new Set([...enrolments.map(e => e.studentId), ...charges.map(c => c.studentId)]);
-    return [...ids].map(id => { const student = this.registry.student(id); const charge = charges.find(c => c.studentId === id); const enrolment = enrolments.find(e => e.studentId === id);
-      return { id, name: enrolment?.studentName ?? charge?.student ?? student?.name ?? 'Student', number: charge?.number ?? student?.number ?? '', classId: enrolment?.classId ?? charge?.classId ?? '', ...this.totals(id, term, yearId) };
-    });
-  }
   readonly summary = computed(() => this.totals());
   readonly attentionCount = computed(() => this.accounts().filter(a => a.balance > 0).length);
-  constructor() {}
-  private restore():FinanceState{return {fees:[],charges:[],payments:[],adjustments:[]};}
-  private id() { return crypto.randomUUID(); }
-  private blocked() { return this.readOnly() ? 'This academic year is read-only.' : null; }
-  private money(value: number) { return Number.isSafeInteger(value) && value > 0 && value <= 1_000_000_000; }
-  private validDate(value: string) { const timestamp = Date.parse(value); return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value; }
-  accountClass(id: string) { return this.enrolments().find(e => e.studentId === id)?.classId ?? this.charges().find(c => c.studentId === id)?.classId ?? ''; }
+
+  private context() { return `${this.api.auth.identity()?.id}:${this.api.role()}:${this.api.schoolId()}`; }
+  private cacheKey(yearId: string) { return `${this.context()}:${yearId}`; }
+  readonly loading = signal(false);
+  readonly lastPaymentId = signal('');
+
+  forYear(yearId: string): FinanceRecords {
+    return this.recordsByYear()[this.cacheKey(yearId)] ?? emptyRecords();
+  }
+
+  async loadYear(yearId: string, force = false): Promise<void> {
+    const schoolId = this.api.schoolId();
+    if (!schoolId || !yearId) {
+      this.loadError.set('Select a school and academic year to load finance records.');
+      return;
+    }
+
+    const context = this.context();
+    const cacheKey = this.cacheKey(yearId);
+    if (!force && this.loadedYears.has(cacheKey)) return;
+    const activeRequest = this.loadingYears.get(cacheKey);
+    if (activeRequest) { await activeRequest; if (!force || context !== this.context()) return; }
+
+    this.loadError.set('');
+    this.loading.set(true);
+    const query = new URLSearchParams({ yearId }).toString();
+    const request = (async () => {
+      try {
+        const [rawFees, rawLedger] = await Promise.all([
+          this.api.auth.request('GET', `schools/${schoolId}/finance/fees?${query}`),
+          this.api.auth.request('GET', `schools/${schoolId}/finance/ledger?${query}`),
+        ]);
+        const records: FinanceRecords = {
+          fees: rawFees.map((fee: any) => ({
+            id: fee.id,
+            yearId: fee.yearId,
+            classId: fee.classroomId,
+            term: fee.term,
+            name: fee.name,
+            amount: fee.amount,
+            due: String(fee.dueDate).slice(0, 10),
+            locked: fee.locked,
+          })),
+          charges: rawLedger.charges.map((charge: any) => ({
+            id: charge.id,
+            yearId: charge.yearId,
+            feeId: charge.feeId,
+            studentId: charge.studentId,
+            student: charge.student.name,
+            number: charge.student.admissionNumber,
+            classId: charge.classroomId,
+            term: charge.term,
+            name: charge.name,
+            amount: charge.amount,
+            due: String(charge.dueDate).slice(0, 10),
+            at: charge.createdAt,
+          })),
+          payments: rawLedger.payments.map((payment: any) => ({
+            id: payment.id,
+            chargeId: payment.chargeId ?? undefined,
+            replacesId: payment.replacesId ?? undefined,
+            yearId: payment.yearId,
+            studentId: payment.studentId,
+            student: payment.student.name,
+            number: payment.student.admissionNumber,
+            className: this.registry.className(this.classIdForStudent(payment.studentId, yearId)),
+            term: payment.term,
+            amount: payment.amount,
+            method: payment.method,
+            reference: payment.reference,
+            date: String(payment.date).slice(0, 10),
+            receipt: payment.receipt,
+            at: payment.createdAt,
+            voidReason: payment.voidReason ?? undefined,
+            voidAt: payment.voidAt ?? undefined,
+          })),
+          adjustments: rawLedger.adjustments.map((adjustment: any) => ({
+            id: adjustment.id,
+            yearId: adjustment.yearId,
+            studentId: adjustment.studentId,
+            term: adjustment.term,
+            amount: adjustment.amount,
+            kind: adjustment.kind,
+            reason: adjustment.reason,
+            at: adjustment.createdAt,
+          })),
+        };
+        if (context !== this.context()) return;
+        this.recordsByYear.update(cache => ({ ...cache, [cacheKey]: records }));
+        this.loadedYears.add(cacheKey);
+      } catch (error) {
+        if (context === this.context()) this.loadError.set(this.api.auth.error(error));
+      } finally {
+        this.loadingYears.delete(cacheKey);
+        if (context === this.context()) this.loading.set(false);
+      }
+    })();
+    this.loadingYears.set(cacheKey, request);
+    return request;
+  }
+
+  private classIdForStudent(studentId: string, yearId: string): string {
+    return this.registry.enrolmentsFor(yearId).find(enrolment => enrolment.studentId === studentId)?.classId ?? '';
+  }
+
+  accountsFor(yearId: string, term?: string) {
+    const { charges } = this.forYear(yearId);
+    const enrolments = this.registry.enrolmentsFor(yearId);
+    const ids = new Set([...enrolments.map(e => e.studentId), ...charges.map(c => c.studentId)]);
+    return [...ids].map(id => {
+      const student = this.registry.student(id);
+      const charge = charges.find(c => c.studentId === id);
+      const enrolment = enrolments.find(e => e.studentId === id);
+      return {
+        id,
+        name: enrolment?.studentName ?? charge?.student ?? student?.name ?? 'Student',
+        number: charge?.number ?? student?.number ?? '',
+        classId: enrolment?.classId ?? charge?.classId ?? '',
+        ...this.totals(id, term, yearId),
+      };
+    });
+  }
+
+  accountClass(id: string) {
+    return this.enrolments().find(e => e.studentId === id)?.classId ?? this.charges().find(c => c.studentId === id)?.classId ?? '';
+  }
+
   className(id: string) { return this.registry.className(id); }
+
   totals(studentId?: string, term?: string, yearId = this.year()?.id ?? '') {
     const records = this.forYear(yearId);
-    const match = (r: { studentId: string; term: string }) => (!studentId || r.studentId === studentId) && (!term || r.term === term);
-    const charged = records.charges.filter(match).reduce((n, r) => n + r.amount, 0);
-    const adjustments = records.adjustments.filter(match).reduce((n, r) => n + r.amount, 0);
-    const paid = records.payments.filter(r => !r.voidAt && match(r)).reduce((n, r) => n + r.amount, 0);
-    // Allocate credits and payments to oldest dues within each student/term account.
+    const match = (record: { studentId: string; term: string }) =>
+      (!studentId || record.studentId === studentId) && (!term || record.term === term);
+    const charged = records.charges.filter(match).reduce((sum, record) => sum + record.amount, 0);
+    const adjustments = records.adjustments.filter(match).reduce((sum, record) => sum + record.amount, 0);
+    const paid = records.payments.filter(record => !record.voidAt && match(record)).reduce((sum, record) => sum + record.amount, 0);
     const today = new Date().toISOString().slice(0, 10);
-    const ids = [...new Set(records.charges.filter(match).map(c => c.studentId))];
-    const overdue = ids.reduce((sum, id) => sum + (term ? [term] : TERMS).reduce((subtotal, t) => {
-      const due = records.charges.filter(c => c.studentId === id && c.term === t && c.due < today).reduce((n, c) => n + c.amount, 0);
-      const adjustment = records.adjustments.filter(a => a.studentId === id && a.term === t).reduce((n, a) => n + a.amount, 0);
-      const received = records.payments.filter(p => p.studentId === id && p.term === t && !p.voidAt).reduce((n, p) => n + p.amount, 0);
-      return subtotal + Math.max(0, due + adjustment - received);
+    const studentIds = [...new Set(records.charges.filter(match).map(charge => charge.studentId))];
+    const overdue = studentIds.reduce((sum, id) => sum + (term ? [term] : [...new Set(records.charges.map(c => c.term))]).reduce((subtotal, currentTerm) => {
+      const termCharges = records.charges.filter(charge => charge.studentId === id && charge.term === currentTerm);
+      const dueCharges = termCharges.filter(charge => charge.due < today);
+      const due = dueCharges.reduce((total, charge) => total + charge.amount, 0);
+      const adjustment = records.adjustments
+        .filter(item => item.studentId === id && item.term === currentTerm)
+        .reduce((total, item) => total + item.amount, 0);
+      const received = records.payments
+        .filter(payment => payment.studentId === id && payment.term === currentTerm && !payment.voidAt)
+        .reduce((total, payment) => total + payment.amount, 0);
+      const receivedForDue = records.payments.filter(p => p.studentId === id && p.term === currentTerm && !p.voidAt && (!p.chargeId || dueCharges.some(c => c.id === p.chargeId))).reduce((total, p) => total + p.amount, 0);
+      const balance = termCharges.reduce((total, c) => total + c.amount, 0) + adjustment - received;
+      return subtotal + (due > 0 ? Math.max(0, Math.min(balance, due + adjustment - receivedForDue)) : 0);
     }, 0), 0);
     return { charged, adjustments, expected: charged + adjustments, paid, balance: charged + adjustments - paid, overdue };
   }
-  used(feeId: string) { return this.charges().some(c => c.feeId === feeId); }
-  eligible(fee: Fee) { return this.enrolments().filter(e => e.classId === fee.classId && e.status === 'active' && !this.charges().some(c => c.feeId === fee.id && c.studentId === e.studentId)); }
-  saveFee(input: Omit<Fee, 'id' | 'yearId'>, id?: string): string | null {
-    const blocked = this.blocked(); if (blocked) return blocked;
-    if (id && (!this.fees().some(f => f.id === id) || this.used(id))) return 'Applied fee structures are locked. Record a reasoned adjustment to correct a student account.';
-    if (!this.classes().some(c => c.id === input.classId) || !TERMS.includes(input.term) || !input.name.trim() || !this.money(input.amount) || !this.validDate(input.due) || input.due < this.year()!.startDate || input.due > this.year()!.endDate) return 'Choose a class, term, fee name, positive whole TZS amount, and due date within the selected year.';
-    if (this.fees().some(f => f.id !== id && f.classId === input.classId && f.term === input.term && f.name.toLowerCase() === input.name.trim().toLowerCase())) return 'This class already has a fee with that name for the term.';
-    const fee: Fee = { ...input, name: input.name.trim(), id: id ?? this.id(), yearId: this.year()!.id };
-    this.state.update(s => ({ ...s, fees: id ? s.fees.map(f => f.id === id ? fee : f) : [...s.fees, fee] })); return null;
+
+  feePaid(chargeId: string) { return this.payments().filter(p => p.chargeId === chargeId && !p.voidAt).reduce((s, p) => s + p.amount, 0); }
+  feeRemaining(charge: Charge) { return Math.max(0, charge.amount - this.feePaid(charge.id)); }
+  payable(charge: Charge) { return Math.max(0, Math.min(this.feeRemaining(charge), this.totals(charge.studentId, charge.term).balance)); }
+  paymentFee(payment: Payment) { return this.charges().find(c => c.id === payment.chargeId)?.name ?? 'Unallocated period payment'; }
+
+  async loadFees(yearId: string) { await this.loadYear(yearId); }
+  async loadAccounts(yearId: string) { await this.loadYear(yearId); }
+  async loadPayments(yearId: string) { await this.loadYear(yearId); }
+  async loadAdjustments(yearId: string) { await this.loadYear(yearId); }
+  async loadReports(yearId: string) { await this.loadYear(yearId); }
+
+  async saveFee(input: Omit<Fee, 'id' | 'yearId'> & { classIds?: string[] }, id?: string, targetYearId = this.year()?.id): Promise<string | null> {
+    const context = this.context();
+    const yearId = targetYearId;
+    if (!yearId) return 'Select an academic year before saving a fee.';
+    const payload = {
+      ...(!id ? input.classIds ? { classroomIds: input.classIds } : { classroomId: input.classId } : {}),
+      term: input.term,
+      name: input.name,
+      amount: input.amount,
+      dueDate: input.due,
+      ...(!id ? { yearId } : {}),
+    };
+    try {
+      if (id) await this.api.write(`finance/fees/${id}`, payload, 'PATCH');
+      else await this.api.write('finance/fees', payload);
+      if (context === this.context()) await this.loadYear(yearId, true);
+      return null;
+    } catch (error) { return this.api.auth.error(error); }
   }
-  applyFee(id: string): string | null {
-    const blocked = this.blocked(); if (blocked) return blocked;
-    const fee = this.fees().find(f => f.id === id); if (!fee) return 'Fee not found in this academic year.';
-    const eligible = this.eligible(fee); if (!eligible.length) return 'No uncharged active students in this class.';
-    const charges: Charge[] = eligible.map(e => ({ id: this.id(), yearId: fee.yearId, feeId: id, studentId: e.studentId, student: e.studentName, number: this.registry.student(e.studentId)!.number, classId: fee.classId, term: fee.term, name: fee.name, amount: fee.amount, due: fee.due, at: new Date().toISOString() }));
-    this.state.update(s => ({ ...s, charges: [...s.charges, ...charges] })); return null;
+
+  async applyFee(id: string, targetYearId = this.year()?.id): Promise<string | null> {
+    const context = this.context();
+    const yearId = targetYearId;
+    if (!yearId) return 'Select an academic year before applying a fee.';
+    try {
+      await this.api.write(`finance/fees/${id}/apply`, {});
+      if (context === this.context()) await this.loadYear(yearId, true);
+      return null;
+    } catch (error) { return this.api.auth.error(error); }
   }
-  recordPayment(input: { studentId: string; term: string; amount: number; method: string; reference: string; date: string }): string | null {
-    const blocked = this.blocked(); if (blocked) return blocked;
-    const account = this.accounts().find(a => a.id === input.studentId);
-    if (!account || !TERMS.includes(input.term) || !METHODS.includes(input.method) || !this.money(input.amount) || !this.validDate(input.date) || input.date > new Date().toISOString().slice(0, 10) || input.date < this.year()!.startDate || input.date > this.year()!.endDate) return 'Choose a student, term, payment method, positive whole TZS amount, and a non-future date within this academic year.';
-    if (input.amount > this.totals(input.studentId, input.term).balance) return 'Payment exceeds the outstanding balance for this term.';
-    const reference = input.reference.trim();
-    if (input.method !== 'Cash' && !reference) return 'Enter the bank or mobile-money transaction reference.';
-    if (reference && this.state().payments.some(p => p.reference.toLowerCase() === reference.toLowerCase() && !p.voidAt)) return 'That transaction reference is already recorded.';
-    const payment: Payment = { ...input, reference, id: this.id(), yearId: this.year()!.id, student: account.name, number: account.number, className: this.className(account.classId), receipt: `SA-${this.year()!.label}-${String(this.state().payments.length + 1).padStart(6, '0')}`, at: new Date().toISOString() };
-    this.state.update(s => ({ ...s, payments: [...s.payments, payment] })); return null;
+
+  async recordPayment(input: { chargeId?: string; studentId: string; term: string; amount: number; method: string; reference: string; date: string; reason?: string }, originalId?: string): Promise<string | null> {
+    const context = this.context();
+    const yearId = this.year()?.id;
+    if (!yearId) return 'Select an academic year before recording a payment.';
+    try {
+      this.lastPaymentId.set('');
+      const saved = await this.api.write(originalId ? `finance/payments/${originalId}/correct` : 'finance/payments', { ...input, yearId });
+      this.lastPaymentId.set(saved.id);
+      if (context === this.context()) await this.loadYear(yearId, true);
+      return null;
+    } catch (error) { return this.api.auth.error(error); }
   }
-  voidPayment(id: string, reason: string): string | null {
-    const blocked = this.blocked(); if (blocked) return blocked;
-    if (!this.payments().some(p => p.id === id && !p.voidAt) || reason.trim().length < 10) return 'Choose an active receipt and provide a correction reason of at least 10 characters.';
-    this.state.update(s => ({ ...s, payments: s.payments.map(p => p.id === id ? { ...p, voidReason: reason.trim(), voidAt: new Date().toISOString() } : p) })); return null;
+
+  async voidPayment(id: string, reason: string): Promise<string | null> {
+    const context = this.context();
+    const yearId = this.year()?.id;
+    if (!yearId) return 'Select an academic year before voiding a payment.';
+    try {
+      await this.api.write(`finance/payments/${id}/void`, { reason });
+      if (context === this.context()) await this.loadYear(yearId, true);
+      return null;
+    } catch (error) { return this.api.auth.error(error); }
   }
-  adjust(input: { studentId: string; term: string; amount: number; kind: string; reason: string }): string | null {
-    const blocked = this.blocked(); if (blocked) return blocked;
-    if (!this.accounts().some(a => a.id === input.studentId) || !TERMS.includes(input.term) || !this.money(input.amount) || !['Discount', 'Scholarship', 'Credit correction', 'Debit correction'].includes(input.kind) || input.reason.trim().length < 10) return 'Choose a student, term, adjustment type, positive whole TZS amount, and a reason of at least 10 characters.';
-    if (!this.charges().some(c => c.studentId === input.studentId && c.term === input.term)) return 'Apply a fee before adjusting this term account.';
-    const amount = input.kind === 'Debit correction' ? input.amount : -input.amount;
-    if (this.totals(input.studentId, input.term).balance + amount < 0) return 'This credit exceeds the remaining term balance.';
-    this.state.update(s => ({ ...s, adjustments: [...s.adjustments, { ...input, amount, reason: input.reason.trim(), id: this.id(), yearId: this.year()!.id, at: new Date().toISOString() }] })); return null;
+
+  async adjust(input: { studentId: string; term: string; amount: number; kind: string; reason: string }): Promise<string | null> {
+    const context = this.context();
+    const yearId = this.year()?.id;
+    if (!yearId) return 'Select an academic year before recording an adjustment.';
+    try {
+      await this.api.write('finance/adjustments', { ...input, yearId });
+      if (context === this.context()) await this.loadYear(yearId, true);
+      return null;
+    } catch (error) { return this.api.auth.error(error); }
   }
 }

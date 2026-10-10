@@ -2,19 +2,19 @@
   <button class="sa-btn--primary" [disabled]="store.readOnly()" (click)="openCreateDialog()">Create Assignment</button>
 </app-head-page-header>
 
-<app-table-toolbar [showSearch]="true" searchPlaceholder="Search assignments?" [searchValue]="searchQuery()" (searchChange)="onSearchChange($event)">
+<app-table-toolbar [showSearch]="true" searchPlaceholder="Search assignments" [searchValue]="searchQuery()" (searchChange)="onSearchChange($event)">
   <div filters style="display: flex; gap: 8px; flex-wrap: wrap;">
-    <select class="sa-select" aria-label="Filter by teacher" [ngModel]="teacherFilter()" (ngModelChange)="teacherFilter.set($event)">
+    <select class="sa-select" aria-label="Filter by teacher" [ngModel]="teacherFilter()" (ngModelChange)="teacherFilter.set($event); page.set(1)">
       <option value="">All Teachers</option>
       <option *ngFor="let t of teacherOptions()" [value]="t">{{ t }}</option>
     </select>
     
-    <select class="sa-select" aria-label="Filter by class" [ngModel]="classFilter()" (ngModelChange)="classFilter.set($event)">
+    <select class="sa-select" aria-label="Filter by class" [ngModel]="classFilter()" (ngModelChange)="classFilter.set($event); page.set(1)">
       <option value="">All Classes</option>
       <option *ngFor="let c of classOptions()" [value]="c">{{ c }}</option>
     </select>
     
-    <select class="sa-select" aria-label="Filter by subject" [ngModel]="subjectFilter()" (ngModelChange)="subjectFilter.set($event)">
+    <select class="sa-select" aria-label="Filter by subject" [ngModel]="subjectFilter()" (ngModelChange)="subjectFilter.set($event); page.set(1)">
       <option value="">All Subjects</option>
       <option *ngFor="let s of subjectOptions()" [value]="s">{{ s }}</option>
     </select>
@@ -47,7 +47,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let a of filteredAssignments()">
+          <tr *ngFor="let a of pageAssignments()">
             <td><strong>{{ a.teacherName }}</strong></td>
             <td>{{ a.classStream || a.className }}</td>
             <td>{{ a.subjectName }}</td>
@@ -65,7 +65,7 @@
 
     <!-- Mobile view -->
     <div class="mobile-only">
-      <app-record-card *ngFor="let a of filteredAssignments()">
+      <app-record-card *ngFor="let a of pageAssignments()">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
           <h4 style="margin: 0;">{{ a.teacherName }}</h4>
           <app-status-badge [variant]="a.status === 'active' ? 'active' : 'inactive'" [label]="a.status"></app-status-badge>
@@ -87,13 +87,14 @@
         </div>
       </app-record-card>
     </div>
+    <div class="pagination-bar" role="navigation" aria-label="Teaching assignments pagination"><span>Page {{ page() }} of {{ pages() }} · {{ filteredAssignments().length }} assignments</span><div class="pagination-actions"><button class="action-btn" [disabled]="page() <= 1" (click)="page.set(page() - 1)">Previous</button><button class="action-btn" [disabled]="page() >= pages()" (click)="page.set(page() + 1)">Next</button></div></div>
   </div>
 </ng-template>
 
-<p class="portal-notice">Choose an active teacher and a subject offered by the selected class. Deactivate assignments to preserve their history.</p>
+
 <!-- Create/Edit Dialog Overlay -->
-<div class="dialog-overlay" *ngIf="showDialog()" appDialogFocus role="dialog" aria-modal="true" aria-label="Teaching assignment" (keydown.escape)="closeDialog()">
-  <div class="dialog">
+<dialog class="dialog-overlay" *ngIf="showDialog()" appDialogFocus role="dialog" aria-modal="true" aria-label="Teaching assignment" (keydown.escape)="closeDialog()" (click)="closeDialog()">
+  <div class="dialog" (click)="$event.stopPropagation()">
     <div class="dialog__header">
       <h3>{{ editingAssignment() ? 'Edit' : 'Create' }} Assignment</h3>
       <button aria-label="Close assignment dialog" class="dialog__close" (click)="closeDialog()">
@@ -152,4 +153,4 @@
       <button class="sa-btn--primary" (click)="saveAssignment()">Save</button>
     </div>
   </div>
-</div>
+</dialog>

@@ -6,8 +6,15 @@ export const HEADMASTER_ROUTES: Routes = [
     path: '',
     component: HeadmasterLayout,
     children: [
+      { path: 'notifications', loadComponent: () => import('../../shared/notifications/notifications.page').then(m => m.NotificationsPage), data: { title: 'Notifications', breadcrumb: 'Headmaster / Notifications', audience: 'head' } },
+      { path: 'academic-results/class/:classId', loadComponent: () => import('../academic/class-results.page').then(m => m.ClassResultsPage), data: { title: 'Class Results', breadcrumb: 'Headmaster / Academic Results / Class Results', audience: 'head' } },
+      { path: 'import', loadComponent: () => import('../registrar/student-import.page').then(m => m.StudentImportPage), data: { title: 'Bulk Import' } },
+      { path: 'subjects', loadComponent: () => import('../registrar/subject-setup.page').then(m => m.SubjectSetupPage), data: { title: 'Subject Setup' } },
+      { path: 'roster-issues', loadComponent: () => import('../registrar/roster-issues.page').then(m => m.RosterIssuesPage), data: { title: 'Roster Issues' } },
+      ...['class-lists','admissions','enrolment','transfers','progression'].map(section => ({ path: section, loadComponent: () => import('../registrar/registrar.page').then(m => m.RegistrarPage), data: { title: ({'class-lists':'Class Lists',admissions:'Admissions',enrolment:'Enrollment',transfers:'Student Movements',progression:'Year Progression'} as Record<string,string>)[section], section } })),
  {path:'students',loadComponent:()=>import('../registrar/registrar.page').then(m=>m.RegistrarPage),data:{title:'Students',breadcrumb:'Headmaster / Students',section:'students'}},
       { path: 'school-setup', loadComponent: () => import('./school-setup.page').then(m => m.SchoolSetupPage), data: { title: 'School Setup', breadcrumb: 'Headmaster / Settings / School Setup' } },
+      { path: 'finance', loadComponent: () => import('./head-oversight.page').then(m => m.HeadOversightPage), data: { title: 'Finance Overview', breadcrumb: 'Headmaster / Finance', section: 'finance' } },
       {
         path: 'settings',
         loadComponent: () => import('./pages/settings/settings.page').then(m => m.SettingsPage),
@@ -56,13 +63,13 @@ export const HEADMASTER_ROUTES: Routes = [
       },
       {
         path: 'reports/send',
-        loadComponent: () => import('./pages/head-reports/head-reports.page').then(m => m.HeadReportsPage),
-        data: { title: 'Send Reports', breadcrumb: 'Headmaster / Reports / Send', mode: 'send' },
+        redirectTo: 'reports',
+        pathMatch: 'full',
       },
       {
         path: 'reports/delivery',
-        loadComponent: () => import('./pages/head-reports/head-reports.page').then(m => m.HeadReportsPage),
-        data: { title: 'Parent Delivery Center', breadcrumb: 'Headmaster / Reports / Delivery', mode: 'delivery' },
+        redirectTo: 'reports',
+        pathMatch: 'full',
       },
       {
         path: 'reports',

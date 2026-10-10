@@ -100,7 +100,7 @@ test(
     assert.equal(migrate.status, 0, "Isolated test migrations must apply");
     // Explicitly restricted to the disposable database named above.
     await db.$executeRawUnsafe(
-      'TRUNCATE TABLE "session", "Outbox", "Idempotency", "RateBucket", "AuditEvent", "Invitation", "PasswordReset", "TeachingAssignment", "Enrollment", "Student", "Classroom", "AcademicYear", "Membership", "School", "User" CASCADE',
+      'TRUNCATE TABLE "RegistryEvent", "Admission", "session", "Outbox", "Idempotency", "RateBucket", "AuditEvent", "Invitation", "PasswordReset", "TeachingAssignment", "Enrollment", "Student", "Classroom", "AcademicYear", "Membership", "School", "User" CASCADE',
     );
     api = spawn(
       process.execPath,
@@ -270,7 +270,7 @@ test(
 
           const listed = await c.call("GET", "platform/invitations");
           assert.equal(listed.status, 200);
-          assert.ok(listed.body.some((item) => item.id === invitation.id));
+          assert.ok(listed.body.items.some((item) => item.id === invitation.id));
           const preview = await client().call("POST", "invitations/preview", {
             token: await invitationToken(invitation.id),
           });
@@ -502,7 +502,7 @@ test(
           );
           assert.equal(
             (await head.call("GET", `schools/${schoolB.id}/workspace`)).status,
-            403,
+            401,
           );
           assert.equal(
             (await head.login("head@example.test", strongPassword, "REGISTRAR"))
@@ -582,6 +582,11 @@ test(
               .status,
             403,
           );
+          assert.equal(
+            (await head.login("head@example.test", strongPassword, "HEADMASTER"))
+              .status,
+            201,
+          );
         },
       );
       await t.test(
@@ -603,23 +608,69 @@ test(
         },
       );
       await t.test(
-        "Headmaster cannot invite another Headmaster or platform admin",
+        "Headmasters can invite multiple Headmasters but cannot invite platform admins",
         async () => {
+          const first = await head.call(
+            "POST",
+            `schools/${schoolA.id}/invitations`,
+            {
+              name: "Additional Headmaster",
+              email: "additional-head@example.test",
+              role: "HEADMASTER",
+            },
+            idempotent(),
+          );
+          assert.equal(first.status, 201, JSON.stringify(first.body));
+          const second = await head.call(
+            "POST",
+            `schools/${schoolA.id}/invitations`,
+            {
+              name: "Another Headmaster",
+              email: "another-head@example.test",
+              role: "HEADMASTER",
+            },
+            idempotent(),
+          );
+          assert.equal(second.status, 201, JSON.stringify(second.body));
           assert.equal(
             (
               await head.call(
                 "POST",
-                `schools/${schoolA.id}/invitations`,
-                {
-                  name: "Elevated",
-                  email: "elevated@example.test",
-                  role: "HEADMASTER",
-                },
-                idempotent(),
+                `schools/${schoolA.id}/invitations/${second.body.id}/resend`,
+                {},
               )
             ).status,
-            403,
+            201,
           );
+          assert.equal(
+            (
+              await head.call(
+                "POST",
+                `schools/${schoolA.id}/invitations/${second.body.id}/revoke`,
+                {},
+              )
+            ).status,
+            201,
+          );
+          for (const role of ["ACADEMIC", "BURSAR"]) {
+            for (const suffix of ["one", "two"]) {
+              const additional = await head.call(
+                "POST",
+                `schools/${schoolA.id}/invitations`,
+                {
+                  name: `${role} ${suffix}`,
+                  email: `${role.toLowerCase()}-${suffix}@example.test`,
+                  role,
+                },
+                idempotent(),
+              );
+              assert.equal(
+                additional.status,
+                201,
+                `${role} ${suffix}: ${JSON.stringify(additional.body)}`,
+              );
+            }
+          }
           assert.equal(
             (
               await head.call(
@@ -695,11 +746,17 @@ test(
           const y = await head.call(
             "POST",
             `schools/${schoolA.id}/years`,
-            { name: "2026", startsAt: "2026-01-01", endsAt: "2026-12-31" },
+            { name: "2026", startsAt: "2026-01-01", endsAt: "2026-12-31", terms: [
+              { key: "Term 1", name: "Opening term", startsAt: "2026-01-01", endsAt: "2026-04-30" },
+              { key: "Term 2", name: "Middle term", startsAt: "2026-05-01", endsAt: "2026-08-31" },
+              { key: "Term 3", name: "Final term", startsAt: "2026-09-01", endsAt: "2026-12-31" },
+            ] },
             idempotent(),
           );
           assert.equal(y.status, 201);
           yearA = y.body;
+          const visibleYears = (await head.call("GET", `schools/${schoolA.id}/workspace`)).body.years;
+          assert.equal(visibleYears.find(year => year.id === yearA.id).terms[0].name, "Opening term");
           const cls = await head.call(
             "POST",
             `schools/${schoolA.id}/classes`,
@@ -769,6 +826,14 @@ test(
           });
         },
       );
+      await t.test("Academic Master can edit configured terms after their dates pass", async () => {
+        const existing = (await academicClient.call("GET", `schools/${schoolA.id}/workspace`)).body.years.find(year => year.id === yearA.id);
+        const terms = existing.terms.map(term => term.key === "Term 1" ? { ...term, name: "First learning term" } : term);
+        const changed = await academicClient.call("PATCH", `schools/${schoolA.id}/years/${yearA.id}`, { name: existing.name, startsAt: "2026-01-01", endsAt: "2026-12-31", terms });
+        assert.equal(changed.status, 200, JSON.stringify(changed.body));
+        assert.equal((await head.call("GET", `schools/${schoolA.id}/workspace`)).body.years.find(year => year.id === yearA.id).terms[0].name, "First learning term");
+        assert.equal((await academicClient.call("PATCH", `schools/${schoolA.id}/years/${yearA.id}`, { name: existing.name, startsAt: "2026-01-01", endsAt: "2026-12-31", terms: [{ ...terms[0], endsAt: "2026-06-01" }, ...terms.slice(1)] })).status, 400, "overlapping terms are rejected");
+      });
       await t.test("Academic Master can invite teachers only", async () => {
         const invitation = await academicClient.call(
           "POST",
@@ -805,6 +870,36 @@ test(
             )
           ).status,
           403,
+        );
+        const selfInvitation = await academicClient.call(
+          "POST",
+          `schools/${schoolA.id}/invitations`,
+          {
+            name: "Academic User",
+            email: "academic@example.test",
+            role: "TEACHER",
+          },
+          idempotent(),
+        );
+        assert.equal(selfInvitation.status, 201, JSON.stringify(selfInvitation.body));
+        assert.equal(
+          (
+            await academicClient.call("POST", "invitations/accept", {
+              token: await invitationToken(selfInvitation.body.id),
+            })
+          ).status,
+          201,
+        );
+        const teacherRole = client();
+        assert.equal(
+          (
+            await teacherRole.login(
+              "academic@example.test",
+              strongPassword,
+              "TEACHER",
+            )
+          ).status,
+          201,
         );
         const recipient = client();
         assert.equal(
@@ -1038,6 +1133,7 @@ test(
           assert.equal((await teacher.call("GET", "auth/me")).status, 401);
         },
       );
+      await require('./platform-operations.cjs')({ t, db, client, admin: c });
       await t.test(
         "password recovery works for every supported role",
         async () => {
@@ -1142,6 +1238,108 @@ test(
           assert.equal((await registrar.call("GET", "auth/me")).status, 401);
         },
       );
+      await t.test('student management persists records and enforces role, school, year and concurrency boundaries', async () => {
+        const school = await db.school.create({ data: { name: 'Registry integration school', code: 'REG-TEST', region: 'Test' } });
+        const other = await db.school.create({ data: { name: 'Isolated registry school', code: 'REG-OTHER', region: 'Test' } });
+        const year = await db.academicYear.create({ data: { schoolId: school.id, name: '2026', startsAt: new Date('2026-01-01'), endsAt: new Date('2026-12-31') } });
+        const next = await db.academicYear.create({ data: { schoolId: school.id, name: '2027', startsAt: new Date('2027-01-01'), endsAt: new Date('2027-12-31') } });
+        const foreignYear = await db.academicYear.create({ data: { schoolId: other.id, name: '2026', startsAt: new Date('2026-01-01'), endsAt: new Date('2026-12-31') } });
+        const makeClass = (name, yearId = year.id, schoolId = school.id) => db.classroom.create({ data: { name, yearId, schoolId } });
+        const a = await makeClass('Class A'), b = await makeClass('Class B'), future = await makeClass('Next class', next.id), foreign = await makeClass('Foreign class', foreignYear.id, other.id);
+        const registrarUser = await fixture('registry@example.test', 'REGISTRAR', school.id);
+        const academicUser = await fixture('registry-academic@example.test', 'ACADEMIC', school.id);
+        const teacherUser = await fixture('registry-teacher@example.test', 'TEACHER', school.id);
+        await fixture('registry-head@example.test', 'HEADMASTER', school.id);
+        const reg = client(), acad = client(), teach = client(), hm = client();
+        for (const [agent, email, role] of [[reg,registrarUser.email,'REGISTRAR'],[acad,academicUser.email,'ACADEMIC'],[teach,teacherUser.email,'TEACHER'],[hm,'registry-head@example.test','HEADMASTER']]) assert.equal((await agent.login(email, strongPassword, role)).status, 201);
+        const membership = await db.membership.findFirstOrThrow({ where: { userId: teacherUser.id, schoolId: school.id } });
+        await db.teachingAssignment.create({ data: { schoolId: school.id, classroomId: a.id, membershipId: membership.id } });
+        const route = `schools/${school.id}/registry/`;
+        const post = (path, body, agent = reg, requestKey = randomUUID()) => agent.call('POST', route + path, body, { 'Idempotency-Key': requestKey });
+        const get = (path, agent = reg) => agent.call('GET', route + path);
+        const input = { name: 'Integration Student', admissionNumber: 'REG-001', classroomId: a.id, gender: 'F', dateOfBirth: '2010-05-12', address: 'Private test address' };
+        const requestKey = randomUUID();
+        const created = await post('students', input, reg, requestKey);
+        assert.equal(created.status, 201, JSON.stringify(created.body));
+        const studentId = created.body.id;
+        assert.equal((await post('students', input, reg, requestKey)).body.id, studentId, 'retry does not create another student');
+        assert.equal((await post('students', input)).status, 409, 'student number is unique');
+        assert.equal((await post('students', { ...input, admissionNumber: 'BAD-DATE', dateOfBirth: '2026-02-30' })).status, 400);
+        assert.equal((await post('students', { ...input, admissionNumber: 'FUTURE-DATE', dateOfBirth: '2099-01-01' })).status, 400);
+        assert.equal((await post('students', { ...input, admissionNumber: 'FOREIGN', classroomId: foreign.id })).status, 400);
+        assert.equal((await post('students', { ...input, admissionNumber: 'DENIED' }, acad)).status, 403);
+        assert.equal((await post('students', { ...input, admissionNumber: 'DENIED' }, teach)).status, 403);
+        assert.equal((await reg.call('GET', `schools/${other.id}/registry/students?yearId=${foreignYear.id}`)).status, 403);
+        assert.equal((await get(`students?yearId=${year.id}&q=REG-001`, acad)).body.total, 1);
+        let detail = await get('students/' + studentId, teach);
+        assert.equal(detail.status, 200); assert.equal('address' in detail.body, false); assert.equal('dateOfBirth' in detail.body, false); assert.equal(detail.body.events.length, 0);
+        assert.equal((await get('admissions?yearId=' + year.id, acad)).status, 403);
+        const editBody = { ...input, name: 'Updated Integration Student', version: 1, yearId: year.id }; delete editBody.classroomId;
+        const edit = await reg.call('PATCH', route + 'students/' + studentId, editBody, { 'Idempotency-Key': randomUUID() });
+        assert.equal(edit.status, 200, JSON.stringify(edit.body));
+        assert.equal((await reg.call('PATCH', route + 'students/' + studentId, editBody, { 'Idempotency-Key': randomUUID() })).status, 409, 'stale profile updates rejected');
+        detail = await get('students/' + studentId); assert.equal(detail.body.name, editBody.name); assert.equal(detail.body.version, 2);
+        let e = detail.body.enrollments[0];
+        assert.equal((await post('movements', { enrollmentId: e.id, version: e.version, action: 'class_change', classroomId: future.id, reason: 'Invalid year change' })).status, 400);
+        assert.equal((await post('movements', { enrollmentId: e.id, version: e.version, action: 'class_change', classroomId: b.id, reason: 'Class allocation updated' })).status, 201);
+        assert.equal((await post('movements', { enrollmentId: e.id, version: e.version, action: 'withdrawn', reason: 'Outdated request' })).status, 409);
+        assert.equal((await get(`students?yearId=${year.id}`, teach)).body.total, 0, 'teacher loses access after transfer');
+        assert.equal((await get('students/' + studentId, teach)).status, 400);
+        let snapshot = await hm.call('GET', `schools/${school.id}/workspace`);
+        assert.equal(snapshot.body.classes.find(c => c.id === a.id)._count.enrollments, 0);
+        assert.equal(snapshot.body.classes.find(c => c.id === b.id)._count.enrollments, 1);
+        e = (await get('students/' + studentId)).body.enrollments[0];
+        assert.equal((await post('movements', { enrollmentId: e.id, version: e.version, action: 'withdrawn', reason: 'Family requested withdrawal' })).status, 201);
+        assert.equal((await get('summary?yearId=' + year.id)).body.active, 0);
+        e = (await get('students/' + studentId)).body.enrollments[0];
+        assert.equal(e.status, 'withdrawn');
+        assert.equal((await post('movements', { enrollmentId: e.id, version: e.version, action: 'reactivate', reason: 'Student returned to school' })).status, 201);
+        assert.equal((await post('enrollments', { studentId, classroomId: a.id })).status, 409);
+        const application = await post('admissions', { name: 'Admission Test Student', gender: 'M', dateOfBirth: '2011-06-12', requestedClassId: a.id });
+        assert.equal(application.status, 201, JSON.stringify(application.body));
+        assert.equal((await post('admissions', { name: 'Admission Test Student', gender: 'M', dateOfBirth: '2011-06-12', requestedClassId: a.id })).status, 409);
+        assert.equal((await get('summary?yearId=' + year.id)).body.pending, 1);
+        const decision = await post(`admissions/${application.body.id}/decision`, { decision: 'accepted', admissionNumber: 'REG-002', classroomId: a.id });
+        assert.equal(decision.status, 201, JSON.stringify(decision.body));
+        assert.equal((await post(`admissions/${application.body.id}/decision`, { decision: 'rejected', note: 'Late duplicate decision' })).status, 409);
+        const firstWorkspacePage = await hm.call('GET', `schools/${school.id}/workspace?page=1&pageSize=1`);
+        const secondWorkspacePage = await hm.call('GET', `schools/${school.id}/workspace?page=2&pageSize=1`);
+        assert.equal(firstWorkspacePage.body.studentCount, 2);
+        assert.equal(firstWorkspacePage.body.students.length, 1);
+        assert.equal(secondWorkspacePage.body.students.length, 1);
+        assert.notEqual(firstWorkspacePage.body.students[0].id, secondWorkspacePage.body.students[0].id);
+        assert.equal((await hm.call('GET', `schools/${school.id}/workspace`)).body.students.length, 2, 'workspace requests without pagination retain the full roster');
+        assert.equal((await get(`students?yearId=${year.id}`, teach)).body.total, 1);
+        assert.equal((await get('summary?yearId=' + year.id)).body.pending, 0);
+        const reject = await post('admissions', { name: 'Rejected Application', requestedClassId: a.id });
+        assert.equal((await post(`admissions/${reject.body.id}/decision`, { decision: 'rejected', note: 'Not eligible for requested year' })).status, 201);
+        const admissions = await get('admissions?yearId=' + year.id + '&status=rejected'); assert.equal(admissions.body.total, 1);
+        assert.equal((await post('progression', { studentIds: [studentId, decision.body.studentId], sourceYearId: year.id, classroomId: future.id })).status, 201);
+        assert.equal((await get('students/' + studentId)).body.enrollments.length, 2, 'source year retained');
+        assert.equal((await post('progression', { studentIds: [studentId], sourceYearId: year.id, classroomId: future.id })).status, 409);
+        const unplaced = await db.student.create({ data: { name: 'Unplaced test student', admissionNumber: 'REG-U', schoolId: school.id } });
+        assert.equal((await get(`students?yearId=${year.id}&status=unassigned`)).body.items.some(s => s.id === unplaced.id), true);
+        const racing = await Promise.all([post('enrollments', { studentId: unplaced.id, classroomId: a.id }), post('enrollments', { studentId: unplaced.id, classroomId: b.id })]);
+        assert.deepEqual(racing.map(r => r.status).sort(), [201,409], 'concurrent enrollment cannot place a student in two classes');
+        await db.student.createMany({ data: Array.from({length:105}, (_,i) => ({ schoolId: school.id, name: 'Pagination student ' + String(i).padStart(3,'0'), admissionNumber: 'PAGE-' + i })) });
+        const first = await get(`students?yearId=${year.id}&q=Pagination&pageSize=100`), second = await get(`students?yearId=${year.id}&q=Pagination&pageSize=100&page=2`);
+        assert.equal(first.body.total, 105); assert.equal(first.body.items.length, 100); assert.equal(second.body.items.length, 5);
+        assert.equal(new Set([...first.body.items,...second.body.items].map(s => s.id)).size, 105);
+        const events = await get(`events?yearId=${year.id}&kind=movement`); assert.equal(events.body.total, 3); assert.ok(events.body.items.every(e => e.kind === 'movement'));
+        await db.academicYear.update({ where: { id: year.id }, data: { closed: true } });
+        assert.equal((await post('students', { ...input, admissionNumber: 'CLOSED' })).status, 201);
+        assert.equal((await post('admissions', { name: 'Closed year applicant', requestedClassId: a.id })).status, 201);
+        e = (await get('students/' + studentId)).body.enrollments.find(e => e.classroom.yearId === year.id);
+        assert.equal((await post('movements', { enrollmentId: e.id, version: e.version, action: 'withdrawn', reason: 'Historical record corrected' })).status, 201);
+        assert.equal((await get('students/' + studentId)).body.name, editBody.name, 'records survive subsequent requests');
+      });
+
+      await require('./registrar-workflows.cjs')({ t, db, client, fixture });
+      await require('./student-subjects.cjs')({ t, db, client, fixture });
+      await require('./assessment-allocation.cjs')({ t, db, client, fixture });
+      await require('./academic-workflows.cjs')({ t, db, client, fixture });
+      await require('./finance-workflows.cjs')({ t, db, client, fixture });
+
       await t.test("expired invitation is rejected", async () => {
         const i = await db.invitation.findFirstOrThrow({
           where: { email: "head-b@example.test" },

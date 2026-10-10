@@ -1,8 +1,7 @@
 import { inject } from '@angular/core';
 import { SchoolApiService } from './school-api.service';
 import { Injectable, computed, effect, signal } from '@angular/core';
-import { MOCK_ACADEMIC_YEARS } from '../../features/headmaster/head-mock-data';
-import { AcademicYear } from '../../features/headmaster/head.models';
+import { AcademicYear, AcademicTerm } from '../../features/headmaster/head.models';
 
 export type YearViewer = 'head' | 'teacher' | 'academic' | 'register' | 'bursar';
 
@@ -19,7 +18,9 @@ export class AcademicYearService {
   readonly academicYear = computed(() => this.selected('academic'));
   readonly teacherYear = computed(() => this.selected('teacher'));
 
-  constructor() { effect(() => { this.years.set((this.api.data()?.years || []).map((y:any)=>({id:y.id,label:y.name,startDate:y.startsAt.slice(0,10),endDate:y.endsAt.slice(0,10),status:y.closed?'closed':'active'}))); }); }
+  constructor() { effect(() => { this.years.set((this.api.data()?.years || []).map((y:any)=>({id:y.id,label:y.name,startDate:y.startsAt.slice(0,10),endDate:y.endsAt.slice(0,10),status:y.closed?'closed':'active',terms:y.terms || []}))); }); }
+  terms(viewer: YearViewer): AcademicTerm[] { return this.selected(viewer)?.terms ?? []; }
+  termName(viewer: YearViewer, key: string): string { return this.terms(viewer).find(term => term.key === key)?.name ?? key; }
   available(viewer: YearViewer): AcademicYear[] {
     return this.years().filter(y => viewer !== 'teacher' || y.status !== 'draft');
   }
@@ -32,6 +33,6 @@ export class AcademicYearService {
   }
   readOnly(viewer: YearViewer): boolean {
     const year = this.selected(viewer);
-    return !year || year.status === 'closed';
+    return !year;
   }
 }

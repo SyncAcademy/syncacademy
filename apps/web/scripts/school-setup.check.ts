@@ -1,31 +1,41 @@
-﻿import 'zone.js/node';
+import 'zone.js/node';
 import '@angular/compiler';
 import assert from 'node:assert/strict';
+import { RendererFactory2, signal } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { TestBed } from '@angular/core/testing';
 import { BrowserDynamicTestingModule, platformBrowserDynamicTesting } from '@angular/platform-browser-dynamic/testing';
 import { SchoolSetupStore } from '../src/app/features/headmaster/school-setup.store';
-const storage = new Map<string, string>();
-Object.defineProperty(globalThis, 'sessionStorage', { value: { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => storage.set(k, v) }, configurable: true });
-TestBed.initTestEnvironment(BrowserDynamicTestingModule, platformBrowserDynamicTesting());
-TestBed.configureTestingModule({ providers: [{ provide: DOCUMENT, useValue: { body: null, querySelectorAll: () => [] } }] });
-const store = TestBed.inject(SchoolSetupStore);
-assert.equal(store.steps().length, 8);
-assert.equal(store.steps().find(s => s.id === 'school')?.done, false);
-assert.equal(store.steps().find(s => s.id === 'fees')?.done, false, 'Sample students cannot imply fee setup completion');
-assert.equal(store.steps().find(s => s.id === 'grading')?.done, false, 'Default grading still needs review');
-const profile = { name: 'Example School', code: 'EX-01', type: 'Private', region: 'Dar es Salaam', address: 'School Road', phone: '+255712345678', email: 'office@example.test' };
-assert.ok(store.save({ ...profile, email: 'invalid' }));
-assert.equal(store.save(profile), null);
-assert.equal(store.steps().find(s => s.id === 'school')?.done, true);
-store.years.select('head', 'ay-4');
-assert.equal(store.steps().find(s => s.id === 'classes')?.done, false);
-assert.equal(store.steps().find(s => s.id === 'students')?.done, false);
-assert.equal(store.steps().find(s => s.id === 'assignments')?.done, false);
-assert.equal(store.steps().find(s => s.id === 'school')?.done, true, 'School information is not year-specific');
-assert.equal(store.years.academicYear()?.id, 'ay-1', 'Reading setup does not change another role’s year');
-TestBed.flushEffects();
-const restored = TestBed.runInInjectionContext(() => new SchoolSetupStore());
-assert.deepEqual(restored.profile(), profile);
-TestBed.flushEffects(); TestBed.resetTestingModule();
-console.log('School setup checks passed: honest completion states, profile validation, year scoping, independent role selections and session persistence.');
+import { SchoolApiService } from '../src/app/core/services/school-api.service';
+import { AcademicYearService } from '../src/app/core/services/academic-year.service';
+import { AcademicDataService } from '../src/app/core/services/academic-data.service';
+
+const year=signal<{id:string;label:string}|undefined>(undefined);
+const workspace=signal<any>(null);
+const academic=signal<any>({policy:{revision:1}});
+TestBed.initTestEnvironment(BrowserDynamicTestingModule,platformBrowserDynamicTesting());
+TestBed.configureTestingModule({providers:[
+  {provide:DOCUMENT,useValue:{body:null,querySelectorAll:()=>[]}},
+  {provide:RendererFactory2,useValue:{begin(){},end(){},whenRenderingDone:()=>Promise.resolve()}},
+  {provide:SchoolApiService,useValue:{data:workspace}},
+  {provide:AcademicYearService,useValue:{headYear:year}},
+  {provide:AcademicDataService,useValue:{data:academic}},
+]});
+const store=TestBed.inject(SchoolSetupStore);
+assert.equal(store.steps().length,7);
+assert.equal(store.complete(),0,'loading must not claim school setup is complete');
+year.set({id:'year-1',label:'2026'});
+workspace.set({school:{name:'Example School',code:'EX-01',region:'Kigoma'},classes:[{id:'class-1',yearId:'year-1',_count:{enrollments:1}}],members:[{role:'TEACHER',active:true,user:{enabled:true}}],classSubjects:[{classroomId:'class-1',subjectId:'math'}],assignments:[{classroomId:'class-1',subjectId:'math',membership:{active:true,user:{enabled:true}}}]});
+assert.equal(store.profile()?.name,'Example School');
+assert.equal(store.steps().find(s=>s.id==='classes')?.done,true);
+assert.equal(store.steps().find(s=>s.id==='staff')?.done,true);
+assert.equal(store.steps().find(s=>s.id==='assignments')?.done,true);
+assert.equal(store.steps().find(s=>s.id==='students')?.done,true);
+assert.equal(store.steps().find(s=>s.id==='grading')?.done,false,'default grading requires review');
+academic.set({policy:{revision:2}});
+assert.equal(store.steps().find(s=>s.id==='grading')?.done,true);
+year.set({id:'year-2',label:'2027'});
+assert.equal(store.steps().find(s=>s.id==='classes')?.done,false,'class setup is scoped to selected year');
+assert.equal(store.steps().find(s=>s.id==='school')?.done,true,'school profile survives year switch');
+TestBed.resetTestingModule();
+console.log('School setup checks passed: live completion, grading revision and year scoping.');

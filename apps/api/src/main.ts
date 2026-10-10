@@ -35,6 +35,7 @@ async function main() {
     }
     next();
   });
+  app.use('/api/v1/schools/:schoolId/registry/imports/preview', express.json({ limit: '8mb' }));
   app.use(express.json({ limit: '32kb' }));
   const pool = new Pool({ connectionString: config.DATABASE_URL, max: 5 });
   pool.on('error', () => console.error('Session database connection unavailable'));

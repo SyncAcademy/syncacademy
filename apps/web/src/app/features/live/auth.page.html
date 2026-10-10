@@ -1,11 +1,11 @@
-<app-auth-layout><section class="auth-card">
+<app-auth-layout><section class="auth-card" [attr.aria-busy]="busy">
 <a class="brand" routerLink="/">Sync<span>Academy</span></a>
 @if (mode === 'login') {
   <h1>Welcome back</h1><p class="muted">Sign in with your school or platform account.</p>
-  <form #f="ngForm" (ngSubmit)="login()"><label>Email<input name="email" type="email" email required autocomplete="username" [(ngModel)]="email" /></label><label>Password<input name="password" type="password" required maxlength="128" autocomplete="current-password" [(ngModel)]="password" /></label><label class="check"><input name="rememberMe" type="checkbox" [(ngModel)]="rememberMe" />Keep me signed in on this device</label><button class="primary" [disabled]="f.invalid || busy">{{ busy ? 'Signing in...' : 'Sign in' }}</button></form><a routerLink="/auth/recover">Forgot password?</a><p class="muted">Accounts are invitation-only. Ask your school administrator for an invitation.</p>
+  <form #f="ngForm" (ngSubmit)="login()"><label>Email<input name="email" type="email" email required autocomplete="username" [(ngModel)]="email" /></label><label>Password<input name="password" type="password" required maxlength="128" autocomplete="current-password" [(ngModel)]="password" /></label><label class="check"><input name="rememberMe" type="checkbox" [(ngModel)]="rememberMe" />Keep me signed in on this device</label><button class="primary" [disabled]="f.invalid || busy">{{ busy ? 'Signing in...' : 'Sign in' }}</button></form><a routerLink="/auth/recover">Reset password</a><p class="muted">Accounts are invitation-only. Ask your school administrator for an invitation.</p>
 }
 @if (mode === 'recover') { <h1>Reset your password</h1><p class="muted">Enter your account email to request a secure reset link.</p><form #f="ngForm" (ngSubmit)="recover()"><label>Email<input name="email" type="email" email required [(ngModel)]="email" /></label><button class="primary" [disabled]="f.invalid || busy">Send reset link</button></form><a routerLink="/auth/login">Back to sign in</a> }
-@if (mode === 'reset') { <h1>Choose a new password</h1>@if (token) { <form #f="ngForm" (ngSubmit)="reset()"><label>New password (at least 15 characters)<input name="password" type="password" required minlength="15" maxlength="128" autocomplete="new-password" [(ngModel)]="password" /></label><label>Confirm password<input name="confirm" type="password" required [(ngModel)]="confirm" /></label><button class="primary" [disabled]="f.invalid || busy">Save password</button></form> }<a routerLink="/auth/login">Go to sign in</a> }
+@if (mode === 'reset') { <h1>Choose a new password</h1>@if (resetTokenValid) { <form #f="ngForm" (ngSubmit)="reset()"><label>New password (at least 15 characters)<input name="password" type="password" required minlength="15" maxlength="128" autocomplete="new-password" [(ngModel)]="password" /></label><label>Confirm password<input name="confirm" type="password" required [(ngModel)]="confirm" /></label><button class="primary" [disabled]="f.invalid || busy">Save password</button></form> } @else if (busy) { <p role="status">Checking reset link...</p> } @else if (error) { <p class="muted">Request a new reset link from the sign-in page.</p> }<a routerLink="/auth/login">Go to sign in</a> }
 @if (mode === 'invitation') {
 <h1>Your school invitation</h1>
 @if (invitation; as i) { <div class="notice"><strong>{{ i.school }}</strong><p>{{ i.name }} &middot; {{ i.email }}</p><span>{{ i.role }}</span></div>
@@ -27,5 +27,5 @@
 }<button class="text-button" (click)="signOut()" [disabled]="busy">Sign out</button>
 } @else { <a routerLink="/auth/login">Sign in again</a> }
 }
-@if (busy) { <p role="status">Working...</p> }@if (error) { <p class="error" role="alert">{{ error }}</p> }@if (notice) { <p class="notice" role="status">{{ notice }}</p> }
+@if (busy) { <p class="auth-progress" aria-live="polite"><span class="loading-spinner" aria-hidden="true"></span>{{ activityLabel }}</p> }@if (error) { <p class="error" role="alert">{{ error }}</p> }@if (notice) { <p class="notice" role="status">{{ notice }}</p> }
 </section></app-auth-layout>

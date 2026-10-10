@@ -1,3 +1,4 @@
+import { AcademicDataService } from './academic-data.service';
 import { Injectable, effect, inject, signal } from '@angular/core';
 import { AcademicYearService } from './academic-year.service';
 
@@ -15,18 +16,9 @@ export class GradingPolicyService {
   private readonly years = inject(AcademicYearService);
   private readonly policies = signal<Record<string, GradingPolicy>>(this.restore());
   readonly storageAvailable = signal(true);
+  readonly remote=inject(AcademicDataService);
   constructor() {}
-  forYear(yearId: string): GradingPolicy { return this.policies()[yearId] ?? DEFAULT_GRADING; }
-  save(bands: GradeBand[], passMark: number): string | null {
-    const year = this.years.academicYear();
-    if (!year || this.years.readOnly('academic')) return 'The academic year is read-only.';
-    const clean = bands.map(b => ({ label: b.label.trim(), minimum: Number(b.minimum) }));
-    if (clean.length < 2 || clean.some(b => !b.label || b.label.length > 12 || !Number.isFinite(b.minimum) || b.minimum < 0 || b.minimum > 100) ||
-      new Set(clean.map(b => b.label.toLowerCase())).size !== clean.length || clean.at(-1)?.minimum !== 0 ||
-      clean.some((b, i) => i > 0 && b.minimum >= clean[i - 1].minimum)) return 'Use unique grade names and strictly descending minimum scores ending at 0. Boundaries must be between 0 and 100.';
-    if (!Number.isFinite(passMark) || passMark < 0 || passMark > 100) return 'Pass mark must be between 0 and 100.';
-    this.policies.update(p => ({ ...p, [year.id]: { revision: this.forYear(year.id).revision + 1, bands: clean, passMark } }));
-    return null;
-  }
-  private restore():Record<string, GradingPolicy>{return {};}
+  forYear(yearId:string):GradingPolicy {return this.remote.year()?.id===yearId ? this.remote.data().policy ?? DEFAULT_GRADING : DEFAULT_GRADING;}
+  save(bands:GradeBand[],passMark:number):Promise<string|null>{return this.remote.command('grading',{bands,passMark});}
+  private restore():Record<string,GradingPolicy>{return {};}
 }

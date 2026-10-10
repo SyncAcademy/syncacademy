@@ -7,6 +7,7 @@
 button:disabled { opacity:.5; cursor:not-allowed; } .filters label { display:flex; flex-direction:column; gap:4px; font-size:.8rem; }
 
 .page-header > div, .panel, .detail-panel { min-width: 0; }
+.section-header > div { min-width: 0; }
 .filters { align-items: end; width: 100%; }
 .filters > input, .filters > select, .filters > label { box-sizing: border-box; flex: 1 1 13rem; min-width: 0; }
 .filters > input, .filters > select, .filters > label input { width: 100%; min-height: 44px; }
@@ -19,6 +20,8 @@ button:disabled { opacity:.5; cursor:not-allowed; } .filters label { display:fle
 @media (max-width: 600px) {
 	.page-header { align-items: stretch; }
 	.page-header > button { width: 100%; }
+	.section-header { align-items: stretch; }
+	.section-header > button { width: 100%; }
 	.filters { display: grid; grid-template-columns: minmax(0, 1fr); }
 	.filters > input, .filters > select, .filters > label { width: 100%; min-width: 0; }
 	.row-actions { flex-wrap: wrap; }

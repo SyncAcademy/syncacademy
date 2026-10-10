@@ -1,1 +1,31 @@
-<div class="page-header"><div><h2>System Health</h2><p>Current application connectivity.</p></div><button class="action-btn" (click)="check()">Refresh status</button></div><div class="stats-grid"><div class="stat-card"><span>API and database</span><strong>{{status()}}</strong><small>{{checkedAt() | date:'medium'}}</small></div></div><section class="panel"><h3>Monitoring</h3><p>Historical uptime, backups, storage usage and provider delivery monitoring are not connected yet.</p></section>
+<div class="section-header">
+  <div><h2>System Health</h2><p>Database availability and email delivery at a glance.</p></div>
+  <button type="button" class="action-btn" [disabled]="checking()" (click)="check()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg>
+    {{ checking() ? 'Checking...' : 'Refresh status' }}
+  </button>
+</div>
+@if (error()) { <p class="portal-notice portal-notice--error" role="alert">{{ error() }}</p> }
+<div class="health-grid" [attr.aria-busy]="checking()" aria-live="polite">
+  <article class="health-card" [class.health-card--healthy]="status() === 'Available'" [class.health-card--danger]="status() === 'Unavailable'">
+    <span class="health-label">API &amp; database</span><strong class="health-value health-value--status">{{ status() }}</strong><small>Live connectivity check</small>
+  </article>
+  <article class="health-card"><span class="health-label">Email queued</span><strong class="health-value">{{ mail()?.queued ?? '—' }}</strong><small>Waiting for delivery</small></article>
+  <article class="health-card" [class.health-card--danger]="(mail()?.failed ?? 0) > 0"><span class="health-label">Email failed</span><strong class="health-value">{{ mail()?.failed ?? '—' }}</strong><small>Deliveries requiring attention</small></article>
+  <article class="health-card"><span class="health-label">Email sent</span><strong class="health-value">{{ mail()?.sent ?? '—' }}</strong><small>Successfully delivered</small></article>
+</div>
+<div class="health-details">
+  <section class="panel">
+    <div class="panel-heading"><h3>Service status</h3><span class="status-badge" [class.healthy]="status() === 'Available'">{{ checking() ? 'Checking' : status() }}</span></div>
+    <dl class="service-list"><div><dt>API and PostgreSQL</dt><dd>{{ status() }}</dd></div><div><dt>Last check</dt><dd>{{ checkedAt() ? (checkedAt() | date:'medium') : 'Not checked yet' }}</dd></div></dl>
+    <p class="panel-note">Use Refresh status to request a new database and delivery queue check.</p>
+  </section>
+  <section class="panel">
+    <h3>Email delivery</h3>
+    @if (mail(); as queue) {
+      <p class="delivery-message" [class.delivery-message--warning]="queue.failed > 0">{{ queue.failed > 0 ? queue.failed + ' failed emails need attention.' : 'No failed emails recorded.' }}</p>
+      <p>{{ queue.queued | number }} {{ queue.queued === 1 ? 'email is' : 'emails are' }} waiting in the delivery queue.</p>
+    } @else { <p>Email delivery counts will appear after a successful check.</p> }
+    <p class="panel-note">Counts include account invitations and password reset emails.</p>
+  </section>
+</div>

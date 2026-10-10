@@ -7,7 +7,7 @@ import { CommonModule } from '@angular/common';
   standalone: true,
   imports: [CommonModule, DialogFocusDirective],
   template: `
-    <div class="overlay" appDialogFocus *ngIf="open" aria-labelledby="confirmation-title" aria-describedby="confirmation-message" (click)="onCancel()" (keydown.escape)="onCancel()" role="dialog" aria-modal="true">
+    <dialog class="overlay" appDialogFocus *ngIf="open" aria-labelledby="confirmation-title" aria-describedby="confirmation-message" (click)="onCancel()" (keydown.escape)="onCancel()" role="dialog" aria-modal="true">
       <div class="dialog" (click)="$event.stopPropagation()">
         <h3 class="dialog__title" id="confirmation-title">{{ title }}</h3>
         <p class="dialog__message" id="confirmation-message">{{ message }}</p>
@@ -18,7 +18,7 @@ import { CommonModule } from '@angular/common';
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   `,
   styles: [`
     @use 'variables' as *;
@@ -47,7 +47,7 @@ import { CommonModule } from '@angular/common';
 })
 export class ConfirmDialogComponent {
   @Input() open = false;
-  @Input() title = 'Are you sure?';
+  @Input() title = 'Confirm action';
   @Input() message = '';
   @Input() confirmLabel = 'Confirm';
   @Input() variant: 'danger' | 'primary' = 'danger';

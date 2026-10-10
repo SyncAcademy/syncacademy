@@ -1,5 +1,6 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
+import { requestId } from './request-id';
 
 /** Shared server snapshot for the original portal components. No business data is persisted in the browser. */
 @Injectable({ providedIn: 'root' })
@@ -33,9 +34,9 @@ export class SchoolApiService {
   async write(path: string, payload: unknown, method = 'POST', key?: string) {
     const id = this.schoolId(); if (!id) throw new Error('Select a school first.');
     const fingerprint = id + ':' + method + ':' + path + ':' + JSON.stringify(payload);
-    const requestKey = key || this.writeKeys.get(fingerprint) || crypto.randomUUID();
+    const requestKey = key || this.writeKeys.get(fingerprint) || requestId();
     this.writeKeys.set(fingerprint, requestKey);
     const result = await this.auth.request(method, `schools/${id}/${path}`, payload, requestKey);
-    await this.refresh(); this.writeKeys.delete(fingerprint); return result;
+    if (this.schoolId() === id) await this.refresh(); this.writeKeys.delete(fingerprint); return result;
   }
 }

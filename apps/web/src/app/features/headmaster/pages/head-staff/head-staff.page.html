@@ -15,6 +15,7 @@
       <option value="registrar">Registrar</option>
       <option value="academic_officer">Academic Officer</option>
       <option value="teacher">Teacher</option>
+      <option value="bursar">Bursar</option>
     </select>
 
     <select class="sa-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
@@ -48,7 +49,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let s of filteredStaff()">
+          <tr *ngFor="let s of visibleStaff()">
             <td>{{ s.fullName }}</td>
             <td><app-status-badge variant="info" [label]="staffRoleLabels[s.role]"></app-status-badge></td>
             <td>
@@ -59,7 +60,8 @@
               <app-status-badge [variant]="s.status === 'active' ? 'active' : 'inactive'" [label]="s.status"></app-status-badge>
             </td>
             <td>
-              <button class="action-btn action-btn--danger" *ngIf="(s.role !== 'school_admin' || store.api.auth.identity()?.platformAdmin) && s.email !== store.api.auth.identity()?.email" (click)="requestDeactivate(s)">{{s.status === 'active' ? 'Deactivate' : 'Reactivate'}}</button>
+              <button class="action-btn action-btn--danger" *ngIf="canManage(s)" (click)="requestDeactivate(s)">{{s.status === 'active' ? 'Deactivate' : 'Reactivate'}}</button>
+              <button class="action-btn action-btn--danger" *ngIf="canManage(s) && s.status !== 'active'" (click)="requestRemoveRole(s)">Remove role</button>
             </td>
           </tr>
         </tbody>
@@ -68,7 +70,7 @@
 
     <!-- Mobile view -->
     <div class="mobile-only">
-      <app-record-card *ngFor="let s of filteredStaff()">
+      <app-record-card *ngFor="let s of visibleStaff()">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
           <h4 style="margin: 0;">{{ s.fullName }}</h4>
           <app-status-badge [variant]="s.status === 'active' ? 'active' : 'inactive'" [label]="s.status"></app-status-badge>
@@ -84,20 +86,23 @@
           <span class="label">Phone:</span>
           <span class="value">{{ s.phone }}</span>
         </div>
-        <div style="margin-top: 12px; display: flex; justify-content: flex-end;" *ngIf="(s.role !== 'school_admin' || store.api.auth.identity()?.platformAdmin) && s.email !== store.api.auth.identity()?.email">
+        <div style="margin-top: 12px; display: flex; justify-content: flex-end; gap:8px;" *ngIf="canManage(s)">
           <button class="action-btn action-btn--danger" (click)="requestDeactivate(s)">{{s.status === 'active' ? 'Deactivate' : 'Reactivate'}}</button>
+          <button class="action-btn action-btn--danger" *ngIf="s.status !== 'active'" (click)="requestRemoveRole(s)">Remove role</button>
         </div>
       </app-record-card>
     </div>
+    <div class="pagination-bar" role="navigation" aria-label="Staff pagination"><span>Page {{page()}} of {{pageCount()}} · {{filteredStaff().length}} staff</span><div class="pagination-actions"><button class="action-btn" [disabled]="page() <= 1" (click)="page.set(page()-1)">Previous</button><button class="action-btn" [disabled]="page() >= pageCount()" (click)="page.set(page()+1)">Next</button></div></div>
   </div>
 </ng-template>
 
 <app-confirm-dialog
   [open]="showDeactivateDialog()"
   [title]="selectedStaff()?.status === 'active' ? 'Deactivate Staff Member' : 'Reactivate Staff Member'"
-  [message]="(selectedStaff()?.status === 'active' ? 'Deactivate ' : 'Reactivate ') + (selectedStaff()?.fullName || '') + '? Records are retained; deactivation revokes existing sessions.'"
+  [message]="selectedStaff()?.status === 'active' ? 'This will deactivate the selected staff role and revoke existing sessions. School records will be retained.' : 'This will reactivate the selected staff role and restore access.'"
   [confirmLabel]="selectedStaff()?.status === 'active' ? 'Deactivate' : 'Reactivate'"
   variant="danger"
   (confirmed)="confirmDeactivate()"
   (cancelled)="cancelDeactivate()"
 ></app-confirm-dialog>
+<app-confirm-dialog [open]="showRemoveRoleDialog()" title="Remove role" [message]="'This permanently removes the ' + (selectedStaff() ? staffRoleLabels[selectedStaff()!.role] : '') + ' role for ' + (selectedStaff()?.fullName || '') + '. Roles with teaching history must be deactivated to preserve records.'" confirmLabel="Remove role" variant="danger" (confirmed)="confirmRemoveRole()" (cancelled)="showRemoveRoleDialog.set(false); selectedStaff.set(null)"></app-confirm-dialog>

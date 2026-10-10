@@ -10,28 +10,33 @@ export class LiveAuthPage implements OnInit {
   mode = this.route.snapshot.data['mode'] || 'login';
   email = ''; password = ''; confirm = ''; currentPassword = ''; code = ''; rememberMe = false;
   token = ''; invitation: any = null; setup: { secret: string; qr: string } | null = null;
-  busy = false; error = ''; notice = ''; recoveryCodes: string[] = []; recoveryCode = '';
+  resetTokenValid = false;
+  busy = false; activityLabel = 'Working…'; error = ''; notice = ''; recoveryCodes: string[] = []; recoveryCode = '';
   async ngOnInit() {
     this.token = new URLSearchParams(location.hash.slice(1)).get('token') || '';
     if (this.token) history.replaceState(null, '', location.pathname);
     if (this.mode === 'invitation') {
-      await this.run(async () => { this.invitation = await this.auth.request('POST', 'invitations/preview', { token: this.token }); try { await this.auth.refresh(); } catch { this.auth.identity.set(null); } });
+      await this.run(async () => { this.invitation = await this.auth.request('POST', 'invitations/preview', { token: this.token }); try { await this.auth.refresh(); } catch { this.auth.identity.set(null); } }, 'Checking invitation…');
     }
-    if (this.mode === 'security') await this.run(async () => { await this.auth.refresh(); });
+    if (this.mode === 'reset') {
+      if (!this.token) this.error = 'This reset link is missing. Request a new link.';
+      else await this.run(async () => { await this.auth.request('POST', 'auth/reset/validate', { token: this.token }); this.resetTokenValid = true; }, 'Checking reset link…');
+    }
+    if (this.mode === 'security') await this.run(async () => { await this.auth.refresh(); }, 'Checking account security…');
   }
-  async run(action: () => Promise<void>) { if (this.busy) return; this.busy = true; this.error = ''; this.notice = ''; try { await action(); } catch (e) { this.error = this.auth.error(e); } finally { this.busy = false; } }
-  async login() { if (!this.invitation?.role) { await this.router.navigateByUrl('/auth/login'); return; } await this.run(async () => { await this.auth.login(this.email, this.password, this.invitation.role, this.rememberMe); this.password = ''; await this.router.navigateByUrl(this.auth.landing()); }); }
-  async invitationLogin() { await this.run(async () => { if (this.auth.identity() && this.auth.identity()?.email !== this.invitation.email) await this.auth.logout(); await this.auth.request('POST', 'invitations/accept', { token: this.token, password: this.password }); await this.auth.login(this.invitation.email, this.password, this.invitation.role); this.password = ''; this.invitation = null; await this.router.navigateByUrl(this.auth.landing()); }); }
+  async run(action: () => Promise<void>, label = 'Working…') { if (this.busy) return; this.activityLabel = label; this.busy = true; this.error = ''; this.notice = ''; try { await action(); } catch (e) { this.error = this.auth.error(e); } finally { this.busy = false; } }
+  async login() { if (!this.invitation?.role) { await this.router.navigateByUrl('/auth/login'); return; } await this.run(async () => { await this.auth.login(this.email, this.password, this.invitation.role, this.rememberMe); this.password = ''; await this.router.navigateByUrl(this.auth.landing()); }, 'Signing in…'); }
+  async invitationLogin() { await this.run(async () => { if (this.auth.identity() && this.auth.identity()?.email !== this.invitation.email) await this.auth.logout(); await this.auth.request('POST', 'invitations/accept', { token: this.token, password: this.password }); await this.auth.login(this.invitation.email, this.password, this.invitation.role); this.password = ''; this.invitation = null; await this.router.navigateByUrl(this.auth.landing()); }, 'Accepting invitation…'); }
   async accept() { await this.run(async () => {
     if (!this.invitation.existingAccount && this.password !== this.confirm) { this.error = 'Passwords do not match.'; return; }
     const result = await this.auth.request('POST', 'invitations/accept', { token: this.token, ...(!this.invitation.existingAccount ? { password: this.password } : {}) });
     this.notice = result.message; this.invitation = null; this.password = ''; this.confirm = '';
-  }); }
-  async recover() { await this.run(async () => { this.notice = (await this.auth.request('POST', 'auth/recover', { email: this.email })).message; }); }
-  async reset() { await this.run(async () => { if (this.password !== this.confirm) { this.error = 'Passwords do not match.'; return; } this.notice = (await this.auth.request('POST', 'auth/reset', { token: this.token, password: this.password })).message; this.password = ''; this.confirm = ''; this.token = ''; }); }
-  async changePassword() { await this.run(async () => { if (this.password !== this.confirm) { this.error = 'Passwords do not match.'; return; } await this.auth.request('POST', 'auth/change-password', { currentPassword: this.currentPassword, password: this.password }); this.password = ''; this.currentPassword = ''; this.confirm = ''; await this.auth.refresh(); this.notice = 'Password changed. Other sessions have been revoked.'; }); }
-  async startMfa() { await this.run(async () => { this.setup = await this.auth.request('POST', 'auth/mfa/setup', {}); }); }
-  async verify() { await this.run(async () => { const result = await this.auth.request('POST', 'auth/mfa/verify', { code: this.code, setup: !!this.setup }); this.setup = null; this.code = ''; await this.auth.refresh(); if (result.recoveryCodes) this.recoveryCodes = result.recoveryCodes; else await this.router.navigateByUrl(this.auth.landing()); }); }
-  async recoverMfa() { await this.run(async () => { await this.auth.request('POST', 'auth/mfa/recovery', { code: this.recoveryCode.trim() }); this.recoveryCode = ''; await this.auth.refresh(); await this.router.navigateByUrl(this.auth.landing()); }); }
-  async signOut() { await this.run(async () => { await this.auth.logout(); await this.router.navigateByUrl('/auth/login'); }); }
+  }, 'Accepting invitation…'); }
+  async recover() { await this.run(async () => { this.notice = (await this.auth.request('POST', 'auth/recover', { email: this.email })).message; }, 'Sending reset link…'); }
+  async reset() { await this.run(async () => { if (this.password !== this.confirm) { this.error = 'Passwords do not match.'; return; } this.notice = (await this.auth.request('POST', 'auth/reset', { token: this.token, password: this.password })).message; this.password = ''; this.confirm = ''; this.token = ''; }, 'Saving password…'); }
+  async changePassword() { await this.run(async () => { if (this.password !== this.confirm) { this.error = 'Passwords do not match.'; return; } await this.auth.request('POST', 'auth/change-password', { currentPassword: this.currentPassword, password: this.password }); this.password = ''; this.currentPassword = ''; this.confirm = ''; await this.auth.refresh(); this.notice = 'Password changed. Other sessions have been revoked.'; }, 'Changing password…'); }
+  async startMfa() { await this.run(async () => { this.setup = await this.auth.request('POST', 'auth/mfa/setup', {}); }, 'Preparing authenticator…'); }
+  async verify() { await this.run(async () => { const result = await this.auth.request('POST', 'auth/mfa/verify', { code: this.code, setup: !!this.setup }); this.setup = null; this.code = ''; await this.auth.refresh(); if (result.recoveryCodes) this.recoveryCodes = result.recoveryCodes; else await this.router.navigateByUrl(this.auth.landing()); }, 'Verifying code…'); }
+  async recoverMfa() { await this.run(async () => { await this.auth.request('POST', 'auth/mfa/recovery', { code: this.recoveryCode.trim() }); this.recoveryCode = ''; await this.auth.refresh(); await this.router.navigateByUrl(this.auth.landing()); }, 'Checking recovery code…'); }
+  async signOut() { await this.run(async () => { await this.auth.logout(); await this.router.navigateByUrl('/auth/login'); }, 'Signing out…'); }
 }

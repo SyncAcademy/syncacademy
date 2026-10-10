@@ -57,7 +57,10 @@ export interface AcademicYear {
   startDate: string;
   endDate: string;
   status: AcademicYearStatus;
+  terms: AcademicTerm[];
 }
+
+export interface AcademicTerm { key: string; name: string; startsAt: string; endsAt: string; }
 
 export interface SchoolClass {
   enrolmentStatus?: 'draft' | 'open' | 'closed';
@@ -67,6 +70,10 @@ export interface SchoolClass {
   name: string;
   stream: string | null;
   studentCount: number;
+}
+
+export function displayClassName(name: string): string {
+  return name.replace(/(\d)\s+([A-Za-z])$/, '$1$2');
 }
 
 export interface Subject {
@@ -133,13 +140,13 @@ export interface ReportOverviewStats {
 // ── Helpers ──────────────────────────────────────────────────
 
 export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
-  school_admin: 'School Admin',
+  school_admin: 'Headmaster',
   registrar: 'Registrar',
   academic_officer: 'Academic Officer',
   teacher: 'Teacher', bursar:'Bursar',
 };
 
-export const INVITABLE_ROLES: StaffRole[] = ['registrar', 'academic_officer', 'teacher', 'bursar'];
+export const INVITABLE_ROLES: StaffRole[] = ['school_admin', 'registrar', 'academic_officer', 'teacher', 'bursar'];
 
 export const EXPIRY_OPTIONS = [
   { label: '5 minutes', minutes: 5 },

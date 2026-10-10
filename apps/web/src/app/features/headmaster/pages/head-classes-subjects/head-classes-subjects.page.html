@@ -141,7 +141,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let cls of filteredClasses()">
+              <tr *ngFor="let cls of pageClasses()">
                 <td class="font-medium text-primary">{{ cls.name }}</td>
                 <td>
                   <span class="stream-pill" *ngIf="cls.stream; else noStream">
@@ -176,7 +176,7 @@
 
         <!-- Mobile Cards View -->
         <div class="mobile-cards">
-          <app-record-card *ngFor="let cls of filteredClasses()">
+          <app-record-card *ngFor="let cls of pageClasses()">
             <div class="card-header-row">
               <div class="card-title-group">
                 <h4 class="card-title">{{ cls.name }}</h4>
@@ -236,7 +236,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let sub of filteredSubjects()">
+              <tr *ngFor="let sub of pageSubjects()" class="subject-row" (click)="openEditSubject(sub)" (keydown.enter)="openEditSubject(sub)" tabindex="0" [attr.aria-label]="'Edit subject ' + sub.name">
                 <td class="font-medium text-primary">{{ sub.name }}</td>
                 <td>
                   <span class="code-pill">{{ sub.code }}</span>
@@ -263,7 +263,7 @@
 
         <!-- Mobile Cards View -->
         <div class="mobile-cards">
-          <app-record-card *ngFor="let sub of filteredSubjects()">
+          <app-record-card *ngFor="let sub of pageSubjects()">
             <div class="card-header-row">
               <h4 class="card-title">{{ sub.name }}</h4>
               <button
@@ -321,7 +321,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let map of filteredMappings()">
+              <tr *ngFor="let map of pageMappings()">
                 <td class="font-medium text-primary">{{ map.className }}</td>
                 <td>
                   <span class="stream-pill" *ngIf="map.classStream; else noMappingStream">
@@ -358,7 +358,7 @@
 
         <!-- Mobile Cards View -->
         <div class="mobile-cards">
-          <app-record-card *ngFor="let map of filteredMappings()">
+          <app-record-card *ngFor="let map of pageMappings()">
             <div class="card-header-row">
               <div class="card-title-group">
                 <h4 class="card-title">{{ map.className }}</h4>
@@ -403,9 +403,10 @@
       </ng-template>
     </section>
   </div>
+  <div class="pagination-bar" role="navigation" aria-label="Classes and subjects pagination" *ngIf="activeCount() > 0"><span>Page {{ page() }} of {{ pages() }} · {{ activeCount() }} records</span><div class="pagination-actions"><button class="action-btn" [disabled]="page() <= 1" (click)="page.set(page() - 1)">Previous</button><button class="action-btn" [disabled]="page() >= pages()" (click)="page.set(page() + 1)">Next</button></div></div>
 
   <!-- ──────────────── MODAL DIALOG ──────────────── -->
-  <div
+  <dialog
     *ngIf="showDialog()"
     class="modal-backdrop"
     (click)="closeDialog()"
@@ -566,7 +567,7 @@
         </button>
       </div>
     </div>
-  </div>
+  </dialog>
 </div>
 
-<app-confirm-dialog [open]="!!mappingToRemove()" title="Remove subject mapping?" message="This removes the unused subject from this class in the demo." confirmLabel="Remove mapping" (confirmed)="confirmRemoveMapping()" (cancelled)="mappingToRemove.set(null)"></app-confirm-dialog>
+<app-confirm-dialog [open]="!!mappingToRemove()" title="Remove subject mapping" message="This removes the unused subject mapping from the class." confirmLabel="Remove mapping" (confirmed)="confirmRemoveMapping()" (cancelled)="mappingToRemove.set(null)"></app-confirm-dialog>

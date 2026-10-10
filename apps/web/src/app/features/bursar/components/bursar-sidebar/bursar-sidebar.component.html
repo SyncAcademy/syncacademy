@@ -57,10 +57,10 @@
           class="sidebar__nav-item"
           [routerLink]="item.route"
           routerLinkActive="sidebar__nav-item--active"
-          [routerLinkActiveOptions]="{ exact: true }"
+          [routerLinkActiveOptions]="{ paths: 'exact', queryParams: 'ignored', matrixParams: 'ignored', fragment: 'ignored' }"
           (click)="$event.preventDefault(); navigateTo(item.route)"
         >
-          <svg class="sidebar__nav-icon" aria-hidden="true">
+          <svg class="sidebar__nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <use
               [attr.href]="'assets/icons/sidebar-icons.svg#icon-' + item.icon"
             ></use>

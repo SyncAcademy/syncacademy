@@ -70,4 +70,8 @@
         <circle cx="12" cy="8" r="4" />
         <path d="M5 21a7 7 0 0 1 14 0" />
     </symbol>
+<symbol id="icon-fees" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 7h6M9 11h6M9 15h3"/></symbol>
+<symbol id="icon-accounts" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M5 17c0-4 8-4 8 0M16 8h2M16 12h2M16 16h2"/></symbol>
+<symbol id="icon-payments" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></symbol>
+<symbol id="icon-adjustments" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="white"/><circle cx="15" cy="17" r="3" fill="white"/></symbol>
 </svg>

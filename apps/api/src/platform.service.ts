@@ -6,6 +6,7 @@ import QRCode from 'qrcode';
 import { Database } from './database/database.service';
 import { config } from './config';
 import { decrypt, digest, encrypt, passwordHash, passwordMatches, randomToken } from './security';
+import { buildInvitationEmail, buildPasswordResetEmail } from './communication/email/email-templates';
 
 const invitationExpiryLabel = (minutes: number) => {
   if (minutes < 60) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
@@ -124,12 +125,21 @@ export class PlatformService {
     if (user?.enabled) {
       const token = randomToken();
       await this.atomic(async tx => {
+        const previousResets = await tx.passwordReset.findMany({ where: { userId: user.id, usedAt: null }, select: { id: true } });
         await tx.passwordReset.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } });
+        if (previousResets.length) await tx.outbox.updateMany({ where: { resetId: { in: previousResets.map(reset => reset.id) }, sentAt: null, cancelledAt: null }, data: { cancelledAt: new Date(), payload: '' } });
         const reset = await tx.passwordReset.create({ data: { userId: user.id, tokenHash: digest(token), expiresAt: new Date(Date.now() + 30 * 60000) } });
-        await tx.outbox.create({ data: { resetId: reset.id, payload: encrypt(JSON.stringify({ to: email, subject: 'Reset your SyncAcademy password', text: `Reset your password within 30 minutes: ${config.APP_ORIGIN}/auth/reset#token=${token}\nIf you did not request this, ignore this message.` })) } });
+        const mail = buildPasswordResetEmail({ recipientEmail: email, token, appOrigin: config.APP_ORIGIN });
+        await tx.outbox.create({ data: { resetId: reset.id, payload: encrypt(JSON.stringify({ to: email, subject: mail.subject, text: mail.text, html: mail.html })) } });
       });
     }
     return { message: 'If this address has an active account, a reset link will be sent.' };
+  }
+  async validateReset(req: Request, token: string) {
+    await this.rate('reset-validate:' + req.ip, 20, 900);
+    const reset = await this.db.passwordReset.findUnique({ where: { tokenHash: digest(token) }, select: { usedAt: true, expiresAt: true, user: { select: { enabled: true } } } });
+    if (!reset || reset.usedAt || reset.expiresAt < new Date() || !reset.user.enabled) throw new BadRequestException('This reset link is invalid or expired. Request a new link.');
+    return { valid: true };
   }
   async reset(req: Request, token: string, password: string) {
     await this.rate('reset-ip:' + req.ip, 10, 900); const hash = await passwordHash(password);
@@ -166,7 +176,7 @@ export class PlatformService {
     });
   }
   async createInvitation(tx: Prisma.TransactionClient, actorId: string, schoolId: string, data: { name: string; email: string; role: Role; studentId?: string; expiresInMinutes?: number }) {
-    if (await tx.membership.findFirst({ where: { schoolId, role: data.role, user: { email: data.email } } })) throw new ConflictException('This person already has this school role. Manage their existing access instead.');
+    if (await tx.membership.findFirst({ where: { schoolId, role: data.role, active: true, user: { email: data.email } } })) throw new ConflictException('This person already has this active school role. Manage their existing access instead.');
     if (await tx.invitation.findFirst({ where: { schoolId, email: data.email, role: data.role, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } } })) throw new ConflictException('A pending invitation already exists. Resend it instead.');
     await tx.invitation.updateMany({ where: { schoolId, email: data.email, role: data.role, acceptedAt: null, revokedAt: null, expiresAt: { lte: new Date() } }, data: { revokedAt: new Date() } });
     const token = randomToken();
@@ -187,12 +197,23 @@ export class PlatformService {
     await tx.auditEvent.create({ data: { actorId, action: 'PLATFORM_ADMIN_INVITED', target: invitation.id } });
     return { id: invitation.id, name: invitation.name, email: invitation.email, role: 'SUPER_ADMIN', expiresInMinutes: invitation.expiresInMinutes, expiresAt: invitation.expiresAt };
   }
-  async invitationMail(tx: Prisma.TransactionClient, invitation: { id: string; schoolId: string | null; platformAdmin: boolean; email: string; generation: number; expiresInMinutes: number }, token: string) {
+  async invitationMail(tx: Prisma.TransactionClient, invitation: { id: string; schoolId: string | null; platformAdmin: boolean; email: string; generation: number; expiresInMinutes: number; name?: string; role?: string }, token: string) {
     const school = invitation.schoolId ? await tx.school.findUniqueOrThrow({ where: { id: invitation.schoolId } }) : null;
     const expiryLabel = invitationExpiryLabel(invitation.expiresInMinutes);
     const organization = invitation.platformAdmin ? 'the SyncAcademy platform' : school!.name;
     const roleDescription = invitation.platformAdmin ? 'as a Super Admin' : `to ${school!.name}`;
-    await tx.outbox.create({ data: { invitationId: invitation.id, invitationGeneration: invitation.generation, payload: encrypt(JSON.stringify({ to: invitation.email, subject: `Invitation to ${organization}`, text: `You have been invited ${roleDescription} on SyncAcademy. Accept within ${expiryLabel}: ${config.APP_ORIGIN}/auth/invitation#token=${token}\nIf you already have an account, sign in to that account to accept. If unexpected, ignore this email.` })) } });
+    const roleLabel = invitation.platformAdmin ? 'Platform Administrator (SUPER_ADMIN)' : (invitation.role || 'Staff Member');
+    const mail = buildInvitationEmail({
+      recipientName: invitation.name,
+      recipientEmail: invitation.email,
+      organizationName: organization,
+      roleDescription,
+      roleLabel,
+      expiryLabel,
+      token,
+      appOrigin: config.APP_ORIGIN,
+    });
+    await tx.outbox.create({ data: { invitationId: invitation.id, invitationGeneration: invitation.generation, payload: encrypt(JSON.stringify({ to: invitation.email, subject: mail.subject, text: mail.text, html: mail.html })) } });
   }
   async invitationInfo(req: Request, token: string) {
     await this.rate('invitation-read:' + req.ip, 60, 900);
@@ -216,8 +237,13 @@ export class PlatformService {
         user = await tx.user.create({ data: { email: i.email, name: i.name, passwordHash: hash, platformAdmin: i.platformAdmin } });
       }
       if (i.platformAdmin && !user.platformAdmin) user = await tx.user.update({ where: { id: user.id }, data: { platformAdmin: true } });
-      if (!i.platformAdmin && await tx.membership.findFirst({ where: { userId: user.id, schoolId: i.schoolId!, role: i.role } })) throw new ConflictException('This role already exists.');
-      if (!i.platformAdmin) await tx.membership.create({ data: { userId: user.id, schoolId: i.schoolId!, role: i.role } });
+      if (!i.platformAdmin) {
+        const existingMembership = await tx.membership.findFirst({ where: { userId: user.id, schoolId: i.schoolId!, role: i.role } });
+        if (existingMembership?.active) throw new ConflictException('This role is already active.');
+        if (existingMembership) await tx.membership.update({ where: { id: existingMembership.id }, data: { active: true } });
+        else await tx.membership.create({ data: { userId: user.id, schoolId: i.schoolId!, role: i.role } });
+        await tx.user.update({ where: { id: user.id }, data: { sessionVersion: { increment: 1 } } });
+      }
       if (i.studentId && i.schoolId) {
         const changed = await tx.student.updateMany({ where: { id: i.studentId, schoolId: i.schoolId, userId: null }, data: { userId: user.id } });
         if (!changed.count) throw new ConflictException('Student account is already linked.');

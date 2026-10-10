@@ -1,9 +1,11 @@
+import { requestId } from '../../core/services/request-id';
 import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { SaEditorComponent, EditorField } from '../super-admin/components/sa-editor.component';
+import { displayClassName } from '../headmaster/head.models';
 
 @Component({
   standalone: true,
@@ -12,6 +14,7 @@ import { SaEditorComponent, EditorField } from '../super-admin/components/sa-edi
   styleUrls: ['./workspace.page.scss'],
 })
 export class WorkspacePage implements OnInit {
+  readonly displayClassName = displayClassName;
   readonly invitationExpiryChoices = [
     { value: '5', label: '5 minutes' },
     { value: '15', label: '15 minutes' },
@@ -31,9 +34,17 @@ export class WorkspacePage implements OnInit {
   schools: any[] = [];
   total = 0;
   page = 1;
+  schoolSearch = '';private schoolSearchTimer?:ReturnType<typeof setTimeout>;
   schoolId = '';
   workspace: any = null;
+  studentPage = 1;
+  readonly studentPageSize = 25;
+  get studentPages(): number { return Math.max(1, Math.ceil((this.workspace?.studentCount ?? 0) / this.studentPageSize)); }
+  get studentRangeStart(): number { return this.workspace?.students?.length ? (this.studentPage - 1) * this.studentPageSize + 1 : 0; }
+  get studentRangeEnd(): number { return Math.min(this.studentPage * this.studentPageSize, this.workspace?.studentCount ?? 0); }
   audit: any[] = [];
+  auditPage = 1; auditTotal = 0; auditSearch = '';
+  get auditPages():number { return Math.max(1,Math.ceil(this.auditTotal/25)); }
   tab = 'overview';
   busy = false;
   error = '';
@@ -99,19 +110,27 @@ export class WorkspacePage implements OnInit {
   async load(): Promise<void> {
     await this.run(async () => {
       if (this.auth.identity()?.platformAdmin) {
-        const list = await this.auth.request('GET', 'schools?page=' + this.page);
+        const list = await this.auth.request('GET', 'schools?' + new URLSearchParams({page:String(this.page),q:this.schoolSearch}));
         this.schools = list.items;
         this.total = list.total;
       }
-      this.workspace = this.schoolId ? await this.auth.request('GET', `schools/${this.schoolId}/workspace`) : null;
+      const workspaceParams = new URLSearchParams();
+      workspaceParams.set('page', String(this.studentPage));
+      workspaceParams.set('pageSize', String(this.studentPageSize));
+      this.workspace = this.schoolId
+        ? await this.auth.request('GET', `schools/${this.schoolId}/workspace?${workspaceParams}`)
+        : null;
       if (this.tab === 'audit') {
-        this.audit = await this.auth.request('GET', 'audit' + (this.schoolId ? '?schoolId=' + this.schoolId : ''));
+        const params=new URLSearchParams({page:String(this.auditPage),q:this.auditSearch});if(this.schoolId)params.set('schoolId',this.schoolId);
+        const result=await this.auth.request('GET','audit?'+params);this.audit=result.items;this.auditTotal=result.total;
       }
     });
   }
 
   async choose(id: string): Promise<void> {
     this.schoolId = id;
+    this.auditPage=1;this.auditSearch='';
+    this.studentPage = 1;
     this.workspace = null;
     this.tab = 'overview';
     this.notice = '';
@@ -121,8 +140,18 @@ export class WorkspacePage implements OnInit {
 
   async changeTab(tab: string): Promise<void> {
     this.tab = tab;
+    if (tab === 'students') this.studentPage = 1;
     this.closeMobileMenu();
-    if (tab === 'audit') await this.load();
+    if (tab === 'audit' || tab === 'students') await this.load();
+  }
+  async filterAudit(value:string):Promise<void>{this.auditSearch=value;this.auditPage=1;await this.load();}
+  filterSchools(value:string):void{this.schoolSearch=value;this.page=1;clearTimeout(this.schoolSearchTimer);this.schoolSearchTimer=setTimeout(()=>void this.load(),250);}
+  async changeAuditPage(change:number):Promise<void>{this.auditPage=Math.max(1,this.auditPage+change);await this.load();}
+  async changeStudentPage(change: number): Promise<void> {
+    const previousPage = this.studentPage;
+    this.studentPage = Math.min(this.studentPages, Math.max(1, this.studentPage + change));
+    await this.load();
+    if (this.error) this.studentPage = previousPage;
   }
 
   async signOut(): Promise<void> {
@@ -160,7 +189,7 @@ export class WorkspacePage implements OnInit {
       { value: 'TEACHER', label: 'Teacher' },
       { value: 'BURSAR', label: 'Bursar' },
     ];
-    if (this.auth.identity()?.platformAdmin) {
+    if (this.auth.identity()?.platformAdmin || this.canManage) {
       roleChoices.unshift({ value: 'HEADMASTER', label: 'Headmaster' });
     }
     this.open(
@@ -204,7 +233,7 @@ export class WorkspacePage implements OnInit {
       {
         key: 'classroomId',
         label: 'Class',
-        choices: this.workspace.classes.filter((c: any) => !c.year.closed).map((c: any) => ({ value: c.id, label: c.name + ' / ' + c.year.name })),
+        choices: this.workspace.classes.filter((c: any) => !c.year.closed).map((c: any) => ({ value: c.id, label: displayClassName(c.name) + ' / ' + c.year.name })),
         required: true,
       },
     ]);
@@ -223,7 +252,7 @@ export class WorkspacePage implements OnInit {
       {
         key: 'classroomId',
         label: 'Class',
-        choices: this.workspace.classes.filter((c: any) => !c.year.closed).map((c: any) => ({ value: c.id, label: c.name + ' / ' + c.year.name })),
+        choices: this.workspace.classes.filter((c: any) => !c.year.closed).map((c: any) => ({ value: c.id, label: displayClassName(c.name) + ' / ' + c.year.name })),
         required: true,
       },
     ]);
@@ -237,7 +266,7 @@ export class WorkspacePage implements OnInit {
     if (payload['dateOfBirth'] === '') delete payload['dateOfBirth'];
     const fingerprint = JSON.stringify(payload);
     if (this.editor.fingerprint !== fingerprint) {
-      this.editor.key = crypto.randomUUID();
+      this.editor.key = requestId();
       this.editor.fingerprint = fingerprint;
     }
     try {

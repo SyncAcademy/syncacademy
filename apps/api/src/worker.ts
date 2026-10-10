@@ -1,9 +1,11 @@
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import nodemailer from 'nodemailer';
 import { config } from './config';
 import { decrypt } from './security';
+import { SYNCACADEMY_LOGO_CID } from './communication/email/email-templates';
 const db = new PrismaClient();
 const transport = nodemailer.createTransport({ host: config.SMTP_HOST, port: config.SMTP_PORT, secure: config.SMTP_SECURE === 'true', auth: config.SMTP_USER ? { user: config.SMTP_USER, pass: config.SMTP_PASSWORD } : undefined, connectionTimeout: 10000, socketTimeout: 20000, ...(config.NODE_ENV === 'production' && config.SMTP_SECURE !== 'true' ? { requireTLS: true } : {}) });
 let stopping = false; process.on('SIGTERM', () => stopping = true); process.on('SIGINT', () => stopping = true);
@@ -30,7 +32,19 @@ async function main() {
           if (!valid) await db.outbox.updateMany({ where: { id: job.id, leaseId: lease }, data: { cancelledAt: new Date(), payload: '', leaseUntil: null } });
           else {
             const mail = JSON.parse(decrypt(job.payload));
-            await transport.sendMail({ from: config.MAIL_FROM, to: mail.to, subject: mail.subject, text: mail.text, messageId: `<${job.id}@syncacademy.local>` });
+            await transport.sendMail({
+              from: config.MAIL_FROM,
+              to: mail.to,
+              subject: mail.subject,
+              text: mail.text,
+              html: mail.html,
+              attachments: [{
+                filename: 'syncacademy-logo.png',
+                path: resolve(process.cwd(), 'src/communication/email/syncacademy-logo.png'),
+                cid: SYNCACADEMY_LOGO_CID,
+              }],
+              messageId: `<${job.id}@syncacademy.local>`,
+            });
             await db.outbox.updateMany({ where: { id: job.id, leaseId: lease }, data: { sentAt: new Date(), payload: '', leaseUntil: null } });
           }
         } catch (error) {

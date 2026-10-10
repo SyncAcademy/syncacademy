@@ -1,3 +1,4 @@
+import { requestId } from '../../../../core/services/request-id';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Component, inject, signal, computed, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -19,20 +20,14 @@ export class SaSchoolsPage {
   readonly money = this.store.money.bind(this.store);
   readonly timeSince = this.store.timeSince.bind(this.store);
 
-  search = signal(inject(ActivatedRoute).snapshot.queryParamMap.get('q') || '');
-  statusFilter = signal('');
+  search = this.store.schoolSearch;
+  statusFilter = this.store.schoolStatus;
   planFilter = signal('');
   typeFilter = signal('');
 
-  readonly filteredSchools = computed(() => {
-    let schools = this.store.schools();
-    const q = this.search().toLowerCase();
-    if (q) schools = schools.filter(s => s.name.toLowerCase().includes(q) || s.location.toLowerCase().includes(q) || s.contactName.toLowerCase().includes(q));
-    if (this.statusFilter()) schools = schools.filter(s => s.status === this.statusFilter());
-    if (this.planFilter()) schools = schools.filter(s => s.plan === this.planFilter());
-    if (this.typeFilter()) schools = schools.filter(s => s.type === this.typeFilter());
-    return schools;
-  });
+  readonly filteredSchools = computed(() => this.store.schools());
+  private searchTimer?: ReturnType<typeof setTimeout>;
+  filter(value:string,kind:'search'|'status'){(kind==='search'?this.search:this.statusFilter).set(value);this.store.page.set(1);clearTimeout(this.searchTimer);this.searchTimer=setTimeout(()=>void this.store.loadSchools().catch(e=>this.store.storageError.set(this.store.auth.error(e))),kind==='search'?250:0);}
 
   readonly totalStudents = computed(() => this.filteredSchools().reduce((s, x) => s + x.students, 0));
   readonly totalStaff = computed(() => this.filteredSchools().reduce((s, x) => s + x.staff, 0));
@@ -51,6 +46,6 @@ export class SaSchoolsPage {
     const school = this.selected(); if (!school) return;
     this.editor = { title: school.status === 'suspended' ? 'Reactivate school' : 'Suspend school', mode: 'status', fields: [{ key: 'reason', label: 'Reason for this change', required: true }], values: {} };
   }
-  saving=false; error=''; private saveKey=''; private fingerprint=''; async save(values:Record<string,any>):Promise<void>{if(this.saving)return;this.saving=true;this.error='';try{if(this.editor?.mode==='status'){await this.store.setSchoolStatus(this.selectedId(),this.selected()?.status==='suspended'?'active':'suspended',values['reason']);}else{const fp=JSON.stringify(values);if(fp!==this.fingerprint){this.fingerprint=fp;this.saveKey=crypto.randomUUID();}const r=await this.store.auth.request('POST','schools',values,this.saveKey);this.selectedId.set(r.school.id);await this.store.load();}this.editor=null;}catch(e){this.error=this.store.auth.error(e);}finally{this.saving=false;}}
-  constructor(){inject(ActivatedRoute).queryParamMap.pipe(takeUntilDestroyed()).subscribe(params=>{this.search.set(params.get('q')||'');this.statusFilter.set(params.get('status')||'');});}
+  saving=false; error=''; private saveKey=''; private fingerprint=''; async save(values:Record<string,any>):Promise<void>{if(this.saving)return;this.saving=true;this.error='';try{if(this.editor?.mode==='status'){await this.store.setSchoolStatus(this.selectedId(),this.selected()?.status==='suspended'?'active':'suspended',values['reason']);}else{const fp=JSON.stringify(values);if(fp!==this.fingerprint){this.fingerprint=fp;this.saveKey=requestId();}const r=await this.store.auth.request('POST','schools',values,this.saveKey);this.selectedId.set(r.school.id);await this.store.load();}this.editor=null;}catch(e){this.error=this.store.auth.error(e);}finally{this.saving=false;}}
+  constructor(){inject(ActivatedRoute).queryParamMap.pipe(takeUntilDestroyed()).subscribe(params=>{const q=params.get('q')||'';const status=params.get('status')||'';if(q!==this.search()||status!==this.statusFilter()){this.search.set(q);this.statusFilter.set(status);this.store.page.set(1);void this.store.loadSchools().catch(e=>this.store.storageError.set(this.store.auth.error(e)));}});}
 }

@@ -1,0 +1,51 @@
+<h2>Import students</h2>
+<p>Upload a CSV or Excel worksheet, match its columns, and review every row before importing.</p>
+<div class="context-row"><strong>{{ store.year()?.label || 'Choose an academic year' }}</strong><span>{{ api.schoolName() }}</span></div>
+@if (error()) { <p class="portal-notice portal-notice--error" role="alert">{{ error() }}</p> }
+@if (store.readOnly()) { <p class="portal-notice">An open academic year and registrar access are required.</p> }
+
+<section class="panel import-file-panel">
+  <div class="panel-heading"><div><h3>1. Choose a file</h3><p>CSV UTF-8 or Excel .xlsx · Up to 5 MB and 5,000 students. Save older .xls files as .xlsx or CSV UTF-8.</p></div><button type="button" class="action-btn" (click)="template()">Download CSV template</button></div>
+  <div class="import-dropzone" [class.import-dropzone--active]="dragging()" [class.import-dropzone--disabled]="busy() || store.readOnly()" (dragover)="dragOver($event)" (dragleave)="dragLeave($event)" (drop)="dropFile($event)">
+    <input id="student-import-file" class="visually-hidden-file" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="Choose student import file" [disabled]="busy() || store.readOnly()" (change)="upload($event)">
+    <svg class="import-dropzone__icon" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M24 31V8m0 0-8 8m8-8 8 8M9 29v10h30V29" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 39h18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+    <strong>Drag and drop your student file here</strong>
+    <span>CSV or Excel workbook</span>
+    <label class="import-file-button" for="student-import-file">Choose file</label>
+    @if (filename) { <span class="import-selected-file" role="status">Selected: {{ filename }}</span> }
+  </div>
+  <div class="form-row import-options"><label class="field">CSV delimiter<select [(ngModel)]="delimiter" [disabled]="busy()" (ngModelChange)="readFile()"><option value=",">Comma</option><option value=";">Semicolon</option><option value="&#9;">Tab</option></select></label>
+    @if (sheets.length) { <label class="field">Worksheet<select [(ngModel)]="sheet" [disabled]="busy()" (ngModelChange)="readSheet()">@for (s of sheets; track s) { <option [value]="s">{{ s }}</option> }</select></label> }
+  </div>
+  <p class="import-file-note">Keep admission numbers and phone numbers as text to preserve leading zeros. Guardian contacts are stored for school records.</p>
+</section>
+
+@if (headers().length) {
+  <section class="panel"><h3>2. Match columns</h3><p>{{ filename }} · {{ rows().length }} source rows · {{ ignored() }} columns will be ignored. Check all suggested matches.</p>
+    <fieldset [disabled]="busy()" class="import-mapping"><div class="table-scroll import-mapping__table"><table><thead><tr><th>File column</th><th>First row example</th><th>Store as</th></tr></thead><tbody>
+      @for (h of headers(); track $index; let i = $index) { <tr><td>{{ i + 1 }}. {{ h || '(no heading)' }}</td><td>{{ (rows()[0]?.[i] || '—').slice(0,100) }}</td><td><select [attr.aria-label]="'Map column ' + (i + 1)" [ngModel]="mappings()[i]" (ngModelChange)="mapping(i, $event)"><option value="">Ignore column</option>@for (field of fields; track field.key) { <option [value]="field.key">{{ field.label }}</option> }</select></td></tr> }
+    </tbody></table></div>
+    <div class="form-row"><label class="field">Dates in this file<select [(ngModel)]="dateFormat" (ngModelChange)="resetPreview()"><option value="ISO">YYYY-MM-DD</option><option value="DMY">DD/MM/YYYY</option><option value="MDY">MM/DD/YYYY</option></select></label><label class="field">Class for all rows (optional)<select [(ngModel)]="defaultClass" (ngModelChange)="resetPreview()"><option value="">Use each row's class</option>@for (c of store.classes(); track c.id) { <option [value]="c.id">{{ c.name }}</option> }</select></label></div>
+    @if (!defaultClass && classValues().length) { <h3>Match class names</h3><p>Exact names and unambiguous spacing differences match automatically. Choose a saved class for abbreviations or other differences.</p>@for (value of classValues(); track value) { <label class="field">{{ value }}<select [(ngModel)]="classMappings[value]" (ngModelChange)="resetPreview()"><option [ngValue]="undefined">Match from CSV name</option>@for (c of store.classes(); track c.id) { <option [value]="c.id">{{ c.name }}</option> }</select></label> } }
+    </fieldset><button type="button" class="action-btn action-btn--primary" [disabled]="busy() || store.readOnly()" (click)="validate()">{{ busy() ? 'Working…' : 'Validate and preview' }}</button>
+  </section>
+}
+
+@if (preview(); as p) {
+  <section class="panel"><h3>3. Review and confirm</h3><p><strong>{{ p.total }} rows: {{ p.valid }} valid, {{ p.total - p.valid }} with errors.</strong> Existing students will not be overwritten. This preview expires after 24 hours.</p>
+    <div class="table-scroll"><table><thead><tr><th>Source row</th><th>Name</th><th>Admission number</th><th>Validation</th></tr></thead><tbody>@for (r of reviewRows(); track r.row) { <tr><td>{{ r.row }}</td><td>{{ r.values.name }}</td><td>{{ r.values.admissionNumber }}</td><td>{{ r.errors.length ? r.errors.join('; ') : 'Ready to import' }}</td></tr> }</tbody></table></div>
+    <div class="pagination"><button type="button" class="action-btn" [disabled]="page() === 1" (click)="page.set(page()-1)">Previous</button><span>Page {{ page() }}</span><button type="button" class="action-btn" [disabled]="page()*25 >= p.total" (click)="page.set(page()+1)">Next</button></div>
+    <div class="actions"><button type="button" class="action-btn" (click)="errorsCsv()">Download errors</button><button type="button" class="action-btn action-btn--primary" [disabled]="busy() || !p.valid || progress()?.done || store.readOnly()" (click)="commit()">{{ busy() ? 'Importing…' : progress() || error() ? 'Resume import' : 'Confirm import of ' + p.valid + ' valid rows' }}</button></div>
+    @if (progress(); as result) { <p role="status">{{ result.done ? 'Import finished.' : 'Import progress:' }} {{ result.cursor }} / {{ result.total }} processed · {{ imported() }} imported · {{ failed() }} failed after revalidation.</p><progress [value]="result.cursor" [max]="result.total" aria-label="Student import progress"></progress> }
+  </section>
+}
+
+<section class="panel import-history-panel"><div class="panel-heading"><div><h3>Import history</h3><p>Earlier uploads and their results for this academic year.</p></div><button type="button" class="action-btn" [disabled]="historyLoading()" (click)="loadHistory()">Refresh history</button></div>
+  <input type="search" aria-label="Search import history" placeholder="Search filename" [ngModel]="historySearch()" (ngModelChange)="filterHistory($event)">
+  @if (historyLoading()) { <p role="status">Loading import history…</p> }
+  @else if (historyError()) { <p class="portal-notice portal-notice--error" role="alert">{{ historyError() }}</p> }
+  @else { <div class="table-scroll"><table><thead><tr><th>File</th><th>Uploaded</th><th>Rows</th><th>Imported</th><th>Failed</th><th>Status</th><th>Action</th></tr></thead><tbody>
+    @for (job of history(); track job.id) { <tr><td>{{ job.filename }}</td><td>{{ job.createdAt | date:'medium' }}</td><td>{{ job.total }}</td><td>{{ job.imported }}</td><td>{{ job.failed }}</td><td>{{ job.processed ? 'Import recorded' : job.expired ? 'Preview expired' : 'Preview only' }}</td><td><button type="button" class="action-btn" [disabled]="busy()" (click)="removeHistory(job)">Remove record</button></td></tr> }
+    @empty { <tr><td colspan="7" class="empty">No uploads recorded for this academic year.</td></tr> }
+  </tbody></table></div><div class="pagination"><span>Page {{ historyPage() }} of {{ historyPages() }} · {{ historyTotal() }} import records</span><div class="row-actions"><button type="button" class="action-btn" [disabled]="historyPage() <= 1" (click)="changeHistoryPage(-1)">Previous</button><button type="button" class="action-btn" [disabled]="historyPage() >= historyPages()" (click)="changeHistoryPage(1)">Next</button></div></div> }
+</section>

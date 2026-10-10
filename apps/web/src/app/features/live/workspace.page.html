@@ -243,12 +243,13 @@
             <div class="panel-heading">
               <div>
                 <h2>Registered Schools</h2>
-                <p class="panel-sub">{{ total }} registered {{ total === 1 ? 'school' : 'schools' }}</p>
+                <p class="panel-sub">{{ total }} matching {{ total === 1 ? 'school' : 'schools' }}</p>
               </div>
               @if (schoolId) {
                 <button class="action-btn" (click)="choose('')">Platform Overview</button>
               }
             </div>
+            <input class="school-search" type="search" aria-label="Search registered schools" placeholder="Search school, code or region" [ngModel]="schoolSearch" (ngModelChange)="filterSchools($event)" />
 
             <div class="table-scroll">
               <table>
@@ -496,7 +497,7 @@
             <div class="panel-heading">
               <div>
                 <h2>Student Records</h2>
-                <p class="panel-sub">Showing the latest {{ w.students.length }} of {{ w.studentCount }} accessible students.</p>
+                <p class="panel-sub">Showing {{ studentRangeStart }}–{{ studentRangeEnd }} of {{ w.studentCount }} accessible students.</p>
               </div>
               @if (w.permissions.registrar) {
                 <button
@@ -525,7 +526,7 @@
                       <td><code>{{ s.admissionNumber }}</code></td>
                       <td>
                         @for (e of s.enrollments; track $index) {
-                          <span class="role-badge">{{ e.classroom.name }} / {{ e.classroom.year.name }}</span>
+                          <span class="role-badge">{{ displayClassName(e.classroom.name) }} / {{ e.classroom.year.name }}</span>
                         }
                       </td>
                     </tr>
@@ -536,6 +537,13 @@
                   }
                 </tbody>
               </table>
+            </div>
+            <div class="pagination-bar" role="navigation" aria-label="Student records pagination">
+              <span>Page {{ studentPage }} of {{ studentPages }} · {{ w.studentCount }} students</span>
+              <div class="pagination-actions">
+                <button type="button" [disabled]="studentPage <= 1 || busy" (click)="changeStudentPage(-1)">Previous</button>
+                <button type="button" [disabled]="studentPage >= studentPages || busy" (click)="changeStudentPage(1)">Next</button>
+              </div>
             </div>
           </section>
         }
@@ -575,7 +583,7 @@
                 <tbody>
                   @for (c of w.classes; track c.id) {
                     <tr>
-                      <td><strong>{{ c.name }}</strong></td>
+                      <td><strong>{{ displayClassName(c.name) }}</strong></td>
                       <td>{{ c.year.name }}</td>
                       <td>
                         <span class="portal-pill" [attr.data-status]="c.year.closed ? 'Suspended' : 'Active'">
@@ -610,9 +618,10 @@
           <div class="panel-heading">
             <div>
               <h2>Audit History</h2>
-              <p class="panel-sub">Latest 100 recorded platform actions for this school</p>
+              <p class="panel-sub">Search recorded actions for this school</p>
             </div>
           </div>
+          <input class="audit-search" type="search" aria-label="Search audit history" placeholder="Search actions, targets or actors" [ngModel]="auditSearch" (ngModelChange)="filterAudit($event)" />
 
           <div class="table-scroll">
             <table>
@@ -638,6 +647,7 @@
               </tbody>
             </table>
           </div>
+          <div class="pagination-bar" role="navigation" aria-label="Audit history pagination"><span>Page {{auditPage}} of {{auditPages}} · {{auditTotal}} events</span><div class="pagination-actions"><button type="button" [disabled]="auditPage <= 1 || busy" (click)="changeAuditPage(-1)">Previous</button><button type="button" [disabled]="auditPage >= auditPages || busy" (click)="changeAuditPage(1)">Next</button></div></div>
         </section>
       }
       </div>

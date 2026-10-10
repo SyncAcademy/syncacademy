@@ -3,7 +3,7 @@ import { PortalConnectionComponent } from '../../shared/components/portal-connec
 import { AcademicYearSelectorComponent } from '../../shared/components/academic-year-selector.component';
 import { BursarStore } from './bursar.store';
 import { Component, ElementRef, OnInit, ViewChild, signal, inject } from '@angular/core';
-import { Router, RouterOutlet, RouterLink, NavigationEnd, ActivatedRoute } from '@angular/router';
+import { Router, RouterOutlet, NavigationEnd, ActivatedRoute } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import {
   IonApp,
@@ -13,6 +13,8 @@ import {
   IonMenuButton,
 } from '@ionic/angular/standalone';
 import { BursarSidebarComponent } from './components/bursar-sidebar/bursar-sidebar.component';
+import { NotificationBellComponent } from '../../shared/notifications/notification-bell.component';
+import { LoadingSkeletonComponent } from '../../shared/loading-skeleton.component';
 
 @Component({
   selector: 'app-bursar-layout',
@@ -20,13 +22,12 @@ import { BursarSidebarComponent } from './components/bursar-sidebar/bursar-sideb
   host: { class: 'portal-shell' },
   templateUrl: './bursar.layout.html',
   styleUrls: ['./bursar.layout.scss'],
-  imports: [PortalConnectionComponent,
+  imports: [PortalConnectionComponent, NotificationBellComponent, LoadingSkeletonComponent,
     AcademicYearSelectorComponent,
     IonApp,
     IonSplitPane,
     IonMenu,
     RouterOutlet,
-    RouterLink,
     IonHeader,
     IonMenuButton,
     BursarSidebarComponent,
@@ -51,7 +52,11 @@ export class BursarLayout implements OnInit {
     this.updateTitle();
     this.router.events
       .pipe(filter(event => event instanceof NavigationEnd))
-      .subscribe(() => this.updateTitle());
+      .subscribe(() => {
+        this.updateTitle();
+        this.bursarContent?.nativeElement.scrollTo({ top: 0, behavior: 'instant' });
+        this.showScrollTop.set(false);
+      });
   }
 
   private updateTitle(): void {

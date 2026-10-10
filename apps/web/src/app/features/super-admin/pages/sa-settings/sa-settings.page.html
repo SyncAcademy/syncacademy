@@ -1,31 +1,51 @@
-<div class="page-header">
+<header class="page-header">
   <div>
     <h2>Platform Settings</h2>
-    <p>Platform information and administrator access.</p>
+    <p>Manage shared platform preferences, administrators, and access.</p>
   </div>
-</div>
+  <span class="settings-header__badge">Platform</span>
+</header>
 @if (notice) {
 <p class="portal-notice" role="status">{{ notice }}</p>
 } @if (error) {
 <p class="portal-notice portal-notice--error" role="alert">{{ error }}</p>
 }
-<section class="detail-panel">
-  <div class="detail-heading">
-    <h3>Platform preferences</h3>
+<section class="detail-panel settings-section settings-section--preferences">
+  <div class="detail-heading settings-section__header">
+    <div>
+      <span class="settings-section__eyebrow">Configuration</span>
+      <h3>Platform preferences</h3>
+    </div>
     <button
       class="action-btn"
-      disabled
-      title="Preference editing is not available yet"
+      (click)="preferences()"
     >
       Edit preferences
     </button>
   </div>
-  <p>{{store.settings().platformName}}</p>
-  <p>Platform-wide preferences are not editable yet.</p>
+  <div class="settings-summary">
+    <div class="settings-summary__item">
+      <span>Platform name</span>
+      <strong>{{ store.settings().platformName }}</strong>
+    </div>
+    <div class="settings-summary__item">
+      <span>Support email</span>
+      <strong>{{ store.settings().supportEmail || 'Not set' }}</strong>
+    </div>
+    @if (store.settings().maintenanceMessage) {
+      <div class="settings-summary__item settings-summary__item--announcement">
+        <span>Admin announcement</span>
+        <strong>{{ store.settings().maintenanceMessage }}</strong>
+      </div>
+    }
+  </div>
 </section>
-<section class="detail-panel">
-  <div class="detail-heading">
-    <h3>Super Admins</h3>
+<section class="detail-panel settings-section">
+  <div class="detail-heading settings-section__header">
+    <div>
+      <span class="settings-section__eyebrow">Access management</span>
+      <h3>Super Admins</h3>
+    </div>
     <button
       class="action-btn action-btn--primary"
       (click)="inviteAdministrator()"
@@ -33,73 +53,101 @@
       Invite Super Admin
     </button>
   </div>
-  @for(a of store.admins();track a.id){
-  <div class="detail-panel">
-    <div class="detail-heading">
-      <div>
-        <strong>{{a.name}}</strong>
-        <p>{{a.email}} · {{a.status}}</p>
-      </div>
-    </div>
-  </div>
-  }@empty {
-  <p>No platform administrators found.</p>
-  }
-</section>
-<section class="detail-panel">
-  <h3>Platform invitations</h3>
-  <p>
-    Invitations are single-use and expire at the selected time. Resending
-    invalidates the previous link.
-  </p>
-  @for(invitation of invitations;track invitation.id){
-  <div class="detail-heading">
-    <div>
-      <strong>{{invitation.name}}</strong>
-      <p>
-        {{invitation.email}} · {{invitationStatus(invitation)}} · Expires
-        {{invitation.expiresAt | date:'medium'}}
-      </p>
-    </div>
-    @if (!invitation.acceptedAt && !invitation.revokedAt &&
-    invitationStatus(invitation) === 'Pending') {
-    <div class="actions">
-      <button
-        class="action-btn"
-        [disabled]="saving"
-        (click)="invitationAction(invitation.id, 'resend')"
-      >
-        Resend</button
-      ><button
-        class="action-btn"
-        [disabled]="saving"
-        (click)="invitationAction(invitation.id, 'revoke')"
-      >
-        Revoke
-      </button>
-    </div>
+  <div class="settings-list">
+    @for (a of store.admins(); track a.id) {
+      <article class="admin-row">
+        <div class="admin-row__identity">
+          <strong>{{ a.name }}</strong>
+          <span>{{ a.email }}</span>
+        </div>
+        <span class="status-pill" [attr.data-status]="a.status">{{ a.status }}</span>
+        @if (a.id !== store.auth.identity()?.id) { <button class="action-btn action-btn--danger" (click)="targetAdmin=a">Suspend access</button> }
+      </article>
+    } @empty {
+      <p class="settings-empty">No platform administrators found.</p>
     }
   </div>
-  }@empty {
-  <p>No platform invitations yet.</p>
-  }
 </section>
-<section class="detail-panel">
-  <div class="detail-heading">
-    <h3>Account security</h3>
-    <a class="action-btn" href="/auth/security"
-      >Manage password and authenticator</a
-    >
+<app-confirm-dialog [open]="!!targetAdmin" title="Suspend Super Admin access" [message]="'This will suspend platform access for ' + (targetAdmin?.name || 'this administrator') + ' and revoke active sessions. School roles and records will remain. Access can be restored with a new invitation.'" confirmLabel="Suspend access" variant="danger" (confirmed)="changeAdminAccess()" (cancelled)="targetAdmin=null"></app-confirm-dialog>
+<section class="detail-panel settings-section">
+  <div class="detail-heading settings-section__header">
+    <div>
+      <span class="settings-section__eyebrow">Access management</span>
+      <h3>Platform invitations</h3>
+    </div>
   </div>
-  <p>
-    Super Admin accounts require an authenticator code. Use your account
-    security page to change your password.
+  <p class="settings-section__description">
+    Invitations are single-use and expire at the selected time. Resending invalidates the previous link.
+  </p>
+  <div class="invitation-search">
+    <input
+      type="search"
+      aria-label="Search platform invitations"
+      placeholder="Search name or email"
+      [ngModel]="inviteSearch"
+      (ngModelChange)="searchInvitations($event)"
+    />
+  </div>
+  <div class="settings-list invitation-list">
+    @for (invitation of invitations; track invitation.id) {
+      <article class="invitation-row">
+        <div class="invitation-row__details">
+          <strong>{{ invitation.name }}</strong>
+          <span>{{ invitation.email }}</span>
+          <div class="invitation-row__meta">
+            <span class="status-pill" [attr.data-status]="invitationStatus(invitation)">
+              {{ invitationStatus(invitation) }}
+            </span>
+            <span>Expires {{ invitation.expiresAt | date:'medium' }}</span>
+          </div>
+        </div>
+        @if (!invitation.acceptedAt && !invitation.revokedAt && invitationStatus(invitation) === 'Pending') {
+          <div class="actions invitation-row__actions">
+            <button
+              class="action-btn"
+              [disabled]="saving"
+              (click)="invitationAction(invitation.id, 'resend')"
+            >
+              Resend
+            </button>
+            <button
+              class="action-btn action-btn--danger"
+              [disabled]="saving"
+              (click)="invitationAction(invitation.id, 'revoke')"
+            >
+              Revoke
+            </button>
+          </div>
+        }
+      </article>
+    } @empty {
+      <p class="settings-empty">No platform invitations yet.</p>
+    }
+  </div>
+  <nav class="pagination-bar" aria-label="Platform invitations pagination">
+    <span>Page {{ invitePage }} of {{ invitePages }} · {{ inviteTotal }} invitations</span>
+    <div class="pagination-actions">
+      <button class="action-btn" [disabled]="invitePage <= 1" (click)="invitationPage(-1)">Previous</button>
+      <button class="action-btn" [disabled]="invitePage >= invitePages" (click)="invitationPage(1)">Next</button>
+    </div>
+  </nav>
+</section>
+<section class="detail-panel settings-section settings-section--security">
+  <div class="detail-heading settings-section__header">
+    <div>
+      <span class="settings-section__eyebrow">Account protection</span>
+      <h3>Account security</h3>
+    </div>
+    <a class="action-btn" href="/auth/security">Manage password and authenticator</a>
+  </div>
+  <p class="settings-section__description">
+    Super Admin accounts require an authenticator code. Use your account security page to change your password.
   </p>
 </section>
 @if (editor; as e) {
 <app-sa-editor
   [title]="e.title"
-  description="The recipient sets their password after accepting this one-time email invitation."
+  [description]="e.mode === 'settings' ? 'These preferences are shared across the platform.' : 'The recipient sets their password after accepting this one-time email invitation.'"
   [fields]="e.fields"
   [values]="e.values"
   [busy]="saving"

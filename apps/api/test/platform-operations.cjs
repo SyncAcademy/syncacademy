@@ -1,0 +1,44 @@
+const assert = require('node:assert/strict');
+const { randomUUID } = require('node:crypto');
+
+module.exports = async function platformOperations({ t, db, client, admin }) {
+  await t.test('platform leads, school conversion, settings and health persist', async () => {
+    const outsider = client();
+    assert.equal((await outsider.call('GET', 'platform/leads')).status, 401);
+    const values = { schoolName: 'Pipeline School', contactName: 'Pipeline Head', contactEmail: 'pipeline-head@example.test', contactPhone: '+255700000001', location: 'Arusha', source: 'referral', status: 'new', studentCount: 410, notes: 'Interested', owner: 'Platform team', followUp: '2026-10-10' };
+    const key = randomUUID();
+    const created = await admin.call('POST', 'platform/leads', values, { 'Idempotency-Key': key });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const lead = created.body;
+    assert.equal((await admin.call('POST', 'platform/leads', values, { 'Idempotency-Key': key })).body.id, lead.id);
+    assert.equal((await admin.call('POST', `platform/leads/${lead.id}/convert`, { code: 'PIPE-TEST', expiresInMinutes: 2880 }, { 'Idempotency-Key': randomUUID() })).status, 409);
+    const edited = await admin.call('PATCH', `platform/leads/${lead.id}`, { ...values, status: 'won' });
+    assert.equal(edited.status, 200, JSON.stringify(edited.body));
+    const converted = await admin.call('POST', `platform/leads/${lead.id}/convert`, { code: 'PIPE-TEST', expiresInMinutes: 2880 }, { 'Idempotency-Key': randomUUID() });
+    assert.equal(converted.status, 201, JSON.stringify(converted.body));
+    assert.equal(converted.body.invitation.role, 'HEADMASTER');
+    assert.equal((await db.platformLead.findUniqueOrThrow({ where: { id: lead.id } })).convertedSchoolId, converted.body.school.id);
+    assert.equal((await admin.call('POST', `platform/leads/${lead.id}/convert`, { code: 'PIPE-TEST2', expiresInMinutes: 2880 }, { 'Idempotency-Key': randomUUID() })).status, 409);
+    assert.equal((await admin.call('GET', 'platform/leads')).body.items.some(item => item.id === lead.id), true);
+    const settings = { platformName: 'SyncAcademy Operations', supportEmail: 'support@example.test', maintenanceMessage: 'Scheduled review' };
+    assert.equal((await admin.call('PATCH', 'platform/settings', settings)).status, 200);
+    assert.equal((await admin.call('GET', 'platform/settings')).body.platformName, settings.platformName);
+    const health = await admin.call('GET', 'platform/health');
+    assert.equal(health.status, 200); assert.equal(health.body.status, 'ready');
+    assert.ok(health.body.mail.queued >= 1);
+    assert.equal((await outsider.call('PATCH', 'platform/settings', settings)).status, 401);
+    const suffix=randomUUID().slice(0,8);
+    await db.school.createMany({data:Array.from({length:27},(_,index)=>({name:`Paged Campus ${String(index).padStart(2,'0')}`,code:`PG-${suffix}-${index}`,region:'Dodoma'}))});
+    let list=await admin.call('GET','schools?page=1&pageSize=10&q=Paged%20Campus');
+    assert.equal(list.status,200);assert.equal(list.body.total,27);assert.equal(list.body.items.length,10);
+    list=await admin.call('GET','schools?page=3&pageSize=10&q=Paged%20Campus');
+    assert.equal(list.body.items.length,7,'school search reaches later pages');
+    await db.platformLead.createMany({data:Array.from({length:31},(_,index)=>({schoolName:`Paged Lead ${String(index).padStart(2,'0')}`,contactName:'Follow-up Contact',contactEmail:`paged-${suffix}-${index}@example.test`,location:'Dodoma',source:'event',status:index%2?'contacted':'new',studentCount:100}))});
+    list=await admin.call('GET','platform/leads?page=2&pageSize=10&q=Paged%20Lead&source=event');
+    assert.equal(list.status,200);assert.equal(list.body.total,31);assert.equal(list.body.items.length,10);
+    assert.ok(list.body.stages.new>=16);
+    list=await admin.call('GET','audit?page=1&pageSize=10&q=PLATFORM_LEAD');
+    assert.equal(list.status,200);assert.ok(list.body.total>=3);assert.ok(list.body.items.every(item=>item.action.includes('PLATFORM_LEAD')));
+    assert.equal((await admin.call('GET','platform/search?q=Paged')).body.schools.length,5);
+  });
+};

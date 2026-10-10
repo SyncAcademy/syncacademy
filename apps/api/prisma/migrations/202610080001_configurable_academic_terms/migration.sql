@@ -1,0 +1,1 @@
+ALTER TABLE "AcademicYear" ADD COLUMN "terms" JSONB NOT NULL DEFAULT '[]';

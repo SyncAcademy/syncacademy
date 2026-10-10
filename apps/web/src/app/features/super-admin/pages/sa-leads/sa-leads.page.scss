@@ -1,7 +1,7 @@
 @use 'variables' as *;
 @use 'mixins' as *;
 
-.page-header {
+.section-header {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 16px; margin-bottom: 24px; flex-wrap: wrap;
   h2 { margin: 0; font-size: 1.5rem; font-weight: 700; color: $text-primary; }
@@ -62,4 +62,4 @@ table {
   &[data-status="lost"] { background: #fef2f2; color: #991b1b; }
 }
 
-@include mobile { .page-header { flex-direction: column; } .pipeline-funnel { flex-wrap: wrap; } }
+@include mobile { .section-header { flex-direction: column; } .pipeline-funnel { flex-wrap: wrap; } }

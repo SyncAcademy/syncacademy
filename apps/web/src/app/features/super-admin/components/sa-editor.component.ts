@@ -1,5 +1,6 @@
-import { AfterViewInit, Component, ElementRef, EventEmitter, Input, Output, ViewChild, OnDestroy } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { DialogFocusDirective } from '../../../shared/directives/dialog-focus.directive';
 
 export interface EditorField {
   key: string; label: string; type?: string; required?: boolean; min?: number;
@@ -7,11 +8,11 @@ export interface EditorField {
 }
 
 @Component({
-  selector: 'app-sa-editor', standalone: true, imports: [FormsModule],
+  selector: 'app-sa-editor', standalone: true, imports: [FormsModule, DialogFocusDirective],
   template: `
-    <dialog #dialog aria-labelledby="editor-title" (click)="onDialogClick($event)" (cancel)="onCancel($event)">
-      <form #form="ngForm" (ngSubmit)="form.valid && submit()">
-        <h2 id="editor-title">{{ title }}</h2>
+    <dialog #dialog appDialogFocus aria-labelledby="editor-title" (click)="onDialogClick($event)" (keydown.escape)="onCancel($event)">
+      <form class="modal-card editor-card" #form="ngForm" (click)="$event.stopPropagation()" (ngSubmit)="form.valid && submit()">
+        <header class="editor-heading"><h2 id="editor-title">{{ title }}</h2><button type="button" class="editor-button editor-button--secondary" aria-label="Close dialog" [disabled]="busy" (click)="cancelled.emit()">Close</button></header>
         <p>{{ description }}</p>
         @for (field of fields; track field.key) {
           <label [for]="'edit-' + field.key">{{ field.label }}{{ field.required ? ' *' : '' }}</label>
@@ -30,8 +31,9 @@ export interface EditorField {
       </form>
     </dialog>`,
   styles: [`
-    dialog { box-sizing: border-box; width: min(520px, calc(100vw - 24px)); max-height: min(90dvh, 720px); overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #172033; }
-    dialog::backdrop { background: #0f172a88; }
+    .editor-card { box-sizing:border-box; width:540px; padding:24px; color:#172033; }
+    .editor-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .editor-heading h2 { margin:0; font-size:1.25rem; }
     h2 { margin-top: 0; }
     p { color: #64748b; font-size: .875rem; line-height: 1.5; }
     label { display: block; margin: 14px 0 6px; font-weight: 600; font-size: .875rem; }
@@ -47,16 +49,15 @@ export interface EditorField {
     .editor-button:focus-visible { outline: 2px solid #b45309; outline-offset: 2px; }
     .editor-button:disabled { opacity: .5; cursor: not-allowed; }
     .error { color: #b91c1c; }
-    @media (max-width: 480px) { dialog { padding: 16px; } footer button { flex: 1 1 100%; } }
+    @media (max-width: 480px) { .editor-card { padding: 18px; } footer button { flex: 1 1 100%; } }
   `],
 })
-export class SaEditorComponent implements AfterViewInit, OnDestroy {
-  private opener = document.activeElement as HTMLElement | null;
+export class SaEditorComponent {
   validationError = '';
   @ViewChild('dialog') dialog!: ElementRef<HTMLDialogElement>;
   @Input() title = '';
   @Input() busy = false;
-  @Input() description = 'Changes are saved in this browser for the frontend demo.';
+  @Input() description = 'Changes are saved to your school records.';
   @Input() submitLabel = 'Save';
   @Input() fields: EditorField[] = [];
   @Input() values: Record<string, any> = {};
@@ -71,14 +72,11 @@ export class SaEditorComponent implements AfterViewInit, OnDestroy {
   }
   onDialogClick(event: MouseEvent): void {
     const dialog = this.dialog.nativeElement;
-    const bounds = dialog.getBoundingClientRect();
-    const outside = event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
-    if (outside && !this.busy) this.cancelled.emit();
+    if (event.target !== dialog) return;
+    if (!this.busy) this.cancelled.emit();
   }
   onCancel(event: Event): void {
     if (this.busy) { event.preventDefault(); return; }
     this.cancelled.emit();
   }
-  ngOnDestroy(): void { this.dialog.nativeElement.close(); this.opener?.focus(); }
-  ngAfterViewInit(): void { this.dialog.nativeElement.showModal(); }
 }

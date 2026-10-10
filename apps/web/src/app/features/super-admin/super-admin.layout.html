@@ -32,31 +32,20 @@
               <input type="search" aria-label="Search schools and leads" placeholder="Search schools, leads..." [value]="search()" (input)="search.set($any($event.target).value)" (keydown.escape)="search.set('')" />
               @if (search().trim()) { <div class="sa-search-results" aria-label="Search results">@for (r of searchResults(); track r.id) { <a [routerLink]="r.route" [queryParams]="{q: r.label}" (click)="search.set('')"><strong>{{ r.label }}</strong><small>{{ r.type }}</small></a> } @empty { <p>No matching schools or leads.</p> }</div> }
             </div>
-            <button class="icon-btn" [attr.aria-label]="'Alerts, ' + alertCount() + ' items'" [attr.aria-expanded]="showNotifications()" (click)="showNotifications.set(!showNotifications())">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-              </svg>
-              <span *ngIf="alertCount() > 0" class="sa-header__badge">{{ alertCount() }}</span>
-            </button>
+            <app-notification-bell audience="super-admin" />
           </div>
         </header>
       </ion-header>
 
-      <div *ngIf="showNotifications()" class="sa-notifications-backdrop" (click)="showNotifications.set(false)">
-        <section class="sa-notifications" role="dialog" aria-modal="true" aria-label="Platform alerts" (keydown.escape)="showNotifications.set(false)" (click)="$event.stopPropagation()">
-          <div class="sa-notifications__heading"><h2>Platform Alerts</h2><button class="action-btn" (click)="showNotifications.set(false)">Close</button></div>
-          @for (item of store.attention(); track item.id) { <a [routerLink]="item.route" [queryParams]="item.query" (click)="showNotifications.set(false)"><strong>{{ item.title }}</strong><span>{{ item.detail }} &middot; {{ item.action }}</span></a> } @empty { <p>No outstanding alerts.</p> }
-        </section>
-      </div>
 
       <!-- Scrollable Content -->
       <main #saContent class="sa-content" role="main" (scroll)="onContentScroll($event)">
         <div class="sa-content-inner">
           @if(store.loading()){<p role="status">Loading platform records…</p>}
-          @if (store.storageError()) { <p class="sa-demo-notice" role="alert">{{ store.storageError() }}</p> }
-          @if (store.settings().maintenanceMessage) { <p class="sa-demo-notice">{{ store.settings().maintenanceMessage }}</p> }
-          <router-outlet></router-outlet>
+          @if (store.storageError()) { <div class="portal-notice portal-notice--error" role="alert">{{ store.storageError() }} <button type="button" class="action-btn" [disabled]="store.loading()" (click)="store.load()">Retry loading</button></div> }
+          @if (store.settings().maintenanceMessage) { <p class="sa-notice">{{ store.settings().maintenanceMessage }}</p> }
+          @if (store.loading() && !store.summary()) { <app-loading-skeleton label="Loading platform records…" /> }
+          @else { <router-outlet></router-outlet> }
         </div>
       </main>
 

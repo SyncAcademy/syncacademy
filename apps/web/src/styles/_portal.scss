@@ -22,12 +22,22 @@
     background-color: #fff;
     &::placeholder { color: #64748b; opacity: 1; }
     &:focus-visible { outline: 2px solid #b45309; outline-offset: 2px; }
+    &:disabled { background:#f1f5f9; color:#64748b; cursor:not-allowed; }
+    &.ng-invalid.ng-touched { border-color:#b91c1c; }
   }
+  input:is([type=checkbox], [type=radio]) { min-height:20px; width:20px; accent-color:#b45309; flex-shrink:0; }
+  .sidebar__nav-icon { width:22px; height:22px; flex:0 0 22px; }
+  .form-group { display:flex; flex-direction:column; gap:.5rem; margin-bottom:1rem; }
+  .form-group > label { font-size:.875rem; font-weight:600; }
+  .form-group > :is(input, select, textarea) { border:1px solid #cbd5e1; border-radius:8px; padding:.625rem .75rem; width:100%; box-sizing:border-box; }
+  .field-error, .error-text { color:#b91c1c; font-size:.875rem; line-height:1.5; }
+  :is(.loading-state, .empty-state, .error-state) { padding:2rem 1rem; text-align:center; }
+  fieldset { min-width:0; }
 
   :is(.action-btn, .sa-btn, .sa-btn--primary, .header-action-btn, .row-btn, .m-btn,
       .dialog-btn, .dialog__btn, .copy-btn, .empty-btn, .alert-btn, .btn-primary,
       .btn-secondary, .btn-retry, .icon-btn, .dialog__close, .dialog-card__close,
-      .btn-icon-action, .btn-modal, .btn-close, .sa-btn-action, .error-state__retry-btn) {
+      .btn-icon-action, .btn-modal, .btn-close, .sa-btn-action, .error-state__retry-btn, .text-btn) {
     min-height: 44px;
     min-width: 44px;
     padding: .625rem 1rem;
@@ -163,3 +173,55 @@
 }
 
 @media print { app-bursar-layout.portal-shell .modal-card { max-height:none !important; overflow:visible !important; } }
+
+/* Native modal dialogs enter the browser top layer, above Ionic headers and
+   ancestor stacking/scroll containers. Keep DOM ancestry for component styles. */
+dialog.portal-dialog-layer[open] {
+  position:fixed !important;
+  inset:0 !important;
+  width:100% !important;
+  height:100% !important;
+  max-width:none !important;
+  max-height:none !important;
+  margin:0 !important;
+  border:0 !important;
+  padding:clamp(12px, 3vw, 28px) !important;
+  box-sizing:border-box;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  background:transparent !important;
+  color:inherit;
+  overflow:hidden !important;
+  transform:none !important;
+  animation:none !important;
+}
+dialog::backdrop {
+  background:rgb(15 23 42 / 45%) !important;
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+}
+dialog.portal-dialog-layer > :is(.modal-card, .dialog, .dialog-card, .head-notifications, .sa-notifications) {
+  background:#fff !important;
+  border:1px solid #e2e8f0 !important;
+  border-radius:14px !important;
+  box-shadow:0 20px 60px #0f172340 !important;
+  position:relative !important;
+  inset:auto !important;
+  margin:0 !important;
+  min-height:0;
+  max-width:100%;
+  max-height:calc(100dvh - clamp(24px, 6vw, 56px)) !important;
+  overflow-y:auto !important;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+}
+/* Hide the scrollbar chrome, while retaining wheel, touch and keyboard scroll. */
+dialog, dialog * { scrollbar-width:none !important; }
+dialog::-webkit-scrollbar, dialog *::-webkit-scrollbar { display:none !important; width:0; height:0; }
+body:has(dialog[open]) { overflow:hidden; }
+@media print {
+  dialog.portal-dialog-layer[open] { position:static !important; display:block !important; height:auto !important; padding:0 !important; overflow:visible !important; }
+  dialog.portal-dialog-layer > :is(.modal-card, .dialog, .dialog-card) { max-height:none !important; overflow:visible !important; }
+  dialog::backdrop { background:transparent !important; backdrop-filter:none; }
+}

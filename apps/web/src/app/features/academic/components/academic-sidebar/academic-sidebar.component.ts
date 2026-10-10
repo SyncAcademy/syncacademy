@@ -18,6 +18,7 @@ export class AcademicSidebarComponent {
     { label: 'DASHBOARD', items: [{ title: 'Overview', route: '/academic/dashboard', icon: 'overview' }] },
     { label: 'ACADEMIC WORK', items: [
       { title: 'Classes & Subjects', route: '/academic/classes-subjects', icon: 'academics' },
+      { title: 'Student Subjects', route: '/academic/student-subjects', icon: 'students' },
       { title: 'Teachers', route: '/academic/teachers', icon: 'teachers' },
       { title: 'Marks Review', route: '/academic/marks-review', icon: 'approvals' },
       { title: 'Assessments', route: '/academic/assessments', icon: 'gradebook' },
@@ -31,7 +32,7 @@ export class AcademicSidebarComponent {
       { title: 'Roster Issues', route: '/academic/roster-issues', icon: 'students' },
       { title: 'Student Support', route: '/academic/interventions', icon: 'communication' },
     ] },
-    { label: 'SETTINGS', items: [{ title: 'Academic Settings', route: '/academic/settings', icon: 'settings' }] },
+    { label: 'SETTINGS', items: [{ title: 'Academic Years & Terms', route: '/academic/years', icon: 'calendar' }, { title: 'Academic Settings', route: '/academic/settings', icon: 'settings' }] },
   ];
   constructor(private router:Router,private menuController:MenuController) {}
   navigateTo(route: string): void { void this.router.navigate([route],{queryParamsHandling:'preserve'}).then(() => this.menuController.close('academic-menu')); }

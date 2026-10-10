@@ -1,6 +1,6 @@
 # SyncAcademy
 
-Angular frontend, NestJS API, and PostgreSQL. Authentication and school onboarding use real database records; the original dashboard layouts are retained, with unfinished workflows marked unavailable until their APIs are implemented. See [UI integration status](docs/ORIGINAL_UI_BACKEND_INTEGRATION.md).
+Angular frontend, NestJS API, and PostgreSQL. Authentication and school onboarding use real database records; the original dashboard layouts are retained, with unfinished workflows marked unavailable until their APIs are implemented. See [UI integration status](docs/ORIGINAL_UI_BACKEND_INTEGRATION.md) and [student management](docs/STUDENT_MANAGEMENT_IMPLEMENTED.md).
 
 ## Run locally
 

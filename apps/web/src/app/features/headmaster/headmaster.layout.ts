@@ -2,11 +2,10 @@ import { SchoolApiService } from '../../core/services/school-api.service';
 import { PortalConnectionComponent } from '../../shared/components/portal-connection.component';
 import { AcademicYearSelectorComponent } from '../../shared/components/academic-year-selector.component';
 import { CommonModule } from '@angular/common';
-import { HeadDemoStore } from './head-demo.store';
-import { ReportDemoStore } from './report-demo.store';
-import { DialogFocusDirective } from '../../shared/directives/dialog-focus.directive';
+import { HeadStore } from './head.store';
+import { ReportStore } from './report.store';
 import { Component, ElementRef, OnInit, ViewChild, signal, inject, computed } from '@angular/core';
-import { Router, RouterOutlet, RouterLink, NavigationEnd, ActivatedRoute } from '@angular/router';
+import { Router, RouterOutlet, NavigationEnd, ActivatedRoute } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import {
   IonApp,
@@ -16,6 +15,9 @@ import {
   IonMenuButton,
 } from '@ionic/angular/standalone';
 import { HeadSidebarComponent } from './components/head-sidebar/head-sidebar.component';
+import { NotificationBellComponent } from '../../shared/notifications/notification-bell.component';
+import { LoadingSkeletonComponent } from '../../shared/loading-skeleton.component';
+import { AcademicDataService } from '../../core/services/academic-data.service';
 
 @Component({
   selector: 'app-headmaster-layout',
@@ -23,15 +25,13 @@ import { HeadSidebarComponent } from './components/head-sidebar/head-sidebar.com
   host: { class: 'portal-shell' },
   templateUrl: './headmaster.layout.html',
   styleUrls: ['./headmaster.layout.scss'],
-  imports: [PortalConnectionComponent,
+  imports: [PortalConnectionComponent, NotificationBellComponent, LoadingSkeletonComponent,
     AcademicYearSelectorComponent,
     IonApp,
     IonSplitPane,
     IonMenu,
     RouterOutlet,
-    RouterLink,
     CommonModule,
-    DialogFocusDirective,
     IonHeader,
     IonMenuButton,
     HeadSidebarComponent,
@@ -39,11 +39,14 @@ import { HeadSidebarComponent } from './components/head-sidebar/head-sidebar.com
 })
 export class HeadmasterLayout implements OnInit {
   readonly api=inject(SchoolApiService);
+  readonly academicData=inject(AcademicDataService);
 
-  store = inject(HeadDemoStore);
-  reports = inject(ReportDemoStore);
+  store = inject(HeadStore);
+  reports = inject(ReportStore);
   showNotifications = signal(false);
-  notificationCount = computed(() => this.store.pending().length + this.reports.stats().failed);
+  pendingReportCount = computed(() => this.reports.reports().filter(r=>r.status==='generated').length);
+  pendingInvitationCount = computed(() => this.store.invitations().filter(i=>i.status==='active'&&Date.parse(i.expiresAt)>Date.now()).length);
+  notificationCount = computed(() => this.pendingInvitationCount() + this.pendingReportCount());
   @ViewChild('headContent') headContent?: ElementRef<HTMLElement>;
 
   pageTitle = signal<string>('');

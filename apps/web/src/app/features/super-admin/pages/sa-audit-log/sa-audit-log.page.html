@@ -1,49 +1,92 @@
-<div class="page-header">
+<header class="page-header">
   <div>
     <h2>Platform Audit Log</h2>
-    <p>Recorded platform actions (latest 100 events).</p>
+    <p>Search and review recorded platform actions.</p>
   </div>
-  <button class="action-btn" (click)="exportCsv()">Export CSV</button>
-</div>
+  <button
+    class="action-btn action-btn--primary"
+    [disabled]="exporting()"
+    (click)="exportCsv()"
+  >
+    {{ exporting() ? 'Exporting...' : 'Export matching CSV' }}
+  </button>
+</header>
 
-<div class="filters">
-  <input aria-label="Search actions, schools, details..." placeholder="Search actions, schools, details..." [ngModel]="search()" (ngModelChange)="search.set($event)" />
-  <select aria-label="Actor" [ngModel]="actorFilter()" (ngModelChange)="actorFilter.set($event)">
-    <option value="">All actors</option>
-    @for (a of actors(); track a) {
-      <option [value]="a">{{ a }}</option>
-    }
-  </select>
-  <select aria-label="Action" [ngModel]="actionFilter()" (ngModelChange)="actionFilter.set($event)"><option value="">All actions</option>@for (a of actions(); track a) { <option [value]="a">{{ a }}</option> }</select>
-  <label>From<input type="date" [ngModel]="from()" (ngModelChange)="from.set($event)" /></label><label>To<input type="date" [ngModel]="to()" (ngModelChange)="to.set($event)" /></label>
-</div>
-<section class="panel">
+@if (error()) {
+  <p class="portal-notice portal-notice--error" role="alert">{{ error() }}</p>
+}
+
+<section class="filters" aria-label="Filter audit entries">
+  <input
+    type="search"
+    aria-label="Search audit actions and targets"
+    placeholder="Search actions, targets or actors"
+    [ngModel]="search()"
+    (ngModelChange)="filter($event, 'search')"
+  />
+  <input
+    type="search"
+    aria-label="Filter by actor"
+    placeholder="Actor name or email"
+    [ngModel]="actorFilter()"
+    (ngModelChange)="filter($event, 'actor')"
+  />
+  <input
+    type="search"
+    aria-label="Filter by action"
+    placeholder="Action"
+    [ngModel]="actionFilter()"
+    (ngModelChange)="filter($event, 'action')"
+  />
+  <label>
+    <span>From</span>
+    <input type="date" [ngModel]="from()" (ngModelChange)="filter($event, 'from')" />
+  </label>
+  <label>
+    <span>To</span>
+    <input type="date" [ngModel]="to()" (ngModelChange)="filter($event, 'to')" />
+  </label>
+</section>
+
+<section class="panel audit-panel" aria-label="Audit entries">
   <div class="table-scroll">
     <table>
       <thead>
         <tr>
-          <th>Action</th>
-          <th>Actor</th>
-          <th>Target</th>
-          <th>Details</th>
-          <th>IP Address</th>
-          <th>Time</th>
+          <th scope="col">Action</th>
+          <th scope="col">Actor</th>
+          <th scope="col">Target</th>
+          <th scope="col">Time</th>
         </tr>
       </thead>
       <tbody>
         @for (log of filtered(); track log.id) {
           <tr>
-            <td><span class="action-badge" [attr.data-action]="log.action">{{ log.action }}</span></td>
-            <td>{{ log.actor }}</td>
-            <td><strong>{{ log.target }}</strong></td>
-            <td class="details-cell">{{ log.details }}</td>
-            <td><code>{{ log.ip }}</code></td>
-            <td>{{ log.timestamp | date:'medium' }}</td>
+            <td data-label="Action">
+              <span class="action-badge" [attr.data-action]="log.action">{{ log.action }}</span>
+            </td>
+            <td data-label="Actor">{{ log.actor }}</td>
+            <td data-label="Target"><strong>{{ log.target }}</strong></td>
+            <td data-label="Time">
+              <time [attr.datetime]="log.timestamp | date:'yyyy-MM-ddTHH:mm:ssXXX'">
+                {{ log.timestamp | date:'medium' }}
+              </time>
+            </td>
           </tr>
         } @empty {
-          <tr><td colspan="6">No audit entries match your filters.</td></tr>
+          <tr class="empty-row">
+            <td colspan="4">No audit entries match your filters.</td>
+          </tr>
         }
       </tbody>
     </table>
   </div>
 </section>
+
+<nav class="pagination-bar" aria-label="Audit pagination">
+  <span>Page {{ store.auditPage() }} of {{ pageCount() }} · {{ store.auditTotal() }} matching events</span>
+  <div class="pagination-actions">
+    <button class="action-btn" [disabled]="store.auditPage() <= 1" (click)="page(-1)">Previous</button>
+    <button class="action-btn" [disabled]="store.auditPage() >= pageCount()" (click)="page(1)">Next</button>
+  </div>
+</nav>

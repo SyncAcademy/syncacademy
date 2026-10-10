@@ -1,3 +1,7 @@
+# Current student-management update (2026-10-04)
+
+Registrar/student management now persists admissions, profile edits, enrollment, movements and year progression. Headmaster manages the same records; Academic has read-only class lists and student search. Parent/guardian workflows remain excluded. Mock datasets and the legacy demo-named adapters have been removed or renamed. See [student-management implementation](STUDENT_MANAGEMENT_IMPLEMENTED.md) for validation and current limits. The September notes below are historical where they describe these workflows as unavailable.
+
 # Original UI and real backend integration
 
 Updated 2026-09-28. The owner explicitly requires the former UI. Preserve its sidebars, page structure, cards, tables, dialogs, responsive styles and navigation. Do not replace it with the generic live workspace. Keep the removed general dashboard removed. No payments or subscriptions are in scope.

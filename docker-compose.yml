@@ -67,7 +67,7 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     ports:
-      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8080}:8080"
     depends_on:
       api: { condition: service_healthy }
     restart: unless-stopped

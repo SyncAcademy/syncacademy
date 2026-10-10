@@ -1,6 +1,9 @@
 import { Component, OnDestroy, OnInit, HostListener, signal, computed, AfterViewInit, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { LogoComponent } from '@shared/components/logo/logo.component';
 
 export interface HeroSlide {
@@ -39,7 +42,7 @@ export interface StatCounter {
 @Component({
   selector: 'app-landing',
   standalone: true,
-  imports: [CommonModule, RouterModule, LogoComponent],
+  imports: [CommonModule, RouterModule, FormsModule, LogoComponent],
   templateUrl: './landing.page.html',
   styleUrls: ['./landing.page.scss']
 })
@@ -142,7 +145,36 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
   private slideIntervalId: ReturnType<typeof setInterval> | null = null;
   private isPaused = signal(false);
 
-  constructor(private el: ElementRef) {}
+  contactData = {
+    fullName: '',
+    emailAddress: '',
+    phoneNumber: '',
+    subject: '',
+    message: ''
+  };
+
+  contactStatus = signal<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  contactMessage = signal<string>('');
+
+  constructor(private el: ElementRef, private http: HttpClient) {}
+
+  async submitContactForm() {
+    if (this.contactStatus() === 'submitting') return;
+    this.contactStatus.set('submitting');
+    this.contactMessage.set('');
+
+    try {
+      const res = await firstValueFrom(this.http.post<{message: string}>('/api/v1/contact', this.contactData, {
+        headers: { 'X-Requested-With': 'SyncAcademy', 'Content-Type': 'application/json' }
+      }));
+      this.contactStatus.set('success');
+      this.contactMessage.set(res?.message || 'Your message has been sent successfully.');
+      this.contactData = { fullName: '', emailAddress: '', phoneNumber: '', subject: '', message: '' };
+    } catch (err: any) {
+      this.contactStatus.set('error');
+      this.contactMessage.set(err?.error?.message || 'Failed to send message. Please try again.');
+    }
+  }
 
   ngAfterViewInit() {
     this.observer = new IntersectionObserver((entries) => {

@@ -10,6 +10,11 @@
   --sa-gray-light: #f8fafc;
   --sa-gray: #cbd5e1;
 }
+.text-center { text-align:center; }
+.mx-auto { margin-inline:auto; }
+.bg-gray { background:#f8fafc; }
+.section-light { background:#fff; }
+.functional-grid { align-items:stretch; }
 
 .landing-page {
   min-height: 100vh;
@@ -119,7 +124,7 @@
   background-image: linear-gradient(rgba(15, 23, 42, 0.7), rgba(15, 23, 42, 0.7)), url('/assets/images/hero-classroom.jpg');
   background-size: cover;
   background-position: center;
-  background-attachment: fixed;
+  background-attachment: scroll;
   display: flex;
   flex-direction: column;
 }

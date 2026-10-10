@@ -10,22 +10,22 @@
       <span>Create Academic Year</span>
     </button>
   </app-head-page-header>
+  <p *ngIf="formError() && !showDialog()" class="form-error-banner" role="alert">{{ formError() }}</p>
 
   <!-- Toolbar & Filters -->
   <app-table-toolbar
     [showSearch]="true"
     searchPlaceholder="Search academic years..."
     [searchValue]="searchQuery()"
-    (searchChange)="searchQuery.set($event)">
+    (searchChange)="searchQuery.set($event); page.set(1)">
     <div filters class="filter-controls">
       <select
         class="sa-select filter-select"
         [ngModel]="statusFilter()"
-        (ngModelChange)="statusFilter.set($event)"
+        (ngModelChange)="statusFilter.set($event); page.set(1)"
         aria-label="Filter by status">
         <option value="all">All Statuses</option>
         <option value="active">Active</option>
-        <option value="draft">Draft</option>
         <option value="closed">Closed</option>
       </select>
     </div>
@@ -86,17 +86,19 @@
                 <th scope="col" class="th-label">Label</th>
                 <th scope="col">Start Date</th>
                 <th scope="col">End Date</th>
+                <th scope="col">Terms</th>
                 <th scope="col" class="th-status">Status</th>
                 <th scope="col" class="th-actions">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let year of filteredYears()">
+              <tr *ngFor="let year of pageYears()">
                 <td class="td-label">
                   <span class="label-badge">{{ year.label }}</span>
                 </td>
                 <td class="td-date">{{ year.startDate | date:'mediumDate' }}</td>
                 <td class="td-date">{{ year.endDate | date:'mediumDate' }}</td>
+                <td class="td-date">{{ year.terms.length }} · {{ year.terms[0]?.name }}{{ year.terms.length > 1 ? ' – ' + year.terms[year.terms.length - 1].name : '' }}</td>
                 <td class="td-status">
                   <app-status-badge [variant]="year.status" [label]="year.status"></app-status-badge>
                 </td>
@@ -105,7 +107,7 @@
                     <button
                       type="button"
                       class="row-btn row-btn--edit"
-                      [disabled]="year.status === 'closed'" disabled title="Academic year editing is not available yet"
+                      [disabled]="saving" (click)="openEditDialog(year)"
                       title="Edit academic year"
                       aria-label="Edit academic year">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -114,6 +116,7 @@
                       </svg>
                       <span>Edit</span>
                     </button>
+                    <button *ngIf="store.api.role() === 'HEADMASTER'" type="button" class="row-btn" [disabled]="saving" (click)="requestStatusChange(year)">{{ year.status === 'closed' ? 'Reopen' : 'Close year' }}</button>
                     <button
                       type="button"
                       class="row-btn row-btn--delete"
@@ -136,7 +139,7 @@
 
       <!-- Mobile Record Cards View -->
       <div class="mobile-section">
-        <app-record-card *ngFor="let year of filteredYears()">
+        <app-record-card *ngFor="let year of pageYears()">
           <div class="m-card-header">
             <span class="m-card-label">{{ year.label }}</span>
             <app-status-badge [variant]="year.status" [label]="year.status"></app-status-badge>
@@ -150,18 +153,20 @@
               <span class="m-card-key">End Date:</span>
               <span class="m-card-val">{{ year.endDate | date:'mediumDate' }}</span>
             </div>
+            <div class="m-card-row"><span class="m-card-key">Terms:</span><span class="m-card-val">{{ year.terms.length }}</span></div>
           </div>
           <div class="m-card-actions">
             <button
               type="button"
               class="m-btn m-btn--edit"
-              disabled title="Editing is not available yet">
+              [disabled]="saving" (click)="openEditDialog(year)">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
               </svg>
               Edit
             </button>
+            <button *ngIf="store.api.role() === 'HEADMASTER'" type="button" class="m-btn" [disabled]="saving" (click)="requestStatusChange(year)">{{ year.status === 'closed' ? 'Reopen' : 'Close year' }}</button>
             <button
               type="button"
               class="m-btn m-btn--delete"
@@ -175,11 +180,12 @@
           </div>
         </app-record-card>
       </div>
+      <div class="pagination-bar" role="navigation" aria-label="Academic years pagination"><span>Page {{ page() }} of {{ pages() }} · {{ filteredYears().length }} years</span><div class="pagination-actions"><button class="action-btn" [disabled]="page() <= 1" (click)="page.set(page() - 1)">Previous</button><button class="action-btn" [disabled]="page() >= pages()" (click)="page.set(page() + 1)">Next</button></div></div>
     </div>
   </div>
 
   <!-- Create/Edit Overlay Dialog -->
-  <div
+  <dialog
     class="dialog-backdrop"
     *ngIf="showDialog()"
     (click)="closeDialog()"
@@ -234,7 +240,7 @@
               type="date"
               class="sa-input"
               [ngModel]="formStartDate()"
-              (ngModelChange)="formStartDate.set($event)"
+              (ngModelChange)="setYearDate('start', $event)"
               name="startDate"
               required
             />
@@ -246,17 +252,17 @@
               type="date"
               class="sa-input"
               [ngModel]="formEndDate()"
-              (ngModelChange)="formEndDate.set($event)"
+              (ngModelChange)="setYearDate('end', $event)"
               name="endDate"
               required
             />
           </div>
         </div>
 
-        <div class="form-group">
-          <label for="year-status" class="sa-label">Status</label>
-          <p>New academic years are open for enrollment.</p>
-        </div>
+        <section class="term-editor" aria-label="Academic terms">
+          <div class="term-editor__heading"><div><h4>Terms in this year</h4><p>Choose how many terms you use, then name each one and set its dates. These dates can be edited later.</p><button type="button" class="term-editor__divide" [disabled]="!formStartDate() || !formEndDate()" (click)="redistributeTermDates()">Divide year dates evenly</button></div><label for="term-count" class="sa-label">Number of terms<select id="term-count" name="termCount" class="sa-select" [ngModel]="formTerms().length" (ngModelChange)="setTermCount($event)">@for (count of termCounts; track count) { <option [ngValue]="count">{{ count }}</option> }</select></label></div>
+          <div class="term-editor__list">@for (term of formTerms(); track term.key; let i = $index) { <div class="term-editor__row"><span class="term-editor__number">{{ i + 1 }}</span><label class="sa-label">Term name<input class="sa-input" [name]="'termName' + i" [ngModel]="term.name" (ngModelChange)="setTermField(i, 'name', $event)" required maxlength="80" placeholder="e.g. Autumn term" /></label><label class="sa-label">Starts<input type="date" class="sa-input" [name]="'termStart' + i" [ngModel]="term.startsAt" (ngModelChange)="setTermField(i, 'startsAt', $event)" required /></label><label class="sa-label">Ends<input type="date" class="sa-input" [name]="'termEnd' + i" [ngModel]="term.endsAt" (ngModelChange)="setTermField(i, 'endsAt', $event)" required /></label></div> }</div>
+        </section>
 
         <div class="dialog-card__actions">
           <button type="button" class="dialog-btn dialog-btn--cancel" (click)="closeDialog()">
@@ -268,13 +274,14 @@
         </div>
       </form>
     </div>
-  </div>
+  </dialog>
 
   <!-- Delete Confirm Dialog -->
+  <app-confirm-dialog [open]="!!yearToClose()" title="Close academic year" [message]="'This will mark ' + (yearToClose()?.label || 'the academic year') + ' as closed. Existing records and term settings can still be corrected later.'" confirmLabel="Close year" (confirmed)="confirmClose()" (cancelled)="yearToClose.set(null)"></app-confirm-dialog>
   <app-confirm-dialog
     [open]="showDeleteConfirm()"
     title="Delete Academic Year"
-    [message]="'Are you sure you want to delete academic year ' + (yearToDelete()?.label || '') + '? This action cannot be undone.'"
+    [message]="'This permanently deletes academic year ' + (yearToDelete()?.label || '') + '. This action cannot be undone.'"
     confirmLabel="Delete"
     variant="danger"
     (confirmed)="onDeleteConfirmed()"

@@ -107,6 +107,10 @@
 
 .sa-btn-action {
   display: inline-flex;
+  flex: 0 0 auto;
+  width: fit-content;
+  max-width: 100%;
+  align-self: flex-start;
   align-items: center;
   justify-content: center;
   gap: 8px;
