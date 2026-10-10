@@ -1,9 +1,7 @@
 @use 'variables' as *;
 @use 'mixins' as *;
 
-.teacher-status {
-  max-width: 700px;
-}
+.teacher-status { max-width: 960px; }
 
 .back-link {
   display: inline-flex;
@@ -112,6 +110,23 @@
   margin-top: 24px;
   flex-wrap: wrap;
 }
+
+.submitted-marks { margin-top:24px; overflow:hidden; border:1px solid $input-border; border-radius:$radius-lg; background:#fff; }
+.submitted-marks__heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:20px 24px; border-bottom:1px solid $input-border; }
+.submitted-marks__heading .eyebrow { color:#92400e; font-size:.7rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
+.submitted-marks__heading h3 { margin:3px 0 4px; color:$text-primary; font-size:1.1rem; }
+.submitted-marks__heading p { margin:0; color:$text-secondary; font-size:.82rem; line-height:1.5; }
+.submitted-marks__count { padding:7px 10px; border-radius:999px; background:#fff3e4; color:#92400e; font-size:.75rem; font-weight:700; }
+.submitted-marks__scroll { overflow-x:auto; }
+.submitted-marks table { width:100%; border-collapse:collapse; min-width:500px; text-align:left; }
+.submitted-marks th,.submitted-marks td { padding:12px 20px; border-bottom:1px solid #edf0f4; color:$text-primary; font-size:.85rem; }
+.submitted-marks thead { background:#f8fafc; }
+.submitted-marks thead th { color:$text-secondary; font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; }
+.submitted-marks td strong,.submitted-marks td small,.submitted-marks tfoot small { display:block; }
+.submitted-marks td small,.submitted-marks tfoot small { margin-top:3px; color:$text-secondary; font-size:.73rem; font-weight:400; }
+.submitted-marks .score { width:135px; font-weight:700; font-variant-numeric:tabular-nums; }
+.submitted-marks tfoot { background:#fff8ee; }
+.submitted-marks tfoot th,.submitted-marks tfoot td { border-bottom:0; font-weight:700; }
 
 .action-btn {
   display: inline-flex;

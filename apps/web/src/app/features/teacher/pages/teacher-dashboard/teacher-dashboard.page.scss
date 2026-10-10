@@ -192,6 +192,9 @@
   }
 }
 
+.assignment-card__class, .assignment-card__students { display:inline-flex; align-items:center; gap:6px; }
+.assignment-card__year { display:block; color:#64748b; font-size:.8125rem; line-height:1.5; }
+.dashboard-content { min-width:0; }
 .progress-label {
   font-size: 0.8125rem;
   color: #596579;

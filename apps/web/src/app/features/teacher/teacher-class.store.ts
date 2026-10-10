@@ -1,12 +1,12 @@
-﻿import { Injectable, computed, inject } from '@angular/core';
+import { Injectable, computed, inject } from '@angular/core';
 import { AcademicStore } from '../academic/academic.store';
-import { TeacherDemoStore } from './teacher-demo.store';
+import { TeacherStore } from './teacher.store';
 import { RegistrarStore } from '../registrar/registrar.store';
 import { ClassTeacherService } from '../../core/services/class-teacher.service';
 import { AttendanceService } from '../../core/services/attendance.service';
 @Injectable({ providedIn: 'root' })
 export class TeacherClassStore {
-  readonly teacher = inject(TeacherDemoStore);
+  readonly teacher = inject(TeacherStore);
   readonly academic = inject(AcademicStore);
   readonly registry = inject(RegistrarStore);
   readonly roles = inject(ClassTeacherService);
@@ -18,6 +18,7 @@ export class TeacherClassStore {
   readonly sheets = computed(() => this.attendance.forYear(this.year()?.id ?? '').filter(s => this.classes().some(c => c.id === s.classId)));
   readonly ownAssignments = this.teacher.assignments;
   readonly classAssignments = computed(() => this.teacher.state().assignments.filter(a => a.academicYearId === this.year()?.id && this.classes().some(c => a.classId ? a.classId === c.id : (a.classStream || a.className) === (c.stream || c.name))));
+  readonly reports = computed(() => this.academic.reportStore.forYear(this.year()?.id ?? '').filter(report => this.classes().some(classroom => report.classId === classroom.id)));
   results(classMode: boolean) {
     return (classMode ? this.classAssignments() : this.ownAssignments()).flatMap(a => (this.teacher.state().marks[a.id] ?? []).flatMap(m => {
       const grade = this.teacher.grade(a.id, m.marksValue); if (grade === null || m.marksValue === null) return [];

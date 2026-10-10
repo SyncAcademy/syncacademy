@@ -1,11 +1,11 @@
 <div class="teacher-profile">
   <app-teacher-page-header
-    title="Profile & Settings"
+    title="My Profile"
     description="View your account information.">
   </app-teacher-page-header>
 
   <div class="profile-card">
-    <div class="profile-card__avatar">JM</div>
+    <div class="profile-card__avatar">{{ teacher.fullName.slice(0, 2).toUpperCase() }}</div>
     <div class="profile-card__info">
       <h3 class="profile-card__name">{{ teacher.fullName }}</h3>
       <span class="profile-card__role">{{ teacher.role }}</span>
@@ -23,25 +23,10 @@
       <span class="details-row__value">{{ teacher.email }}</span>
     </div>
     <div class="details-row">
-      <span class="details-row__label">Phone</span>
-      <span class="details-row__value">{{ teacher.phone }}</span>
-    </div>
-    <div class="details-row">
       <span class="details-row__label">School</span>
       <span class="details-row__value">{{ teacher.school }}</span>
     </div>
-    <div class="details-row">
-      <span class="details-row__label">Joined</span>
-      <span class="details-row__value">{{ teacher.joinedAt | date:'MMMM d, y' }}</span>
-    </div>
   </div>
 
-  <div class="details-card">
-    <h4 class="details-card__title">Preferences</h4>
-    <label for="profile-language" class="sa-label">Preferred language</label>
-    <select id="profile-language" class="sa-select" [ngModel]="language()" (ngModelChange)="language.set($event); saved.set('')"><option value="en">English</option><option value="sw">Kiswahili</option></select>
-    <p class="portal-notice" style="margin-top:16px">Your role, school, and verified contact details are managed by your school administrator.</p>
-    <button class="action-btn action-btn--primary" (click)="savePreferences()">Save preference</button>
-    <p *ngIf="saved()" role="status" class="portal-notice" style="margin-top:16px">{{ saved() }}</p>
-  </div>
+  
 </div>

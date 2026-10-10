@@ -8,9 +8,13 @@ export const TEACHER_ROUTES: Routes = [
     path: '',
     component: TeacherLayout,
     children: [
+      {path:'planner',loadComponent:()=>import('./teacher-work.page').then(m=>m.TeacherWorkPage),data:{title:'Teaching Planner',breadcrumb:'Teacher / Planner'}},
+      {path:'support',loadComponent:()=>import('./teacher-support.page').then(m=>m.TeacherSupportPage),data:{title:'Student Support',breadcrumb:'Teacher / Student Support'}},
       { path: 'subject-performance', loadComponent: () => import('./teacher-class.page').then(m => m.TeacherClassPage), data: { title: 'Subject Performance', breadcrumb: 'Teacher / Subject Performance', section: 'subject-performance' } },
-      ...[{ path: 'my-class', title: 'Class Overview', section: 'class-overview' }, { path: 'my-class/attendance', title: 'Attendance', section: 'attendance' }, { path: 'my-class/performance', title: 'Class Performance', section: 'class-performance' }].map(page => ({
-        path: page.path, canActivate: [() => inject(TeacherClassStore).classes().length > 0 || inject(Router).createUrlTree(['/teacher'])],
+      { path: 'my-class/student-subjects', loadComponent: () => import('../academic/student-subjects.page').then(m => m.StudentSubjectsPage), data: { title: 'Student Subjects', breadcrumb: 'Teacher / My Class / Student Subjects', audience: 'teacher' } },
+      { path: 'my-class/performance/:classId', loadComponent: () => import('../academic/class-results.page').then(m => m.ClassResultsPage), data: { title: 'Class Results', breadcrumb: 'Teacher / My Class / Class Results', audience: 'teacher' } },
+      ...[{ path: 'my-class', title: 'Class Overview', section: 'class-overview' }, { path: 'my-class/attendance', title: 'Attendance', section: 'attendance' }, { path: 'my-class/performance', title: 'Class Performance', section: 'class-performance' }, { path: 'my-class/reports', title: 'Student Reports', section: 'class-reports' }].map(page => ({
+        path: page.path,
         loadComponent: () => import('./teacher-class.page').then(m => m.TeacherClassPage), data: { title: page.title, breadcrumb: `Teacher / My Class / ${page.title}`, section: page.section },
       })),
       {
@@ -28,6 +32,7 @@ export const TEACHER_ROUTES: Routes = [
       },
       {
         path: ':assignmentId/marks',
+        canDeactivate: [(component:any)=>component.canLeave()],
         loadComponent: () =>
           import('./pages/teacher-marks/teacher-marks.page').then(m => m.TeacherMarksPage),
         data: { title: 'Mark Entry', breadcrumb: 'Teacher / Marks' },
@@ -41,14 +46,14 @@ export const TEACHER_ROUTES: Routes = [
       {
         path: 'notifications',
         loadComponent: () =>
-          import('./pages/teacher-notifications/teacher-notifications.page').then(m => m.TeacherNotificationsPage),
-        data: { title: 'Notifications', breadcrumb: 'Teacher / Notifications' },
+          import('../../shared/notifications/notifications.page').then(m => m.NotificationsPage),
+        data: { title: 'Notifications', breadcrumb: 'Teacher / Notifications', audience: 'teacher' },
       },
       {
         path: 'profile',
         loadComponent: () =>
           import('./pages/teacher-profile/teacher-profile.page').then(m => m.TeacherProfilePage),
-        data: { title: 'Profile & Settings', breadcrumb: 'Teacher / Profile' },
+        data: { title: 'My Profile', breadcrumb: 'Teacher / Profile' },
       },
     ],
   },

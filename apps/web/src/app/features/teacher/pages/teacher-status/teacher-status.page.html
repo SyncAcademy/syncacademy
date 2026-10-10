@@ -1,4 +1,4 @@
-<p class="portal-notice" role="status">Assessment workflows are not available yet.</p><div inert>
+
 <div class="teacher-status">
   <app-teacher-page-header
     [title]="'Submission Status \u2014 ' + assignmentLabel()"
@@ -11,12 +11,13 @@
     </a>
   </app-teacher-page-header>
 
-  <div class="portal-context"><strong>{{ store.period() }}</strong></div><div *ngIf="!found()" class="portal-empty"><h3>Assignment unavailable</h3><p>Return to your assignments to continue.</p></div>
+  <div class="portal-context"><strong>{{ store.period() }}</strong></div><div *ngIf="!loading() && !found()" class="portal-empty"><h3>Assignment unavailable</h3><p>Return to your assignments to continue.</p></div>
   <div *ngIf="loading()" class="skeleton-container" aria-busy="true">
     <div class="skeleton-timeline" *ngFor="let i of [1,2,3]"></div>
   </div>
 
-  <div *ngIf="!loading()" class="status-content">
+  <div *ngIf="!loading() && found() && !isAssessment()" class="portal-empty"><h3>Teaching assignment active</h3><p>Open the student list for this class and subject. Marks submission status appears when an assessment is assigned.</p><a [routerLink]="['/teacher', assignmentId, 'roster']" class="action-btn action-btn--primary">Open student list</a></div>
+  <div *ngIf="!loading() && found() && isAssessment()" class="status-content">
     <div class="timeline">
       <div class="timeline-step" *ngFor="let step of timeline(); let last = last"
            [class.timeline-step--completed]="step.completed"
@@ -37,6 +38,11 @@
       </div>
     </div>
 
+    <section class="submitted-marks" *ngIf="submittedMarks()">
+      <div class="submitted-marks__heading"><div><span class="eyebrow">Submitted roster</span><h3>Student marks</h3><p>A dash is a completed no-mark entry and is excluded from the numeric average.</p></div><span class="submitted-marks__count">{{ marks().length }} students</span></div>
+      <div class="submitted-marks__scroll"><table><thead><tr><th scope="col">Student</th><th scope="col">Mark / 100</th><th scope="col">Comment</th></tr></thead><tbody><tr *ngFor="let mark of marks()"><td><strong>{{ mark.fullName }}</strong><small>{{ mark.studentNumber }}</small></td><td class="score">{{ mark.noMark ? '-' : (mark.marksValue ?? '—') }}</td><td>{{ mark.comments || '—' }}</td></tr></tbody><tfoot><tr><th scope="row">Average <small>{{ scoredCount() }} numeric marks</small></th><td class="score">{{ average() === null ? '—' : (average() | number:'1.1-1') }}</td><td></td></tr></tfoot></table></div>
+    </section>
+
     <div class="status-actions">
       <a *ngIf="isEditable()" [routerLink]="['/teacher', assignmentId, 'marks']" class="action-btn action-btn--primary">
         Continue / correct marks
@@ -44,6 +50,4 @@
       <a [routerLink]="['/teacher']" class="action-btn action-btn--ghost">Back to Dashboard</a>
     </div>
   </div>
-</div>
-
 </div>

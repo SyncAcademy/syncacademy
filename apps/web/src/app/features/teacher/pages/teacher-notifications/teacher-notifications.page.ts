@@ -1,11 +1,9 @@
-import { Component, OnInit, signal, inject, computed } from '@angular/core';
-import { TeacherDemoStore } from '../../teacher-demo.store';
+import { Component, signal, inject, computed } from '@angular/core';
+import { TeacherStore } from '../../teacher.store';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { TeacherPageHeaderComponent } from '../../shared/teacher-page-header.component';
 import { TeacherNotification } from '../../teacher.models';
-import { MOCK_TEACHER_NOTIFICATIONS } from '../../teacher-mock-data';
-
 @Component({
   selector: 'app-teacher-notifications',
   standalone: true,
@@ -13,14 +11,15 @@ import { MOCK_TEACHER_NOTIFICATIONS } from '../../teacher-mock-data';
   templateUrl: './teacher-notifications.page.html',
   styleUrls: ['./teacher-notifications.page.scss'],
 })
-export class TeacherNotificationsPage implements OnInit {
-  loading = signal<boolean>(true);
-  store = inject(TeacherDemoStore);
+export class TeacherNotificationsPage {
+  store = inject(TeacherStore);
+  loading = computed(() => this.store.remote.loading());
+  readonly busy = signal(false); readonly error = signal('');
   notifications = computed(() => [...this.store.notifications()].sort((a,b) => b.createdAt.localeCompare(a.createdAt)));
   unreadCount = this.store.unreadCount;
-  ngOnInit(): void { this.loading.set(false); }
-  markAsRead(id: string): void { this.store.markRead(id); }
-  markAllRead(): void { this.store.markRead(); }
+  async markAsRead(id: string): Promise<void> { await this.mark(id); }
+  async markAllRead(): Promise<void> { await this.mark(); }
+  private async mark(id?:string):Promise<void>{if(this.busy())return;this.busy.set(true);this.error.set('');try{this.error.set(await this.store.markRead(id)??'');}finally{this.busy.set(false);}}
   getTypeIcon(type: string): string {
     const icons: Record<string, string> = {
       reminder: 'M12 8v4l3 3',

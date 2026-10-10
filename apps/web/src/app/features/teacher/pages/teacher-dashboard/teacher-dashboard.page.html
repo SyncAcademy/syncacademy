@@ -1,8 +1,8 @@
-<p class="portal-notice">Class assignments and student rosters are live. Assessment entry and roster confirmation are not available yet.</p>
+
 <div class="teacher-dashboard">
   <app-teacher-page-header
     title="My Teaching Assignments"
-    description="View your classes, enter marks, and track submission status.">
+    description="View your assigned classes and review current or archived student rosters.">
   </app-teacher-page-header>
 
   <!-- Loading Skeleton -->
@@ -61,17 +61,17 @@
       </div>
     </div>
 
-    <div class="portal-context"><strong>{{ store.period() }}</strong><span>Your assigned assessments</span></div>
+    <div class="portal-context"><strong>{{ store.period() }}</strong><span>Your teaching and assessment work</span></div>
     <div class="portal-filters">
-      <input class="sa-input" aria-label="Search assignments" placeholder="Search class or subject?" [ngModel]="search()" (ngModelChange)="search.set($event)">
-      <select class="sa-select" aria-label="Filter assignment status" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+      <input class="sa-input" aria-label="Search assignments" placeholder="Search class or subject" [ngModel]="search()" (ngModelChange)="search.set($event);page.set(1)">
+      <select class="sa-select" aria-label="Filter assignment status" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event);page.set(1)">
         <option value="all">All statuses</option><option value="draft">In progress</option><option value="returned">Needs correction</option><option value="submitted">Submitted</option><option value="approved">Approved</option>
       </select>
     </div>
     <div class="portal-empty" *ngIf="!filteredAssignments().length"><h3>{{ assignments().length ? 'No matching assignments' : 'No assignments for this academic year' }}</h3><p>{{ assignments().length ? 'Try another class, subject, or status.' : 'Select another academic year to view your assigned classes.' }}</p><button class="action-btn" (click)="search.set(''); statusFilter.set('all')">Clear filters</button></div>
     <!-- Assignment Cards -->
     <div class="assignment-grid">
-      <div class="assignment-card" *ngFor="let a of filteredAssignments()">
+      <div class="assignment-card" *ngFor="let a of visibleAssignments()">
         <div class="assignment-card__header">
           <div class="assignment-card__subject">
             <span class="assignment-card__code">{{ a.subjectCode }}</span>
@@ -82,7 +82,7 @@
                 [class.assignment-card__badge--submitted]="a.assessmentProgress.status === 'submitted'"
                 [class.assignment-card__badge--returned]="a.assessmentProgress.status === 'returned'"
                 [class.assignment-card__badge--draft]="a.assessmentProgress.status === 'draft'">
-            {{ getStatusLabel(a.assessmentProgress.status) }}
+            {{ a.assessmentId ? getStatusLabel(a.assessmentProgress.status) : 'Teaching assignment' }}
           </span>
         </div>
 
@@ -101,12 +101,12 @@
             </svg>
             {{ a.studentCount }} students
           </span>
-          <span class="assignment-card__year">{{ a.academicYearLabel }} / {{ a.assessmentName || 'Term 2 / End-term assessment' }}</span>
+          <span class="assignment-card__year">{{ a.academicYearLabel }} · {{ a.assessmentName || 'Class roster' }}</span>
         </div>
 
         <p class="portal-field-error" *ngIf="a.assessmentProgress.returnReason">{{ a.assessmentProgress.returnReason }}</p>
         <!-- Progress Bar -->
-        <div class="assignment-card__progress">
+        <div class="assignment-card__progress" *ngIf="a.assessmentId">
           <div class="progress-bar">
             <div class="progress-bar__fill"
                  [style.width.%]="getProgressPercent(a)"
@@ -122,7 +122,7 @@
              class="action-btn action-btn--outline">
             Confirm Student List
           </a>
-          <a *ngIf="a.rosterStatus !== 'pending' && a.assessmentProgress.status === 'draft'"
+          <a *ngIf="a.assessmentId && a.rosterStatus !== 'pending' && a.assessmentProgress.status === 'draft'"
              [routerLink]="['/teacher', a.id, 'marks']"
              class="action-btn action-btn--primary">
             {{ a.assessmentProgress.completed > 0 ? 'Continue Entry' : 'Enter Marks' }}
@@ -132,12 +132,13 @@
              class="action-btn action-btn--warning">
             Correct Marks
           </a>
-          <a [routerLink]="['/teacher', a.id, 'status']"
+          <a *ngIf="a.assessmentId" [routerLink]="['/teacher', a.id, 'status']"
              class="action-btn action-btn--ghost">
             View Status
           </a>
         </div>
       </div>
     </div>
+    <div class="pagination-bar" role="navigation" aria-label="Assignments pagination"><span>Page {{page()}} of {{pages()}} · {{filteredAssignments().length}} assignments</span><div class="pagination-actions"><button class="action-btn" [disabled]="page() <= 1" (click)="page.set(page()-1)">Previous</button><button class="action-btn" [disabled]="page() >= pages()" (click)="page.set(page()+1)">Next</button></div></div>
   </div>
 </div>

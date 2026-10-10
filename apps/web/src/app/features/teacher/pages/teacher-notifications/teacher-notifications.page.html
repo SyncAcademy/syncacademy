@@ -1,12 +1,13 @@
 <div class="teacher-notifications">
   <app-teacher-page-header
     title="Notifications"
-    [description]="unreadCount() > 0 ? unreadCount() + ' unread notifications' : 'All caught up!'">
-    <button *ngIf="unreadCount() > 0" type="button" class="action-btn" (click)="markAllRead()">
+    [description]="loading() ? 'Loading notifications' : unreadCount() > 0 ? unreadCount() + ' unread notifications' : 'No unread notifications'">
+    <button *ngIf="unreadCount() > 0" type="button" class="action-btn" [disabled]="busy()" (click)="markAllRead()">
       Mark all as read
     </button>
   </app-teacher-page-header>
 
+  <p *ngIf="error()" class="portal-notice portal-notice--error" role="alert">{{ error() }}</p>
   <div *ngIf="loading()" class="skeleton-container" aria-busy="true">
     <div class="skeleton-notif" *ngFor="let i of [1,2,3,4]"></div>
   </div>
@@ -28,7 +29,8 @@
         <time class="notif-item__time">{{ n.createdAt | date:'MMM d, y \u2014 h:mm a' }}</time>
         <div class="portal-filters" style="margin-top:12px;margin-bottom:0">
           <a *ngIf="n.relatedAssignmentId" class="action-btn" [routerLink]="['/teacher', n.relatedAssignmentId, n.type === 'roster_issue_resolved' ? 'roster' : 'status']" (click)="markAsRead(n.id)">View assignment</a>
-          <button *ngIf="!n.read" class="action-btn" (click)="markAsRead(n.id)">Mark as read</button>
+          <a *ngIf="n.relatedSupportId" class="action-btn" routerLink="/teacher/support" (click)="markAsRead(n.id)">View support plan</a>
+          <button *ngIf="!n.read" class="action-btn" [disabled]="busy()" (click)="markAsRead(n.id)">Mark as read</button>
         </div>
       </div>
     </div>

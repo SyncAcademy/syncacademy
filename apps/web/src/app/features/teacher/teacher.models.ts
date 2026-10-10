@@ -9,6 +9,8 @@ export type RosterIssueType = 'missing_student' | 'wrong_class' | 'wrong_subject
 // ── Teaching Assignment ──────────────────────────────────────
 
 export interface TeacherAssignment {
+  revision?: number; teachingId?: string; assessmentStatus?: string;
+  createdAt?: string;
   classId?: string;
   subjectId?: string;
   gradingPolicy?: import('../../core/services/grading-policy.service').GradingPolicy;
@@ -44,7 +46,7 @@ export interface RosterStudent {
   studentNumber: string;
   fullName: string;
   gender: 'M' | 'F' | ''; 
-  enrollmentStatus: 'active' | 'transferred_out';
+  enrollmentStatus: 'active' | 'transferred_out' | 'withdrawn' | 'graduated';
 }
 
 export interface RosterIssueReport {
@@ -61,6 +63,7 @@ export interface MarkEntry {
   studentNumber: string;
   fullName: string;
   marksValue: number | null;
+  noMark?: boolean;
   grade: string | null;
   comments: string;
   lastSaved: string | null;
@@ -92,9 +95,10 @@ export interface TeacherDashboardStats {
 
 export interface TeacherNotification {
   id: string;
-  type: 'roster_issue_resolved' | 'marks_returned' | 'marks_approved' | 'reminder' | 'system';
+  type: 'roster_issue_resolved' | 'marks_returned' | 'marks_approved' | 'support_assigned' | 'reminder' | 'system';
   message: string;
   relatedAssignmentId: string | null;
+  relatedSupportId?: string | null;
   read: boolean;
   createdAt: string;
 }

@@ -1,5 +1,5 @@
-<p class="portal-notice">Class assignments and student rosters are live. Assessment entry and roster confirmation are not available yet.</p>
-<div class="teacher-roster">
+
+<p *ngIf="issueError()" class="portal-notice portal-notice--error" role="alert">{{ issueError() }}</p><div class="teacher-roster">
   <app-teacher-page-header
     [title]="'Student List — ' + assignmentLabel()"
     description="Review the list of students. Confirm it is correct or report any issues.">
@@ -12,7 +12,7 @@
   </app-teacher-page-header>
 
   <div class="portal-context"><strong>{{ store.period() }}</strong><span>Official student list</span></div>
-  <div *ngIf="!found()" class="portal-empty"><h3>Assignment unavailable</h3><p>Return to your assignments to choose a valid class.</p></div>
+  <div *ngIf="!loading() && !found()" class="portal-empty"><h3>Assignment unavailable</h3><p>Return to your assignments to choose a valid class.</p></div>
   <!-- Loading -->
   <div *ngIf="loading()" class="skeleton-container" aria-busy="true">
     <div class="skeleton-card" *ngFor="let i of [1,2,3,4,5,6]">
@@ -26,15 +26,16 @@
     <!-- Success message -->
     <div *ngIf="issueSubmitted()" class="success-banner" role="status">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-      Issue recorded in this demo. It is ready for Registrar review.
+      Issue submitted to the Registrar and Academic Master.
     </div>
 
     <div class="portal-notice" *ngIf="issues().length"><strong>{{ issues().length }} issue(s) recorded</strong><p *ngFor="let issue of issues()">{{ issue.description }} - {{ issue.resolvedAt ? 'Resolved: ' + issue.resolution : 'Awaiting review' }}</p></div>
+<div class="roster-actions" *ngIf="issueTotal() > 25"><button class="action-btn" [disabled]="issuePage() === 1" (click)="issuePage.set(issuePage()-1); loadIssues()">Previous requests</button><span>{{ issueTotal() }} requests</span><button class="action-btn" [disabled]="issuePage()*25 >= issueTotal()" (click)="issuePage.set(issuePage()+1); loadIssues()">Next requests</button></div>
     <!-- Confirmed banner -->
     <div *ngIf="confirmed()" class="confirmed-banner" role="status">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
       Student list confirmed.
-      <a class="action-btn action-btn--primary" [routerLink]="['/teacher', assignmentId, 'marks']">Continue to marks</a>
+      <a *ngIf="assessmentRoster()" class="action-btn action-btn--primary" [routerLink]="['/teacher', assignmentId, 'marks']">Continue to marks</a>
     </div>
 
     <!-- Toolbar -->
@@ -51,15 +52,16 @@
 
     <!-- Student List -->
     <div class="roster-list">
-      <div class="roster-item" *ngFor="let s of filteredStudents(); let i = index">
-        <span class="roster-item__number">{{ i + 1 }}</span>
+      <div class="roster-item" *ngFor="let s of visibleStudents(); let i = index">
+        <span class="roster-item__number">{{ (page()-1)*25 + i + 1 }}</span>
         <div class="roster-item__info">
           <span class="roster-item__name">{{ s.fullName }}</span>
           <span class="roster-item__meta">{{ s.studentNumber }} · {{ s.gender === 'M' ? 'Male' : 'Female' }}</span>
         </div>
-        <span class="roster-item__status" [class.roster-item__status--active]="s.enrollmentStatus === 'active'">{{ s.enrollmentStatus === 'active' ? 'Active' : 'Transferred' }}</span>
+        <span class="roster-item__status" [class.roster-item__status--active]="s.enrollmentStatus === 'active'">{{ s.enrollmentStatus === 'active' ? 'Active' : s.enrollmentStatus === 'graduated' ? 'Graduated' : s.enrollmentStatus === 'withdrawn' ? 'Withdrawn' : 'Transferred' }}</span>
       </div>
     </div>
+    <div class="pagination-bar" role="navigation" aria-label="Student roster pagination"><span>Page {{page()}} of {{pages()}} · {{filteredStudents().length}} students</span><div class="pagination-actions"><button class="action-btn" [disabled]="page() <= 1" (click)="page.set(page()-1)">Previous</button><button class="action-btn" [disabled]="page() >= pages()" (click)="page.set(page()+1)">Next</button></div></div>
 
     <!-- Empty State -->
     <div *ngIf="filteredStudents().length === 0 && !loading()" class="empty-state">
@@ -68,11 +70,11 @@
 
     <!-- Actions -->
     <div class="roster-actions">
-      <button type="button" class="action-btn action-btn--primary" *ngIf="!confirmed()" [disabled]="store.readOnly()" (click)="openConfirmDialog()">
+      <button type="button" class="action-btn action-btn--primary" *ngIf="!confirmed() || assessmentRoster()" [disabled]="rosterReadOnly() || busy() || (assessmentRoster() && assessmentLocked())" (click)="openConfirmDialog()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        Confirm Student List
+        {{ confirmed() ? 'Refresh & confirm student list' : 'Confirm Student List' }}
       </button>
-      <button type="button" class="action-btn action-btn--outline" [disabled]="store.readOnly()" (click)="toggleIssueForm()">
+      <button type="button" class="action-btn action-btn--outline" [disabled]="rosterReadOnly() || busy()" (click)="toggleIssueForm()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="12" y1="8" x2="12" y2="12"></line>
@@ -95,24 +97,24 @@
         <label for="issue-student" *ngIf="issueType() !== 'missing_student'">Affected student (optional)</label>
         <select id="issue-student" *ngIf="issueType() !== 'missing_student'" [value]="issueStudentId() || ''" (change)="issueStudentId.set($any($event.target).value || null)"><option value="">Whole list / not specified</option><option *ngFor="let student of students()" [value]="student.id">{{ student.fullName }} &middot; {{ student.studentNumber }}</option></select>
         <label for="issue-description">Description</label>
-        <textarea id="issue-description" [value]="issueDescription()" rows="3" placeholder="Describe the issue..." (input)="issueDescription.set($any($event.target).value)"></textarea>
+        <textarea id="issue-description" [value]="issueDescription()" rows="3" maxlength="2000" placeholder="Describe the issue..." (input)="issueDescription.set($any($event.target).value)"></textarea>
       </div>
       <div class="issue-form__actions">
-        <button type="button" class="action-btn action-btn--primary" (click)="submitIssue()" [disabled]="!issueDescription()">Submit Report</button>
-        <button type="button" class="action-btn action-btn--ghost" [disabled]="store.readOnly()" (click)="toggleIssueForm()">Cancel</button>
+        <button type="button" class="action-btn action-btn--primary" (click)="submitIssue()" [disabled]="busy() || !issueDescription()">Submit Report</button>
+        <button type="button" class="action-btn action-btn--ghost" [disabled]="rosterReadOnly() || busy()" (click)="toggleIssueForm()">Cancel</button>
       </div>
     </div>
 
     <!-- Confirm Dialog -->
-    <div *ngIf="showConfirmDialog()" class="dialog-overlay" appDialogFocus role="dialog" aria-modal="true" aria-label="Confirm student list" (keydown.escape)="cancelConfirm()" (click)="cancelConfirm()">
+    <dialog *ngIf="showConfirmDialog()" class="dialog-overlay" appDialogFocus role="dialog" aria-modal="true" aria-label="Confirm student list" (keydown.escape)="cancelConfirm()" (click)="cancelConfirm()">
       <div class="dialog" (click)="$event.stopPropagation()">
         <h3 class="dialog__title">Confirm Student List</h3>
         <p class="dialog__text">You are confirming that the {{ students().length }} students listed above are correct for this assignment. You can still report issues later if needed.</p>
         <div class="dialog__actions">
-          <button type="button" class="action-btn action-btn--primary" (click)="confirmRoster()">Yes, Confirm Student List</button>
+          <button type="button" class="action-btn action-btn--primary" [disabled]="busy()" (click)="confirmRoster()">Yes, Confirm Student List</button>
           <button type="button" class="action-btn action-btn--ghost" (click)="cancelConfirm()">Cancel</button>
         </div>
       </div>
-    </div>
+    </dialog>
   </div>
 </div>

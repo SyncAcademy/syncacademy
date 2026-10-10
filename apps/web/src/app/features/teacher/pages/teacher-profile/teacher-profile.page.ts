@@ -13,11 +13,5 @@ import { TeacherPageHeaderComponent } from '../../shared/teacher-page-header.com
   styleUrls: ['./teacher-profile.page.scss'],
 })
 export class TeacherProfilePage {
-  language = signal(this.readLanguage());
-  saved = signal('');
-  savePreferences():void {this.saved.set('Language preferences are not available yet.');}
-  private readLanguage(): string {
-    try { return sessionStorage.getItem('syncacademy.teacher-language') || 'en'; } catch { return 'en'; }
-  }
-  readonly api=inject(SchoolApiService);get teacher(){const u=this.api.auth.identity();return {fullName:u?.name||'',email:u?.email||'',phone:'Not recorded',role:'Teacher',school:this.api.schoolName(),joinedAt:null};}
+  readonly api=inject(SchoolApiService);get teacher(){const u=this.api.auth.identity();return {fullName:u?.name||'',email:u?.email||'',role:'Teacher',school:this.api.schoolName()};}
 }

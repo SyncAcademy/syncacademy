@@ -1,12 +1,10 @@
 import { Component, OnInit, signal, computed, inject } from '@angular/core';
-import { TeacherDemoStore } from '../../teacher-demo.store';
+import { TeacherStore } from '../../teacher.store';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { TeacherPageHeaderComponent } from '../../shared/teacher-page-header.component';
 import { TeacherAssignment, TeacherDashboardStats } from '../../teacher.models';
-import { MOCK_TEACHER_ASSIGNMENTS, MOCK_TEACHER_STATS } from '../../teacher-mock-data';
-
 @Component({
   selector: 'app-teacher-dashboard',
   standalone: true,
@@ -15,36 +13,26 @@ import { MOCK_TEACHER_ASSIGNMENTS, MOCK_TEACHER_STATS } from '../../teacher-mock
   styleUrls: ['./teacher-dashboard.page.scss'],
 })
 export class TeacherDashboardPage implements OnInit {
-  loading = signal<boolean>(true);
-  error = signal<boolean>(false);
-  store = inject(TeacherDemoStore);
+  loading = computed(()=>this.store.api.loading() || this.store.remote.loading());
+  error = computed(()=>!!this.store.api.error() || !!this.store.remote.error());
+  store = inject(TeacherStore);
   stats = this.store.stats;
   assignments = this.store.assignments;
   search = signal('');
   statusFilter = signal('all');
+  page=signal(1);
   filteredAssignments = computed(() => this.assignments().filter(a =>
     (this.statusFilter() === 'all' || a.assessmentProgress.status === this.statusFilter()) &&
     (a.subjectName + ' ' + (a.classStream || a.className)).toLowerCase().includes(this.search().toLowerCase())
   ).sort((a,b) => Number(b.assessmentProgress.status === 'returned') - Number(a.assessmentProgress.status === 'returned')));
+  pages=computed(()=>Math.max(1,Math.ceil(this.filteredAssignments().length/25)));
+  visibleAssignments=computed(()=>this.filteredAssignments().slice((this.page()-1)*25,this.page()*25));
 
   ngOnInit(): void {
     this.loadData();
   }
 
-  loadData(): void {
-    this.loading.set(true);
-    this.error.set(false);
-
-    setTimeout(() => {
-      try {
-        // Shared demo records are retained when navigating between pages.
-        this.loading.set(false);
-      } catch {
-        this.error.set(true);
-        this.loading.set(false);
-      }
-    }, 500);
-  }
+  loadData(): void {void this.store.remote.load();}
 
   retry(): void {
     this.loadData();

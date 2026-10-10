@@ -45,13 +45,17 @@ export class TeacherSidebarComponent {
       label: 'DASHBOARD',
       items: [
         { title: 'My Assignments', route: '/teacher', icon: 'assignments' },
+        { title: 'Teaching Planner', route: '/teacher/planner', icon: 'calendar' },
+        { title: 'Student Support', route: '/teacher/support', icon: 'communication' },
         { title: 'Subject Performance', route: '/teacher/subject-performance', icon: 'reports' },
       ],
     },
     ...(this.classStore.classes().length ? [{ label: 'MY CLASS', items: [
       { title: 'Class Overview', route: '/teacher/my-class', icon: 'students' },
+      { title: 'Student Subjects', route: '/teacher/my-class/student-subjects', icon: 'academics' },
       { title: 'Attendance', route: '/teacher/my-class/attendance', icon: 'calendar' },
       { title: 'Class Performance', route: '/teacher/my-class/performance', icon: 'gradebook' },
+      { title: 'Student Reports', route: '/teacher/my-class/reports', icon: 'reports' },
     ] }] : []),
     {
       label: 'ACCOUNT',

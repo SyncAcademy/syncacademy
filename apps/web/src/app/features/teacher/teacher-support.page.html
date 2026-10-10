@@ -1,0 +1,20 @@
+<div class="teacher-support">
+  <app-teacher-page-header title="Student Support" description="Review support plans assigned to you and confirm whether you can take each one."></app-teacher-page-header>
+  <div class="support-summary"><span class="support-summary__label">Your assignments</span><strong>{{ plans().length }}</strong><span class="support-summary__pending">{{ pending() }} awaiting your response</span></div>
+  @if (remote.loading()) { <p class="portal-notice" role="status">Loading support plans...</p> }
+  @if (error()) { <p class="portal-notice portal-notice--error" role="alert">{{ error() }}</p> }
+  @if (notice()) { <p class="portal-notice" role="status">{{ notice() }}</p> }
+  <div class="support-list">
+    @for (plan of plans(); track plan.id) {
+      <article class="support-card" [class.support-card--pending]="plan.status === 'pending'">
+        <div class="support-card__top"><div><span class="support-card__eyebrow">{{ plan.className }} · {{ plan.subject }}</span><h2>{{ plan.student }}</h2><span class="support-card__student-number">{{ plan.studentNumber }}</span></div><span class="support-card__status" [attr.data-status]="plan.status">{{ plan.status === 'open' ? 'Accepted' : plan.status }}</span></div>
+        <p class="support-card__action">{{ plan.action }}</p>
+        <div class="support-card__meta"><span>Review by {{ plan.due | date:'mediumDate' }}</span>@if (plan.respondedAt) { <span>Answered {{ plan.respondedAt | date:'mediumDate' }}</span> }</div>
+        @if (plan.responseReason) { <p class="support-card__response"><strong>Your response</strong>{{ plan.responseReason }}</p> }
+        @if (plan.status === 'pending') {
+          <div class="support-card__reply"><label [attr.for]="'reason-' + plan.id">Reason if rejecting <span>(required for rejection)</span></label><textarea [id]="'reason-' + plan.id" rows="2" [ngModel]="reasons[plan.id] || ''" (ngModelChange)="reasons[plan.id] = $event" [disabled]="!!busyId()" placeholder="Explain why you cannot take this plan"></textarea><div class="support-card__buttons"><button type="button" class="support-button support-button--primary" [disabled]="!!busyId()" (click)="respond(plan.id, 'accepted')">{{ busyId() === plan.id ? 'Saving...' : 'Accept assignment' }}</button><button type="button" class="support-button" [disabled]="!!busyId()" (click)="respond(plan.id, 'rejected')">Reject with reason</button></div></div>
+        }
+      </article>
+    } @empty { @if (!remote.loading()) { <div class="portal-empty"><h3>No support plans assigned</h3><p>Plans from the Academic Master will appear here for your response.</p></div> } }
+  </div>
+</div>

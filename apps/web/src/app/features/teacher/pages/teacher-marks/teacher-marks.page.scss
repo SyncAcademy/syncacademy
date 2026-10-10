@@ -209,13 +209,6 @@
   color: $text-primary;
   text-align: center;
   min-height: 44px;
-  -moz-appearance: textfield;
-
-  &::-webkit-outer-spin-button,
-  &::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
 
   &:focus {
     outline: none;
@@ -227,6 +220,24 @@
     width: 100%;
   }
 }
+
+.marks-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid $input-border;
+  border-radius: $radius-lg;
+
+  .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .portal-filters { margin: 0; }
+}
+.marks-toolbar__autosave--error { color: #b91c1c; }
+.mark-card__field .optional { color: #64748b; font-weight: 400; }
 
 .comment-input {
   width: 100%;
@@ -297,6 +308,9 @@
 
   h3 { margin: 0 0 8px; font-size: 1.5rem; font-weight: 600; color: $text-primary; }
   p { margin: 0 0 24px; font-size: 0.875rem; color: $text-secondary; line-height: 1.6; }
+  .submitted-summary { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin:0 0 24px; }
+  .submitted-summary span { display:grid; gap:3px; min-width:125px; padding:12px 16px; border:1px solid $input-border; border-radius:$radius-md; background:#fff; color:$text-secondary; font-size:.8rem; }
+  .submitted-summary strong { color:$text-primary; font-size:1.15rem; font-variant-numeric:tabular-nums; }
 }
 
 // ── Dialog ──────────────────────────────────
