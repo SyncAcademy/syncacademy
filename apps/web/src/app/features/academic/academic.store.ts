@@ -65,10 +65,16 @@ export class AcademicStore {
   readonly summary = computed(() => ({
     submissions: this.assignments().filter(a => a.assessmentProgress.status === 'submitted').length,
     approved: this.assignments().filter(a => a.assessmentProgress.status === 'approved').length,
-    missing: this.assignments().reduce((sum, a) => sum + Math.max(0, a.studentCount - this.entries(a.id).filter(m => gradeMark(m.marksValue) !== null).length), 0),
-    average: this.approvedResults().length ? this.approvedResults().reduce((s, r) => s + r.mark, 0) / this.approvedResults().length : null,
+    missing: this.assignments().reduce((sum, a) => sum + Math.max(0, a.studentCount - ((a as any).resultStats?.count ?? this.entries(a.id).filter(m => gradeMark(m.marksValue) !== null).length)), 0),
+    average: this.remote.data().view==='overview' ? this.overviewAverage() : this.approvedResults().length ? this.approvedResults().reduce((s, r) => s + r.mark, 0) / this.approvedResults().length : null,
     coverage: this.syllabus().length ? this.syllabus().filter(s => s.completed).length / this.syllabus().length * 100 : 0,
   }));
+
+  private overviewAverage():number|null {
+    const rows=this.assignments().filter(a=>a.assessmentProgress.status==='approved');
+    const count=rows.reduce((n,a)=>n+((a as any).resultStats?.count??0),0);
+    return count?rows.reduce((n,a)=>n+((a as any).resultStats?.sum??0),0)/count:null;
+  }
 
   constructor() { effect(() => { this.year()?.id; untracked(() => this.selectTerm('')); }); }
   forYear(yearId: string) {
@@ -80,7 +86,8 @@ export class AcademicStore {
   classLabel(a: TeacherAssignment): string { return a.classStream || a.className; }
   entries(id: string) { return this.assignments().some(a => a.id === id) ? (this.teacher.state().marks[id] ?? []).map(m => ({ ...m, grade: this.teacher.grade(id, m.marksValue) })) : []; }
 
-  review(id:string,decision:'approved'|'returned',reason=''){return this.remote.command('review',{id,decision,reason});}
+  review(id:string,reason:string){return this.remote.command('review',{id,decision:'returned',reason});}
+  reviewClass(assessmentId:string,classId:string){return this.remote.command('review-class',{assessmentId,classId});}
   saveAssessment(input:Omit<Assessment,'id'|'yearId'|'status'>,id?:string){return this.remote.command('assessment',{...input,...(id?{id}:{})});}
   changeAssessment(id:string,status:'open'|'closed'){return this.remote.command('assessment-status',{id,status});}
   assignAssessment(id:string,classIds:string[]){return this.remote.command('allocate',{id,classIds});}
@@ -92,7 +99,18 @@ export class AcademicStore {
   saveSupport(input:{studentNumber:string;className:string;subject:string;action:string;teacherMembershipId:string;due:string}){return this.remote.command('support',input);}
   completeSupport(id:string){return this.remote.command('complete-support',{id});}
   reassignSupport(id:string,teacherMembershipId:string){return this.remote.command('reassign-support',{id,teacherMembershipId});}
-  readiness(className:string):string|null {const rows=this.assignments().filter(a=>this.classLabel(a)===className);return !rows.length||rows.some(a=>a.assessmentProgress.status!=='approved')?'Awaiting approval of all assigned subjects.':null;}
+  readiness(className:string):string|null {
+    const assessmentId=this.assessment()?.id;
+    if(!assessmentId)return 'Choose an assessment first.';
+    const rows=this.remote.data().submissions.filter((a:any)=>a.assessmentId===assessmentId&&a.className===className);
+    if(!rows.length)return 'Assign the assessment to this class first.';
+    if(rows.some((a:any)=>a.assessmentProgress.status!=='approved'))return 'Approve every submitted subject before preparing reports.';
+    const classId=rows[0].classId;
+    const enrollments=(this.head.api.data()?.students??[]).flatMap((student:any)=>student.enrollments.filter((enrollment:any)=>enrollment.classroomId===classId&&enrollment.status==='active').map((enrollment:any)=>({studentId:student.id,subjects:enrollment.subjects??[]})));
+    if(!enrollments.length)return 'This class has no active students to report.';
+    const complete=enrollments.every((enrollment:any)=>enrollment.subjects.every((subject:any)=>rows.some((row:any)=>row.subjectId===subject.subjectId&&row.entries?.some((mark:any)=>mark.studentId===enrollment.studentId&&(typeof mark.marksValue==='number'||mark.noMark===true)))));
+    return complete?null:'Some enrolled subjects still need approved marks. Assign and approve those subjects first.';
+  }
   prepareReports(className:string){return this.remote.command('reports',{className,assessmentId:this.assessment()?.id});}
   async saveTeachingAssignment(teacherId:string,classId:string,subjectId:string):Promise<string|null>{try{await this.head.api.write('assignments',{membershipId:teacherId,classroomId:classId,subjectId:subjectId||null});return null;}catch(e){return this.head.api.auth.error(e);}}
 }

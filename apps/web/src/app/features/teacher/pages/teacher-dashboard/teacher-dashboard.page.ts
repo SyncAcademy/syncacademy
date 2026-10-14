@@ -32,10 +32,10 @@ export class TeacherDashboardPage implements OnInit {
     this.loadData();
   }
 
-  loadData(): void {void this.store.remote.load();}
+  loadData(): void {if(!this.store.remote.hasData())void this.store.remote.load();}
 
   retry(): void {
-    this.loadData();
+    void this.store.remote.load();
   }
 
   getProgressPercent(a: TeacherAssignment): number {

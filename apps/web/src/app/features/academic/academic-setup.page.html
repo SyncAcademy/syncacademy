@@ -112,37 +112,6 @@
 </section>
 } @if (section() === 'teachers') {
 <section class="panel">
-  <div class="panel-heading"><div><h3>Teacher invitations</h3><p>Invite teachers by email. They create their account by accepting the secure link.</p></div><span class="badge">{{ filteredInvitations().length }} invitations</span></div>
-  <div class="list-tools"><input type="search" aria-label="Search teacher invitations" placeholder="Search name, email or status" [ngModel]="invitationSearch()" (ngModelChange)="invitationSearch.set($event)"></div>
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Status</th>
-          <th>Expires</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (invitation of visibleInvitations(); track invitation.id) {
-        <tr>
-          <td>{{ invitation.name }}</td>
-          <td>{{ invitation.email }}</td>
-          <td>{{ invitationStatus(invitation) | titlecase }}</td>
-          <td>{{ invitation.expiresAt | date:'medium' }}</td>
-        </tr>
-        } @empty {
-        <tr>
-          <td colspan="4">No teacher invitations yet.</td>
-        </tr>
-        }
-      </tbody>
-    </table>
-  </div>
-  <div class="list-pager" role="navigation" aria-label="Teacher invitations pagination"><span>Page {{ invitationPage() }} of {{ invitationPages() }} · {{ filteredInvitations().length }} invitations</span><div class="actions"><button type="button" class="action-btn" [disabled]="invitationPage() <= 1" (click)="invitationPage.set(invitationPage() - 1)">Previous</button><button type="button" class="action-btn" [disabled]="invitationPage() >= invitationPages()" (click)="invitationPage.set(invitationPage() + 1)">Next</button></div></div>
-</section>
-<section class="panel">
   <div class="panel-heading"><div><h3>Shared teacher directory</h3><p>Search the active and deactivated teacher roles for this school.</p></div><span class="badge">{{ filteredTeachers().length }} teachers</span></div>
   <div class="list-tools"><input type="search" aria-label="Search teachers" placeholder="Search teacher, email, phone or status" [ngModel]="teacherSearch()" (ngModelChange)="teacherSearch.set($event)"></div>
   <div class="table-scroll">
@@ -174,6 +143,37 @@
     </table>
   </div>
   <div class="list-pager" role="navigation" aria-label="Teacher directory pagination"><span>Page {{ teacherPage() }} of {{ teacherPages() }} · {{ filteredTeachers().length }} teachers</span><div class="actions"><button type="button" class="action-btn" [disabled]="teacherPage() <= 1" (click)="teacherPage.set(teacherPage() - 1)">Previous</button><button type="button" class="action-btn" [disabled]="teacherPage() >= teacherPages()" (click)="teacherPage.set(teacherPage() + 1)">Next</button></div></div>
+</section>
+<section class="panel">
+  <div class="panel-heading"><div><h3>Teacher invitations</h3><p>Invite teachers by email. They create their account by accepting the secure link.</p></div><span class="badge">{{ filteredInvitations().length }} invitations</span></div>
+  <div class="list-tools"><input type="search" aria-label="Search teacher invitations" placeholder="Search name, email or status" [ngModel]="invitationSearch()" (ngModelChange)="invitationSearch.set($event)"></div>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Status</th>
+          <th>Expires</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (invitation of visibleInvitations(); track invitation.id) {
+        <tr>
+          <td>{{ invitation.name }}</td>
+          <td>{{ invitation.email }}</td>
+          <td>{{ invitationStatus(invitation) | titlecase }}</td>
+          <td>{{ invitation.expiresAt | date:'medium' }}</td>
+        </tr>
+        } @empty {
+        <tr>
+          <td colspan="4">No teacher invitations yet.</td>
+        </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <div class="list-pager" role="navigation" aria-label="Teacher invitations pagination"><span>Page {{ invitationPage() }} of {{ invitationPages() }} · {{ filteredInvitations().length }} invitations</span><div class="actions"><button type="button" class="action-btn" [disabled]="invitationPage() <= 1" (click)="invitationPage.set(invitationPage() - 1)">Previous</button><button type="button" class="action-btn" [disabled]="invitationPage() >= invitationPages()" (click)="invitationPage.set(invitationPage() + 1)">Next</button></div></div>
 </section>
 <app-confirm-dialog [open]="!!teacherAction()" [title]="teacherAction()?.remove ? 'Remove teacher role' : (teacherAction()?.active ? 'Deactivate teacher' : 'Reactivate teacher')" [message]="teacherAction()?.remove ? 'This permanently removes the teacher role. Roles with teaching history cannot be removed. Deactivate the role to preserve academic records.' : (teacherAction()?.active ? 'This will deactivate the teacher role and revoke existing sessions. School records will be retained.' : 'This will reactivate the teacher role. The teacher can sign in again with this role.')" [confirmLabel]="teacherAction()?.remove ? 'Remove role' : (teacherAction()?.active ? 'Deactivate' : 'Reactivate')" variant="danger" (confirmed)="confirmTeacherAction()" (cancelled)="teacherAction.set(null)"></app-confirm-dialog>
 <app-confirm-dialog [open]="!!classToDelete()" title="Delete class" [message]="'This permanently deletes ' + (classToDelete()?.name || 'this class') + '. Classes with enrolment, teaching, or admission history cannot be deleted. Rename them to preserve linked records.'" confirmLabel="Delete class" variant="danger" (confirmed)="confirmDeleteClass()" (cancelled)="classToDelete.set(null)"></app-confirm-dialog>
@@ -242,7 +242,7 @@
           type="button"
           class="action-btn"
           [disabled]="store.readOnly()"
-          (click)="bands.push({ label: '', minimum: 0 })"
+          (click)="addGradeBand()"
         >
           Add grade band
         </button>

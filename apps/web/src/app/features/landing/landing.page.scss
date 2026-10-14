@@ -156,16 +156,34 @@
     gap: 2rem;
     
     a {
+      position: relative;
+      display: inline-block;
+      padding-bottom: 5px;
       color: #64748b; /* Darker text for light background */
       text-decoration: none !important;
       font-weight: 600;
       font-size: 0.95rem;
       transition: color 0.2s ease;
+
+      &::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        height: 2px;
+        border-radius: 2px;
+        background: var(--sa-primary, #E87E24);
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.2s ease;
+      }
       
-      &.active, &:hover { 
-        color: var(--sa-primary, #E87E24); 
+      &.active, &:hover, &:focus-visible {
+        color: var(--sa-primary, #E87E24);
         text-decoration: none !important;
       }
+      &.active::after, &:hover::after, &:focus-visible::after { transform: scaleX(1); }
     }
   }
   
@@ -1208,46 +1226,25 @@
   }
 }
 
+/* Invitation directly above the footer, with a shared color and quiet divider. */
+.closing-invite {
+  display: block;
+  padding: clamp(3rem, 6vw, 5rem) 1.5rem;
+  background: var(--sa-dark);
+  color: #fff;
+  border-bottom: 1px solid #1e293b;
+  h2 { max-width: 900px; margin: 0 auto 1rem; color: #fff; font-size: clamp(1.8rem, 4vw, 2.5rem); line-height: 1.2; font-weight: 800; }
+  p { max-width: 650px; margin: 0 auto 2rem; color: #d1dbe8; font-size: 1.125rem; line-height: 1.6; }
+  .closing-invite-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; }
+  .btn-outline-light { border: 2px solid #b5c5d8; background: transparent; color: #fff; }
+  .btn-outline-light:hover { border-color: #fff; background: #ffffff14; }
+}
+
 /* 8. Footer */
 .footer.dark-footer {
   background-color: var(--sa-dark);
   color: white;
-  padding: 6rem 2rem 4rem 2rem;
-  
-  .footer-cta {
-    max-width: 800px;
-    margin: 0 auto 6rem auto;
-    
-    h2 {
-      font-size: 2.5rem;
-      font-weight: 800;
-      color: white;
-      margin-bottom: 1.5rem;
-    }
-    
-    p {
-      color: #94a3b8;
-      font-size: 1.125rem;
-      line-height: 1.6;
-      margin-bottom: 2.5rem;
-      max-width: 600px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    
-    .cta-actions {
-      display: flex;
-      gap: 1rem;
-      justify-content: center;
-      
-      .btn-outline-light {
-        background-color: transparent;
-        border: 2px solid #334155;
-        color: white;
-        &:hover { border-color: #cbd5e1; }
-      }
-    }
-  }
+  padding: 3rem 2rem 4rem;
   
   .footer-main {
     max-width: 1200px;
@@ -1256,7 +1253,6 @@
     justify-content: space-between;
     gap: 4rem;
     padding-top: 4rem;
-    border-top: 1px solid #1e293b;
     text-align: left;
     
     .footer-brand {
@@ -1312,9 +1308,12 @@
   }
   
   @media (max-width: 576px) {
-    .footer-cta .cta-actions { flex-direction: column; }
     .footer-columns { flex-direction: column; gap: 2rem; }
   }
+}
+
+@media (max-width: 576px) {
+  .closing-invite .closing-invite-actions { flex-direction: column; align-items: stretch; }
 }
 
 .scroll-to-top {

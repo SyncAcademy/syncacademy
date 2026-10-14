@@ -43,6 +43,7 @@ const requests: { method: string; path: string; payload?: unknown }[] = [];
 const api = {
   schoolId: signal(schoolId),
   role: signal('BURSAR'),
+  schoolRevisionNotice:signal(0),
   auth: {
     identity: signal({ id: 'bursar-1' }),
     request: async (method: string, path: string, payload?: unknown) => {
@@ -58,7 +59,7 @@ const api = {
     return { id: 'payment-1' };
   },
 };
-const year = { id: yearId, label: '2026', status: 'active', startDate: '2026-01-01', endDate: '2026-12-31' };
+const year = { id: yearId, label: '2026', status: 'active', startDate: '2026-01-01', endDate: '2026-12-31',terms:[{key:'Term 1',name:'Term 1',startsAt:'2026-01-01',endsAt:'2026-03-31'}] };
 const yearService = {
   bursarYear: signal(year),
   registerYear: signal(year),
@@ -75,7 +76,7 @@ TestBed.initTestEnvironment(BrowserDynamicTestingModule, platformBrowserDynamicT
 TestBed.configureTestingModule({
   providers: [
     { provide: RendererFactory2, useValue: { begin() {}, end() {}, whenRenderingDone: () => Promise.resolve() } },
-    { provide: ActivatedRoute, useValue: { data: of({ section: 'payments', title: 'Payments' }) } },
+    { provide: ActivatedRoute, useValue: { data: of({ section: 'payments', title: 'Payments' }),queryParams:of({}),snapshot:{queryParamMap:{get:()=>null}} } },
     { provide: DOCUMENT, useValue: { body: null, querySelectorAll: () => [] } },
     { provide: SchoolApiService, useValue: api },
     { provide: AcademicYearService, useValue: yearService },
@@ -113,6 +114,9 @@ assert.equal(store.adjustments()[0].amount, -10000);
 assert.deepEqual(store.summary(), { charged: 100000, adjustments: -10000, expected: 90000, paid: 40000, balance: 50000, overdue: 50000 });
 assert.equal(store.accounts()[0].name, 'Test Student');
 assert.equal(store.accounts()[0].balance, 50000);
+ledgerRows.payments[0].amount=45000;api.schoolRevisionNotice.set(1);TestBed.flushEffects();await new Promise(resolve=>setTimeout(resolve,0));
+assert.equal(store.payments()[0].amount,45000,'a school change updates an already-open finance cache');
+ledgerRows.payments[0].amount=40000;api.schoolRevisionNotice.set(2);TestBed.flushEffects();await new Promise(resolve=>setTimeout(resolve,0));
 
 assert.equal(await store.saveFee({ classId: 'class-1', term: 'Term 1', name: 'Tuition', amount: 100000, due: pastDue }), null);
 const createFee = requests.find(request => request.path === 'finance/fees' && request.method === 'POST');

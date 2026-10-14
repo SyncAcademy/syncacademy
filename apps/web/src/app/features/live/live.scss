@@ -11,3 +11,6 @@ label { display:flex; flex-direction:column; gap:7px; font-weight:600; font-size
 @media(max-width:800px) { .workspace-shell { display:block; }.workspace-sidebar { position:static; height:auto; padding:20px; gap:10px; }.workspace-sidebar nav { flex-direction:row; flex-wrap:wrap; }.workspace-sidebar footer { flex-direction:row; flex-wrap:wrap; align-items:center; }.workspace-main { padding:20px 12px; }.panel { padding:16px; } .auth-card { padding:24px; } }
 
 app-auth-layout .auth-card {padding:0;max-width:none;background:transparent;border:0;box-shadow:none;}
+.legal-check { align-items:flex-start; line-height:1.5; }
+.legal-check input { flex:none; margin-top:3px; }
+.legal-check a { display:inline; margin:0; }

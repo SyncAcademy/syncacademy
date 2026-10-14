@@ -47,7 +47,6 @@ export class ReportStore {
   forYear(yearId: string): SchoolReport[] { return this.allReports().filter(r => r.academicYearId === yearId); }
   updateRegistryContacts(..._args: unknown[]): number { return 0; }
   receiveAcademicReports(_records: SchoolReport[]): number { return 0; }
-  approve(id:string){return this.remote.command('approve-report',{id});}
   eligible(_report: SchoolReport): boolean { return false; }
   send(_ids: string[], _resend = false): number { return 0; }
   private restore(): SchoolReport[] { return []; }

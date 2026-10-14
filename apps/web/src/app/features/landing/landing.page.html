@@ -1431,7 +1431,7 @@
             <div class="form-group">
               <label for="subject">Subject <span class="required">*</span></label>
               <div class="select-wrapper">
-                <select id="subject" name="subject" [(ngModel)]="contactData.subject" required>
+                <select class="custom-chevron" id="subject" name="subject" [(ngModel)]="contactData.subject" required>
                   <option value="" disabled>Select a subject</option>
                   <option value="sales">Sales & Pricing</option>
                   <option value="support">Technical Support</option>
@@ -1472,62 +1472,7 @@
     </div>
   </section>
 
-  <!-- 8. Footer -->
-  <footer class="footer dark-footer">
-    <div class="footer-cta text-center">
-      <h2>Bring your school together with SyncAcademy</h2>
-      <p>
-        Start managing your school with a platform designed to keep everything
-        connected. Create your Sync Academy account today and see the
-        difference.
-      </p>
-      <div class="cta-actions">
-        <button class="btn btn-primary btn-lg" routerLink="/auth/register">
-          Create Account
-        </button>
-        <button class="btn btn-outline-light btn-lg" routerLink="/auth/login">
-          Sign In to Account
-        </button>
-      </div>
-    </div>
-
-    <div class="footer-main container">
-      <div class="footer-brand">
-        <div class="footer-logo">
-          <app-logo variant="light" size="md"></app-logo>
-        </div>
-        <p class="brand-desc">
-          Premium cloud platform coordinating academics, accounting, security,
-          and school-wide communications in one beautiful, streamlined
-          interface.
-        </p>
-      </div>
-
-      <div class="footer-columns">
-        <div class="footer-col">
-          <h4>PRODUCT</h4>
-          <a href="#features">Features</a>
-          <a href="#solutions">Solutions</a>
-          <a href="#services">Services</a>
-          <a href="#integrations">Integrations</a>
-        </div>
-        <div class="footer-col">
-          <h4>COMPANY</h4>
-          <a href="#about">About Us</a>
-          <a href="#contact">Contact</a>
-          <a href="#support">Support Hub</a>
-          <a href="#stories">Client Stories</a>
-        </div>
-        <div class="footer-col">
-          <h4>LEGAL</h4>
-          <a href="#privacy">Privacy Policy</a>
-          <a href="#terms">Terms of Service</a>
-          <a href="#sla">SLA</a>
-          <a href="#audit">Audit Logs</a>
-        </div>
-      </div>
-    </div>
-  </footer>
+  <app-public-footer></app-public-footer>
 
   <button
     class="scroll-to-top"

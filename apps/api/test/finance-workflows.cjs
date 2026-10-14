@@ -130,6 +130,17 @@ module.exports = async ({ t, db, client, fixture }) => {
       const agent = client(); await agent.login(user.email, undefined, role);
       const workspace = await agent.call('GET', `schools/${school.id}/workspace`);
       assert.equal(workspace.status, 200, JSON.stringify(workspace.body));
+      if(['BURSAR','HEADMASTER'].includes(role)) {
+        const charges=await db.studentCharge.findMany({where:{schoolId:school.id},select:{studentId:true,amount:true}});
+        const payments=await db.payment.findMany({where:{schoolId:school.id,voidAt:null},select:{studentId:true,amount:true}});
+        const adjustments=await db.adjustment.findMany({where:{schoolId:school.id},select:{studentId:true,amount:true}});
+        const owing=[...new Set(charges.map(c=>c.studentId))].filter(id=>charges.filter(c=>c.studentId===id).reduce((n,c)=>n+c.amount,0)+adjustments.filter(a=>a.studentId===id).reduce((n,a)=>n+a.amount,0)-payments.filter(p=>p.studentId===id).reduce((n,p)=>n+p.amount,0)>0).length;
+        assert.equal(workspace.body.financeSummary.studentsOwing,owing,'grouped dashboard totals preserve charges, adjustments and non-void payments');
+      }
+      for (const row of workspace.body.students) for (const enrollment of row.enrollments) {
+        const expected = await db.enrollmentSubject.findMany({where:{schoolId:school.id,enrollmentId:enrollment.id},select:{subjectId:true}});
+        assert.deepEqual(enrollment.subjects.map(s=>s.subjectId).sort(),expected.map(s=>s.subjectId).sort(),'batched subjects preserve the authorized enrollment response');
+      }
       assert.ok(workspace.body.years.some(y => y.id === year.id));
       assert.ok(workspace.body.students.some(s => s.id === student.id && s.enrollments.some(e => e.status === 'graduated')));
       const finance = await call(agent, 'GET', `ledger?yearId=${year.id}`);
@@ -142,7 +153,7 @@ module.exports = async ({ t, db, client, fixture }) => {
       if (role === 'ACADEMIC') {
         const teacher = await fixture('new-history-teacher@example.test', 'TEACHER', school.id);
         const membership = await db.membership.findFirstOrThrow({ where: { userId: teacher.id } });
-        const grant = await agent.call('POST', `schools/${school.id}/assignments`, { membershipId: membership.id, classroomId: cls.id }, { 'Idempotency-Key': randomUUID() });
+        const grant = await agent.call('POST', `schools/${school.id}/academics/commands`, { yearId: year.id, action: 'class-teacher', payload: { teacherId: membership.id, classId: cls.id } }, { 'Idempotency-Key': randomUUID() });
         assert.equal(grant.status, 201, JSON.stringify(grant.body));
         const teacherClient = client(); await teacherClient.login(teacher.email, undefined, 'TEACHER');
         const history = (await teacherClient.call('GET', `schools/${school.id}/workspace`)).body;
@@ -154,5 +165,6 @@ module.exports = async ({ t, db, client, fixture }) => {
     const outsiderUser = await fixture('finance-outsider@example.test', 'BURSAR', other.id);
     const outsider = client(); await outsider.login(outsiderUser.email, undefined, 'BURSAR');
     assert.equal((await call(outsider, 'GET', `ledger?yearId=${year.id}`)).status, 403);
+    assert.equal((await outsider.call('GET',`schools/${other.id}/workspace`)).body.financeSummary.studentsOwing,0,'dashboard balances stay within their school');
   });
 };

@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { AcademicYearService } from '../../core/services/academic-year.service';
 import { RegistrarStore } from '../registrar/registrar.store';
 import { SchoolApiService } from '../../core/services/school-api.service';
@@ -49,6 +49,22 @@ export class BursarStore {
   private cacheKey(yearId: string) { return `${this.context()}:${yearId}`; }
   readonly loading = signal(false);
   readonly lastPaymentId = signal('');
+
+  constructor() {
+    effect(()=>{
+      const notice=this.api.schoolRevisionNotice?.();
+      if(!notice)return;
+      untracked(()=>{
+        const role=this.api.role();
+        if(!['HEADMASTER','BURSAR','REGISTRAR'].includes(role))return;
+        const yearId=(role==='HEADMASTER'?this.years.headYear():this.year())?.id;
+        const reload=!!yearId&&(this.loadedYears.has(this.cacheKey(yearId))||this.loadingYears.has(this.cacheKey(yearId)));
+        const prefix=this.context()+':';
+        for(const key of this.loadedYears)if(key.startsWith(prefix))this.loadedYears.delete(key);
+        if(yearId&&reload)void this.loadYear(yearId,true);
+      });
+    });
+  }
 
   forYear(yearId: string): FinanceRecords {
     return this.recordsByYear()[this.cacheKey(yearId)] ?? emptyRecords();

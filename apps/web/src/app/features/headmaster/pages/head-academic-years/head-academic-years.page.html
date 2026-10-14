@@ -11,6 +11,7 @@
     </button>
   </app-head-page-header>
   <p *ngIf="formError() && !showDialog()" class="form-error-banner" role="alert">{{ formError() }}</p>
+  <p *ngIf="notice()" class="portal-notice" role="status">{{ notice() }}</p>
 
   <!-- Toolbar & Filters -->
   <app-table-toolbar

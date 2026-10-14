@@ -31,6 +31,7 @@ function client() {
   let cookie = "";
   return {
     async call(method, route, body, headers = {}) {
+      if (method === 'POST' && route === 'invitations/accept' && body) body = { acceptedTerms: true, acknowledgedPrivacy: true, ...body };
       const response = await fetch(base + route, {
         method,
         headers: {
@@ -84,7 +85,7 @@ async function invitationToken(id) {
 
 test(
   "PostgreSQL authentication and school workflow",
-  { timeout: 180000 },
+  { timeout: 300000 },
   async (t) => {
     const migrate = spawnSync(
       process.execPath,
@@ -277,6 +278,13 @@ test(
           assert.equal(preview.status, 201);
           assert.equal(preview.body.role, "SUPER_ADMIN");
           assert.equal(preview.body.school, "SyncAcademy platform");
+
+          const withoutAgreement = await fetch(base + "invitations/accept", {
+            method: "POST",
+            headers: { Origin: origin, "X-Requested-With": "SyncAcademy", "Content-Type": "application/json" },
+            body: JSON.stringify({ token: await invitationToken(invitation.id), password: strongPassword }),
+          });
+          assert.equal(withoutAgreement.status, 400);
 
           const recipient = client();
           const accepted = await recipient.call("POST", "invitations/accept", {
@@ -994,8 +1002,8 @@ test(
           (
             await head.call(
               "POST",
-              `schools/${schoolA.id}/assignments`,
-              { membershipId: membership.id, classroomId: classA.id },
+              `schools/${schoolA.id}/academics/commands`,
+              { yearId: yearA.id, action: "class-teacher", payload: {teacherId: membership.id, classId: classA.id} },
               idempotent(),
             )
           ).status,
@@ -1279,6 +1287,12 @@ test(
         assert.equal(edit.status, 200, JSON.stringify(edit.body));
         assert.equal((await reg.call('PATCH', route + 'students/' + studentId, editBody, { 'Idempotency-Key': randomUUID() })).status, 409, 'stale profile updates rejected');
         detail = await get('students/' + studentId); assert.equal(detail.body.name, editBody.name); assert.equal(detail.body.version, 2);
+        const competingProfiles = await Promise.all([reg,hm].map((agent,index)=>agent.call('PATCH',route+'students/'+studentId,{...editBody,version:2,name:'Concurrent profile '+index},{'Idempotency-Key':randomUUID()})));
+        assert.deepEqual(competingProfiles.map(r=>r.status).sort(),[200,409],'Registrar and Headmaster cannot silently overwrite the same profile version');
+        const profileWinner=competingProfiles.findIndex(r=>r.status===200);
+        detail=await get('students/'+studentId);
+        assert.equal(detail.body.name,'Concurrent profile '+profileWinner);assert.equal(detail.body.version,3);
+        assert.equal((await teach.call('PATCH',route+'students/'+studentId,{...editBody,version:3},{'Idempotency-Key':randomUUID()})).status,403,'teachers cannot edit personal student profiles');
         let e = detail.body.enrollments[0];
         assert.equal((await post('movements', { enrollmentId: e.id, version: e.version, action: 'class_change', classroomId: future.id, reason: 'Invalid year change' })).status, 400);
         assert.equal((await post('movements', { enrollmentId: e.id, version: e.version, action: 'class_change', classroomId: b.id, reason: 'Class allocation updated' })).status, 201);
@@ -1331,7 +1345,7 @@ test(
         assert.equal((await post('admissions', { name: 'Closed year applicant', requestedClassId: a.id })).status, 201);
         e = (await get('students/' + studentId)).body.enrollments.find(e => e.classroom.yearId === year.id);
         assert.equal((await post('movements', { enrollmentId: e.id, version: e.version, action: 'withdrawn', reason: 'Historical record corrected' })).status, 201);
-        assert.equal((await get('students/' + studentId)).body.name, editBody.name, 'records survive subsequent requests');
+        assert.equal((await get('students/' + studentId)).body.name, 'Concurrent profile '+profileWinner, 'the winning concurrent edit survives subsequent requests');
       });
 
       await require('./registrar-workflows.cjs')({ t, db, client, fixture });

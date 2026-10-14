@@ -4,7 +4,7 @@
 
 
 
-@if (store.loading() && !store.hasCurrentYearData()) { <app-loading-skeleton label="Loading finance records…" /> }
+@if (store.loading() && !store.hasCurrentYearData()) { <app-loading-skeleton /> }
 
 @if (notice()) { <p class="portal-notice" role="status">{{ notice() }}</p> }
 

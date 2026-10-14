@@ -26,7 +26,7 @@ export class HeadDashboardPage implements OnInit {
     verifiedGuardians: this.reports.reports().flatMap(r => r.recipients).filter(g => g.verified).length,
     pendingSubmissions: this.teacher.state().assignments.filter(a => a.academicYearId === this.store.selectedYear()?.id && a.assessmentProgress.status === 'submitted').length,
     pendingStaffApprovals: this.store.pending().length,
-    reportsReadyForRelease: this.reports.reports().filter(r => r.status === 'approved').length,
+    reportsReadyForRelease: this.reports.reports().length,
     reportsSent: this.reports.stats().sent, reportsDelivered: this.reports.stats().delivered,
     reportsViewed: this.reports.stats().viewed, failedMessages: this.reports.stats().failed,
   }));

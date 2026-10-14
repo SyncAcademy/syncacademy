@@ -42,6 +42,9 @@ export class AcademicPage {
   readonly statusFilter = signal('all');
   readonly search = signal('');
   readonly listPage=signal(1);
+  readonly activityPage=signal(1);
+  readonly activityPages=computed(()=>Math.max(1,Math.ceil(this.store.audit().length/8)));
+  readonly visibleActivity=computed(()=>this.store.audit().slice((this.activityPage()-1)*8,this.activityPage()*8));
   pageItems<T>(rows:T[]):T[]{return rows.slice((this.listPage()-1)*25,this.listPage()*25);}
   readonly reportScope = signal('approved');
   readonly notice = signal('');
@@ -59,6 +62,13 @@ export class AcademicPage {
     (this.classFilter() === 'all' || this.store.classLabel(a) === this.classFilter()) &&
     (this.statusFilter() === 'all' || a.assessmentProgress.status === this.statusFilter()) &&
     `${a.subjectName} ${this.store.classLabel(a)} ${a.teacherName ?? 'Teacher'}`.toLowerCase().includes(this.search().toLowerCase())), a => a.assessmentProgress.approvedAt ?? a.assessmentProgress.submittedAt ?? a.createdAt));
+  readonly reviewClasses = computed(() => [...new Set(this.store.assignments().map(a => a.classId).filter((id): id is string => !!id))].map(classId => {
+    const rows = this.store.assignments().filter(a => a.classId === classId);
+    return { id: classId, name: this.store.classLabel(rows[0]), total: rows.length,
+      submitted: rows.filter(a => a.assessmentProgress.status === 'submitted').length,
+      approved: rows.filter(a => a.assessmentProgress.status === 'approved').length,
+      ready: rows.some(a => a.assessmentProgress.status === 'submitted') && rows.every(a => ['submitted', 'approved'].includes(a.assessmentProgress.status)) };
+  }).filter(c => this.classFilter() === 'all' || c.name === this.classFilter()));
   readonly review = computed(() => this.store.assignments().find(a => a.id === this.detailId()));
   readonly reviewMarks = computed(() => this.store.entries(this.detailId()));
   readonly reviewScoredCount = computed(() => this.reviewMarks().filter(m => this.valid(m.marksValue)).length);
@@ -82,6 +92,9 @@ export class AcademicPage {
   readonly passRate = computed(() => this.results().length ? this.results().filter(r => (r.passed ?? r.mark >= 35)).length / this.results().length * 100 : null);
   readonly allAtRisk = computed(() => this.store.approvedResults().filter(r => r.mark < 50 && `${r.student} ${r.studentNumber} ${r.className} ${r.subject}`.toLowerCase().includes(this.search().toLowerCase())));
   readonly atRisk = computed(() => this.allAtRisk().filter(r => this.classFilter() === 'all' || r.className === this.classFilter()));
+  readonly atRiskCount = computed(() => this.store.remote.data().view==='overview'
+    ? this.store.assignments().filter(a=>a.assessmentProgress.status==='approved').reduce((n,a)=>n+((a as any).resultStats?.below50??0),0)
+    : this.atRisk().length);
   readonly allSupportPlans = computed(() => this.store.support().filter(p=>`${p.student} ${p.className} ${p.subject} ${p.owner}`.toLowerCase().includes(this.search().toLowerCase())));
   readonly supportPlans=computed(()=>this.allSupportPlans().filter(p=>this.classFilter()==='all'||p.className===this.classFilter()));
   readonly assessments=computed(()=>this.store.assessmentsForTerm().filter(a=>`${a.name} ${this.store.years.termName('academic', a.term)}`.toLowerCase().includes(this.search().toLowerCase())));
@@ -99,7 +112,7 @@ export class AcademicPage {
   readonly allPreparedReports=computed(()=>this.store.reports().filter(r=>`${r.student} ${r.studentNumber} ${r.className}`.toLowerCase().includes(this.search().toLowerCase())));
   readonly preparedReports=computed(()=>this.allPreparedReports().filter(r=>this.classFilter()==='all'||r.className===this.classFilter()));
   readonly reportClasses = computed(() => [...new Set([...this.store.assignments().map(a => this.store.classLabel(a)), ...this.store.reports().map(r => r.className)])].sort());
-  readonly reportClassCards = computed(() => this.reportClasses().map(name => ({ name, count: this.allPreparedReports().filter(r => r.className === name).length, pending: this.allPreparedReports().filter(r => r.className === name && r.status === 'generated').length, readiness: this.store.readiness(name) })).filter(c => !this.search().trim() || c.count > 0 || c.name.toLowerCase().includes(this.search().trim().toLowerCase())));
+  readonly reportClassCards = computed(() => this.reportClasses().map(name => ({ name, count: this.allPreparedReports().filter(r => r.className === name).length, readiness: this.store.readiness(name) })).filter(c => !this.search().trim() || c.count > 0 || c.name.toLowerCase().includes(this.search().trim().toLowerCase())));
   readonly interventionClasses = computed(() => [...new Set([...this.allAtRisk().map(r => r.className), ...this.allSupportPlans().map(p => p.className)])].sort().map(name => ({ name, atRisk: this.allAtRisk().filter(r => r.className === name).length, support: this.allSupportPlans().filter(p => p.className === name).length })));
   readonly teaching = computed(() => this.store.teachingAssignments().filter(a => `${a.teacherName} ${a.classStream || a.className} ${a.subjectName}`.toLowerCase().includes(this.search().toLowerCase())));
   readonly availableSubjects = computed(() => this.store.head.subjects());
@@ -113,12 +126,12 @@ export class AcademicPage {
       this.pageContext();
       untracked(()=>{
       this.classFilter.set('all'); this.subjectFilter.set('all'); this.statusFilter.set('all'); this.search.set('');
-      this.close(); this.notice.set(''); });
+      this.activityPage.set(1); this.close(); this.notice.set(''); });
     });
     effect(()=>{this.section();this.search();this.classFilter();this.subjectFilter();this.statusFilter();this.reportScope();this.listPage.set(1);});
   }
   valid(mark: number | null): boolean { return gradeMark(mark) !== null; }
-  completed(id: string): number { return this.store.entries(id).filter(m => this.valid(m.marksValue) || m.noMark === true).length; }
+  completed(id: string): number { return this.store.remote.data().view==='overview' ? this.store.assignments().find(a=>a.id===id)?.assessmentProgress.completed??0 : this.store.entries(id).filter(m => this.valid(m.marksValue) || m.noMark === true).length; }
   topicLabel(id: string): string { const a = this.store.teachingAssignments().find(a => a.id === id); return a ? `${a.classStream || a.className} / ${a.subjectName} / ${a.teacherName}` : 'Assignment unavailable'; }
   offeredSubjects(classId: string) { return this.store.head.mappings().filter(m => m.classId === classId); }
   open(mode: string, id = ''): void {
@@ -130,7 +143,12 @@ export class AcademicPage {
   }
   close(): void { if(this.store.remote.busy() || this.saving())return; this.dialog.set(''); this.detailId.set(''); this.error.set(''); this.form = {}; }
   private finish(error: string | null, message: string): void { if (error) this.error.set(error); else { this.close(); this.notice.set(message); } }
-  async decide(decision: 'approved' | 'returned'): Promise<void> { this.finish(await this.store.review(this.detailId(), decision, this.form['reason'] ?? ''), decision === 'approved' ? 'Marks approved. The teacher can see the updated status.' : 'Marks returned with your feedback.'); }
+  async decide(): Promise<void> { this.finish(await this.store.review(this.detailId(), this.form['reason'] ?? ''), 'Marks returned with your feedback.'); }
+  async approveClass(classId: string): Promise<void> {
+    const assessmentId = this.store.assessment()?.id;
+    if (!assessmentId) return;
+    this.finish(await this.store.reviewClass(assessmentId, classId), 'All submitted subjects for this class were approved.');
+  }
   async reassignSupport(id:string):Promise<void>{const teacherMembershipId=this.reassignTeacher[id];if(!teacherMembershipId){this.error.set('Choose a teacher to reassign this plan.');return;}this.error.set('');const error=await this.store.reassignSupport(id,teacherMembershipId);if(error)this.error.set(error);else{delete this.reassignTeacher[id];this.notice.set('Support plan reassigned. The new teacher can respond.');}}
   async save(): Promise<void> {
     const f = this.form;
@@ -152,7 +170,7 @@ export class AcademicPage {
     }
   }
   async changeAssessment(a: Assessment): Promise<void> { this.finish(await this.store.changeAssessment(a.id, a.status === 'open' ? 'closed' : 'open'), 'Assessment status updated.'); }
-  async prepare(className: string): Promise<void> { this.finish(await this.store.prepareReports(className), 'Reports prepared for headmaster review.'); }
+  async prepare(className: string): Promise<void> { this.finish(await this.store.prepareReports(className), 'Class reports prepared and available to the headmaster.'); }
   async removeSlot(id:string):Promise<void>{this.finish(await this.store.removeSlot(id),'Exam removed from the timetable.');}
   async toggleTopic(id:string):Promise<void>{this.finish(await this.store.toggleTopic(id),'Syllabus progress updated.');}
   addSupport(row: ResultRow): void { this.open('support'); this.form = { studentNumber: row.studentNumber, className: row.className, subject: row.subject }; }

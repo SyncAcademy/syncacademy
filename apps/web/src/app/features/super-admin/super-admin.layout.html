@@ -41,10 +41,9 @@
       <!-- Scrollable Content -->
       <main #saContent class="sa-content" role="main" (scroll)="onContentScroll($event)">
         <div class="sa-content-inner">
-          @if(store.loading()){<p role="status">Loading platform records…</p>}
           @if (store.storageError()) { <div class="portal-notice portal-notice--error" role="alert">{{ store.storageError() }} <button type="button" class="action-btn" [disabled]="store.loading()" (click)="store.load()">Retry loading</button></div> }
           @if (store.settings().maintenanceMessage) { <p class="sa-notice">{{ store.settings().maintenanceMessage }}</p> }
-          @if (store.loading() && !store.summary()) { <app-loading-skeleton label="Loading platform records…" /> }
+          @if (store.loading() && !store.summary()) { <app-loading-skeleton /> }
           @else { <router-outlet></router-outlet> }
         </div>
       </main>

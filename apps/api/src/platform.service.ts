@@ -250,6 +250,10 @@ export class PlatformService {
       }
       await tx.invitation.update({ where: { id: i.id }, data: { acceptedAt: new Date() } });
       await tx.auditEvent.create({ data: { actorId: user.id, schoolId: i.schoolId, action: i.platformAdmin ? 'PLATFORM_ADMIN_INVITATION_ACCEPTED' : 'INVITATION_ACCEPTED', target: i.id } });
+      await tx.auditEvent.createMany({ data: [
+        { actorId: user.id, schoolId: i.schoolId, action: 'TERMS_ACCEPTED', target: `${i.id}:2026-10-12` },
+        { actorId: user.id, schoolId: i.schoolId, action: 'PRIVACY_NOTICE_ACKNOWLEDGED', target: `${i.id}:2026-10-12` },
+      ] });
     });
     return { message: 'Invitation accepted. Sign in to access your account.' };
   }

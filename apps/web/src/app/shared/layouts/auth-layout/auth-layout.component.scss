@@ -128,5 +128,7 @@ ion-content {
     font-size: 0.8125rem;
     color: $text-secondary;
     margin-top: auto;
+    nav { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.5rem 1.25rem; margin-top: 0.75rem; }
+    a { color: #a84a09; text-decoration: underline; text-underline-offset: 2px; }
   }
 }

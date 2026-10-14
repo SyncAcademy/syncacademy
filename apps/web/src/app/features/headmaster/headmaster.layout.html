@@ -34,7 +34,7 @@
       <main #headContent class="head-content" role="main" (scroll)="onContentScroll($event)">
         <div class="head-content-inner">
           <app-portal-connection />
-          @if ((api.schoolId() && !api.data() && !api.error()) || (academicData.loading() && !academicData.hasData())) { <app-loading-skeleton label="Loading school records…" /> }
+          @if ((api.schoolId() && !api.data() && !api.error()) || (academicData.loading() && !academicData.hasData())) { <app-loading-skeleton /> }
           @else { <router-outlet></router-outlet> }
         </div>
       </main>

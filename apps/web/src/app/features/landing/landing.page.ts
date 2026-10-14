@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { LogoComponent } from '@shared/components/logo/logo.component';
+import { PublicFooterComponent } from '@shared/components/public-footer/public-footer.component';
 
 export interface HeroSlide {
   line1: string;
@@ -42,7 +43,7 @@ export interface StatCounter {
 @Component({
   selector: 'app-landing',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, LogoComponent],
+  imports: [CommonModule, RouterModule, FormsModule, LogoComponent, PublicFooterComponent],
   templateUrl: './landing.page.html',
   styleUrls: ['./landing.page.scss']
 })

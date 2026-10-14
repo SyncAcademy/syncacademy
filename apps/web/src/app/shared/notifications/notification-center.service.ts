@@ -51,7 +51,6 @@ export class NotificationCenterService {
   readonly headNotifications = computed(() => [
     ...this.academicItems('head'),
     ...(this.head.invitations().filter(i => i.status === 'active' && Date.parse(i.expiresAt) > Date.now()).length ? [this.attention('head-invitations', 'Pending staff invitations', `${this.head.invitations().filter(i => i.status === 'active' && Date.parse(i.expiresAt) > Date.now()).length} invitations awaiting acceptance`, '/head/staff/pending')] : []),
-    ...(this.reports.reports().filter(r => r.status === 'generated').length ? [this.attention('head-reports', 'Reports awaiting review', `${this.reports.reports().filter(r => r.status === 'generated').length} student reports need review`, '/head/reports')] : []),
   ]);
   readonly teacherNotifications = computed(() => this.academicItems('teacher'));
   readonly registrarNotifications = computed(() => [

@@ -8,7 +8,7 @@
   <section class="panel subjects-panel">
     <div class="subjects-heading"><div><span class="subjects-eyebrow">Student subjects</span><h2>Choose a class</h2><p>Open a class to view its students and subject selections.</p></div><span class="subjects-count">{{ classes().length }} classes</span></div>
     <div class="subjects-tools"><label class="subjects-search"><span class="sr-only">Search classes or subjects</span><input type="search" placeholder="Search classes or subjects" [ngModel]="classSearch()" (ngModelChange)="classSearch.set($event)"></label></div>
-    @if (loadingClasses()) { <app-loading-skeleton label="Loading classes…" /> }
+    @if (loadingClasses()) { <app-loading-skeleton /> }
     @else { <div class="subject-class-grid">
       @for (classroom of filteredClasses(); track classroom.id) {
         <button type="button" class="subject-class-card" (click)="openClass(classroom.id)">
@@ -28,7 +28,7 @@
     <div class="subjects-heading"><div><button type="button" class="subjects-back" (click)="backToClasses()">&#8592; All classes</button><h2>{{ selectedClass()?.name }} students</h2><p>{{ students().length }} active students &middot; {{ selectedClass()?.subjects?.length || 0 }} class subjects</p></div><span class="subjects-count">{{ filteredStudents().length }} shown</span></div>
     <div class="subjects-tools subjects-tools--roster"><p>Review each student below. Class offerings are their default subjects.</p><label class="subjects-search"><span class="sr-only">Search student name or number</span><input type="search" placeholder="Search student or number" [ngModel]="search()" (ngModelChange)="search.set($event)"></label></div>
     @if (!selectedClass()?.subjects?.length) { <p class="portal-notice">This class has no subject offerings. Set its subjects in Subject Setup first.</p> }
-    @if (loadingStudents()) { <app-loading-skeleton label="Loading student subjects…" /> }
+    @if (loadingStudents()) { <app-loading-skeleton /> }
     @else { <div class="subject-student-list">
       @for (student of visibleStudents(); track student.enrollmentId) {
         <article class="subject-student-card">

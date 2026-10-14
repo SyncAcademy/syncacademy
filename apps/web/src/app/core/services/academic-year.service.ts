@@ -8,9 +8,18 @@ export type YearViewer = 'head' | 'teacher' | 'academic' | 'register' | 'bursar'
 /** Browsing context only: selecting a year never changes the school's active year. */
 @Injectable({ providedIn: 'root' })
 export class AcademicYearService {
-  private read(key:string):any { return null; }
+  private storageKey(viewer: YearViewer): string {
+    const user = this.api.auth.identity()?.id;
+    const school = this.api.schoolId();
+    return user && school ? `syncacademy:selected-year:${user}:${school}:${viewer}` : '';
+  }
+  private read(key: string): string | null {
+    if (!key || typeof window === 'undefined') return null;
+    try { return window.localStorage.getItem(key); }
+    catch { return null; }
+  }
   readonly api = inject(SchoolApiService); readonly years = signal<AcademicYear[]>([]);
-  private readonly selection = signal<Partial<Record<YearViewer,string>>>({});
+  private readonly selection = signal<Record<string,string>>({});
   readonly storageAvailable = signal(true);
   readonly bursarYear = computed(() => this.selected('bursar'));
   readonly headYear = computed(() => this.selected('head'));
@@ -26,10 +35,16 @@ export class AcademicYearService {
   }
   selected(viewer: YearViewer): AcademicYear | undefined {
     const years = this.available(viewer);
-    return years.find(y => y.id === this.selection()[viewer]) ?? years.find(y => y.status === 'active') ?? years[0];
+    const key = this.storageKey(viewer);
+    return years.find(y => y.id === (this.selection()[key] ?? this.read(key))) ?? years.find(y => y.status === 'active') ?? years[0];
   }
   select(viewer: YearViewer, id: string): void {
-    if (this.available(viewer).some(y => y.id === id)) this.selection.update(s => ({ ...s, [viewer]: id }));
+    const key = this.storageKey(viewer);
+    if (!key || !this.available(viewer).some(y => y.id === id)) return;
+    this.selection.update(s => ({ ...s, [key]: id }));
+    if (typeof window === 'undefined') return;
+    try { window.localStorage.setItem(key, id); }
+    catch { this.storageAvailable.set(false); }
   }
   readOnly(viewer: YearViewer): boolean {
     const year = this.selected(viewer);

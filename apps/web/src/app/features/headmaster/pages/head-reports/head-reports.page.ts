@@ -20,7 +20,7 @@ export class HeadReportsPage {
  readonly reportAverage = reportAverage;
  readonly store=inject(ReportStore);readonly search=signal('');readonly className=signal('');readonly selected=signal('');
  readonly matchingReports=computed(()=>this.store.reports().filter(r=>`${r.student} ${r.studentNumber} ${r.className} ${r.period}`.toLowerCase().includes(this.search().trim().toLowerCase())));
- readonly classCards=computed(()=>[...new Set(this.matchingReports().map(r=>r.className))].sort().map(name=>{const items=this.matchingReports().filter(r=>r.className===name);return{name,count:items.length,pending:items.filter(r=>r.status==='generated').length};}));
+ readonly classCards=computed(()=>[...new Set(this.matchingReports().map(r=>r.className))].sort().map(name=>({name,count:this.matchingReports().filter(r=>r.className===name).length})));
  readonly reports=computed(()=>this.matchingReports().filter(r=>!this.className()||r.className===this.className()));
  readonly page=signal(1);readonly pages=computed(()=>Math.max(1,Math.ceil(this.reports().length/25)));
  readonly visible=computed(()=>this.reports().slice((this.page()-1)*25,this.page()*25));

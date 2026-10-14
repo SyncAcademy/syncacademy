@@ -177,7 +177,7 @@ export class ApiController {
   @Post('auth/reset/validate') validateReset(@Req() req: Request, @Body() body: unknown) { return this.svc.validateReset(req, parse(z.object({ token }).strict(), body).token); }
   @Post('auth/reset') reset(@Req() req: Request, @Body() body: unknown) { const b = parse(z.object({ token, password }).strict(), body); return this.svc.reset(req, b.token, b.password); }
   @Post('invitations/preview') preview(@Req() req: Request, @Body() body: unknown) { return this.svc.invitationInfo(req, parse(z.object({ token }).strict(), body).token); }
-  @Post('invitations/accept') accept(@Req() req: Request, @Body() body: unknown) { const b = parse(z.object({ token, password: z.string().min(1).max(128).optional() }).strict(), body); return this.svc.accept(req, b.token, b.password); }
+  @Post('invitations/accept') accept(@Req() req: Request, @Body() body: unknown) { const b = parse(z.object({ token, password: z.string().min(1).max(128).optional(), acceptedTerms: z.literal(true), acknowledgedPrivacy: z.literal(true) }).strict(), body); return this.svc.accept(req, b.token, b.password); }
   @Get('schools') async schools(@Req() req: Request, @Query() query: unknown) {
     await this.svc.administrator(req);
     const q = parse(z.object({ page: listPage, pageSize: listSize, q: z.string().trim().max(200).default(''), status: z.enum(['active', 'suspended']).optional() }).strict(), query);
@@ -222,16 +222,31 @@ export class ApiController {
     const visibleEnrollments = !registrar && !academic && !bursar ? teacherScope : {};
     const classroomWhere = { schoolId: id, ...(!registrar && !academic && !bursar ? { OR: [ ...(teacher ? [{ assignments: { some: { membership: { userId: user.id, active: true } } } }] : []), { enrollments: { some: { status: 'active', student: { userId: user.id } } } }] } : {}) };
     const studentWhere = { schoolId: id, ...(!registrar && !academic && !bursar ? { OR: [{ userId: user.id }, ...(teacher ? [{ enrollments: { some: teacherScope } }] : [])] } : {}) };
-    const [school, years, classes, students, studentCount, members, invitations, assignments] = await Promise.all([
+    const [school, years, classes, studentRows, studentCount, members, invitations, assignments] = await Promise.all([
       this.svc.db.school.findUnique({ where: { id }, select: { id: true, name: true, code: true, region: true, schoolType: true, address: true, phone: true, email: true, website: true } }),
       this.svc.db.academicYear.findMany({ where: { schoolId: id, ...(!registrar && !academic && !bursar ? { classes: { some: classroomWhere } } : {}) }, orderBy: { startsAt: 'desc' } }),
       this.svc.db.classroom.findMany({ where: classroomWhere, include: { year: { select: { name: true, closed: true } }, _count: { select: { enrollments: { where: { status: 'active' } } } } }, orderBy: { name: 'asc' } }),
-      this.svc.db.student.findMany({ where: studentWhere, select: { id: true, name: true, admissionNumber: true, dateOfBirth: registrar ? true : false, gender: true, address: registrar ? true : false, userId: true, enrollments: { orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], where: { ...visibleEnrollments, ...(!registrar && !academic && !bursar ? { classroom: classroomWhere } : {}) }, select: { id: true, classroomId: true, createdAt: true, status: true, version: true, subjects: { select: { subjectId: true } }, classroom: { select: { name: true, yearId: true, year: { select: { name: true } } } } } } }, orderBy: { createdAt: 'desc' }, ...(page ? { skip: (page - 1) * (pageSize ?? 25), take: pageSize ?? 25 } : {}) }),
+      this.svc.db.student.findMany({ where: studentWhere, select: { id: true, name: true, admissionNumber: true, dateOfBirth: registrar ? true : false, gender: true, address: registrar ? true : false, userId: true, enrollments: { orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], where: { ...visibleEnrollments, ...(!registrar && !academic && !bursar ? { classroom: classroomWhere } : {}) }, select: { id: true, classroomId: true, createdAt: true, status: true, version: true, classroom: { select: { name: true, yearId: true, year: { select: { name: true } } } } } } }, orderBy: { createdAt: 'desc' }, ...(page ? { skip: (page - 1) * (pageSize ?? 25), take: pageSize ?? 25 } : {}) }),
       this.svc.db.student.count({ where: studentWhere }),
       staffManager || academic ? this.svc.db.membership.findMany({ where: { schoolId: id }, select: { id: true, role: true, active: true, createdAt: true, user: { select: { id: true, name: true, email: true, enabled: true } } }, orderBy: { createdAt: 'desc' } }) : [],
       staffManager || academic ? this.svc.db.invitation.findMany({ where: { schoolId: id, ...(staffManager ? {} : { role: 'TEACHER' }) }, select: { id: true, name: true, email: true, role: true, createdAt: true, expiresAt: true, expiresInMinutes: true, acceptedAt: true, revokedAt: true }, orderBy: { createdAt: 'desc' } }) : [],
       staffManager || academic || teacher ? this.svc.db.teachingAssignment.findMany({ where: { schoolId: id, ...(!staffManager && !academic ? { membership: { userId: user.id, active: true } } : {}) }, select: { id: true, classroomId: true, membershipId: true, subjectId: true, subject: true, confirmedAt: true, membership: { select: { active: true, user: { select: { id: true, name: true, enabled: true } } } }, classroom: { select: { name: true, yearId: true, year: { select: { name: true } }, _count: { select: { enrollments: { where: { status: 'active' } } } } } } } }) : [],
     ]);
+    // Scope the batch to already-authorized enrollments and avoid Prisma's large composite-key IN query.
+    const enrollmentIds = studentRows.flatMap(student => student.enrollments.map(enrollment => enrollment.id));
+    const enrollmentSubjects = enrollmentIds.length ? await this.svc.db.enrollmentSubject.findMany({
+      where: { schoolId: id, enrollmentId: { in: enrollmentIds } },
+      select: { enrollmentId: true, subjectId: true },
+    }) : [];
+    const subjectsByEnrollment = new Map<string, Array<{ subjectId: string }>>();
+    for (const subject of enrollmentSubjects) {
+      const subjects = subjectsByEnrollment.get(subject.enrollmentId) ?? [];
+      subjects.push({ subjectId: subject.subjectId });
+      subjectsByEnrollment.set(subject.enrollmentId, subjects);
+    }
+    const students = studentRows.map(student => ({ ...student, enrollments: student.enrollments.map(enrollment => ({
+      ...enrollment, subjects: subjectsByEnrollment.get(enrollment.id) ?? [],
+    })) }));
     const registryAdmissions = registrar ? await this.svc.db.admission.findMany({ where: { schoolId: id }, select: { id: true, yearId: true, status: true } }) : [];
     const registryIssues = registrar || academic ? await this.svc.db.rosterIssue.findMany({ where: { schoolId: id, status: 'open' }, select: { id: true, assignment: { select: { classroom: { select: { yearId: true } } } } } }) : [];
     const auditEvents = staffManager ? await this.svc.db.auditEvent.findMany({ where: { schoolId: id }, orderBy: { createdAt: 'desc' }, take: 100 }) : [];
@@ -258,19 +273,19 @@ export class ApiController {
         this.svc.db.payment.aggregate({ where: { schoolId: id, voidAt: null }, _sum: { amount: true } }),
         this.svc.db.adjustment.aggregate({ where: { schoolId: id }, _sum: { amount: true } })
       ]);
-      // simple student owing count approximation
+      // Aggregate each school ledger once, rather than rescanning it per student.
       const owingStudents = await this.svc.db.$queryRaw<Array<{ count: number }>>`
-        SELECT COUNT(DISTINCT "studentId")::int as count
-        FROM (
-          SELECT "studentId",
-                 SUM(amount) as charges,
-                 COALESCE((SELECT SUM(amount) FROM "Payment" p WHERE p."studentId" = c."studentId" AND p."schoolId" = ${id}::uuid AND p."voidAt" IS NULL), 0) as paid,
-                 COALESCE((SELECT SUM(amount) FROM "Adjustment" a WHERE a."studentId" = c."studentId" AND a."schoolId" = ${id}::uuid), 0) as adjustments
-          FROM "StudentCharge" c
-          WHERE c."schoolId" = ${id}::uuid
-          GROUP BY "studentId"
-        ) AS s
-        WHERE charges + adjustments - paid > 0
+        WITH charges AS (
+          SELECT "studentId",SUM(amount) AS amount FROM "StudentCharge" WHERE "schoolId"=${id}::uuid GROUP BY "studentId"
+        ), payments AS (
+          SELECT "studentId",SUM(amount) AS amount FROM "Payment" WHERE "schoolId"=${id}::uuid AND "voidAt" IS NULL GROUP BY "studentId"
+        ), adjustments AS (
+          SELECT "studentId",SUM(amount) AS amount FROM "Adjustment" WHERE "schoolId"=${id}::uuid GROUP BY "studentId"
+        )
+        SELECT COUNT(*)::int AS count FROM charges c
+        LEFT JOIN payments p ON p."studentId"=c."studentId"
+        LEFT JOIN adjustments a ON a."studentId"=c."studentId"
+        WHERE c.amount+COALESCE(a.amount,0)-COALESCE(p.amount,0)>0
       `;
       financeSummaryData = {
         fees: feesCount || 0,
@@ -390,13 +405,30 @@ export class ApiController {
     });
   }
   @Post('schools/:id/assignments') async assignment(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
-    const { user } = await this.svc.authorize(req, schoolId(id), academics); const b = parse(z.object({ membershipId: uuid, classroomId: uuid, subjectId: uuid.nullable().default(null) }).strict(), body);
+    const { user } = await this.svc.authorize(req, schoolId(id), academics); const b = parse(z.object({ membershipId: uuid, classroomId: uuid, subjectId: uuid }).strict(), body);
     return this.svc.idempotent(user.id + ':assignment:' + id, key(req), b, async tx => {
       if (!await tx.membership.findFirst({ where: { id: b.membershipId, schoolId: id, role: 'TEACHER', active: true, user: { enabled: true } } }) || !await tx.classroom.findFirst({ where: { id: b.classroomId, schoolId: id } })) throw new BadRequestException('Choose an active teacher and a class in this school.');
       if (b.subjectId) await validateSubjects(tx, id, b.classroomId, [b.subjectId]);
       if (await tx.teachingAssignment.findFirst({ where: { schoolId: id, ...b } })) throw new ConflictException('This teacher assignment already exists.');
       const assignment = await tx.teachingAssignment.create({ data: { ...b, schoolId: id } });
       await tx.auditEvent.create({ data: { actorId: user.id, schoolId: id, action: 'TEACHER_ASSIGNED', target: assignment.id } }); return assignment;
+    });
+  }
+  @Patch('schools/:id/assignments/:assignmentId') async reassignTeacher(@Req() req: Request, @Param('id') id: string, @Param('assignmentId') assignmentId: string, @Body() body: unknown) {
+    const { user } = await this.svc.authorize(req, schoolId(id), academics);
+    parse(uuid, assignmentId);
+    const b = parse(z.object({ membershipId: uuid, previousMembershipId: uuid }).strict(), body);
+    return this.svc.idempotent(`${user.id}:reassign-teacher:${id}`, key(req), { assignmentId, ...b }, async tx => {
+      const assignment = await tx.teachingAssignment.findFirst({ where: { id: assignmentId, schoolId: id } });
+      if (!assignment?.subjectId) throw new BadRequestException('Choose a subject assignment. Manage class teachers separately.');
+      if (assignment.membershipId !== b.previousMembershipId) throw new ConflictException('This assignment changed. Reload and choose the teacher again.');
+      if (!await tx.membership.findFirst({ where: { id: b.membershipId, schoolId: id, role: 'TEACHER', active: true, user: { enabled: true } } })) throw new BadRequestException('Choose an active teacher in this school.');
+      if (b.membershipId === assignment.membershipId) return assignment;
+      if (await tx.teachingAssignment.findFirst({ where: { schoolId: id, classroomId: assignment.classroomId, subjectId: assignment.subjectId, membershipId: b.membershipId } })) throw new ConflictException('This teacher already teaches this subject in this class.');
+      // Keep the assignment ID: syllabus and roster history remain attached, and marks keep their recorded author.
+      const updated = await tx.teachingAssignment.update({ where: { id: assignment.id }, data: { membershipId: b.membershipId, confirmedAt: null } });
+      await tx.auditEvent.create({ data: { schoolId: id, actorId: user.id, action: 'TEACHER_REASSIGNED', target: `${assignment.id}: ${assignment.membershipId} -> ${b.membershipId}` } });
+      return updated;
     });
   }
   @Post('schools/:id/students') async student(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {

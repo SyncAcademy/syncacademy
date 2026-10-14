@@ -3,7 +3,6 @@ import { RouterLink } from '@angular/router';
 import { SchoolApiService } from '../../core/services/school-api.service';
 @Component({selector:'app-portal-connection',standalone:true,imports:[RouterLink],template:`
   @if (api.choices().length > 1) { <label>School <select aria-label="School" [value]="api.schoolId()" (change)="api.select($any($event.target).value)">@for(s of api.choices();track s.id){<option [value]="s.id">{{s.name}}</option>}</select></label> }
-  @if(api.loading()){<p role="status">Loading school records…</p>}
   @if(api.error()){<p role="alert">{{api.error()}} <button (click)="api.refresh()">Retry</button></p>}
   @if(!api.schoolId() && !api.loading()){<p>Select a school from <a routerLink="/super-admin/schools">Schools Directory</a> to manage its records.</p>}
   @if(api.notice()){<p role="status">{{api.notice()}}</p>}

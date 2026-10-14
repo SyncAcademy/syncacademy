@@ -35,7 +35,7 @@
         <div class="academic-content-inner">
           <app-portal-connection />
           @if(academicData.error()){<p class="portal-notice portal-notice--error" role="alert">{{ academicData.error() }} <button type="button" (click)="academicData.load()">Reload</button></p>}
-          @if ((api.schoolId() && !api.data() && !api.error()) || (academicData.loading() && !academicData.hasData())) { <app-loading-skeleton label="Loading academic records…" /> }
+          @if ((api.schoolId() && !api.data() && !api.error()) || (academicData.loading() && !academicData.hasData())) { <app-loading-skeleton /> }
           @else { <router-outlet></router-outlet> }
         </div>
       </main>

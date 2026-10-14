@@ -18,8 +18,9 @@ export class SettingsPage {
   bands:GradeBand[]=[];
   passMark=35;
   readonly error=signal('');readonly notice=signal('');readonly saving=signal(false);
-  constructor(){effect(()=>{const p=this.policy();this.bands=p.bands.map((b:GradeBand)=>({...b}));this.passMark=p.passMark;});}
-  addBand(){this.bands.push({label:'',minimum:0});}
+  private loadedPolicyKey='';
+  constructor(){effect(()=>{const p=this.policy();const key=`${this.year()?.id ?? ''}:${p.revision}`;if(key===this.loadedPolicyKey)return;this.loadedPolicyKey=key;this.bands=p.bands.map((b:GradeBand)=>({...b}));this.passMark=p.passMark;});}
+  addBand(){const index=Math.max(0,this.bands.length-1);const previous=this.bands[index-1]?.minimum??100;this.bands.splice(index,0,{label:'',minimum:Math.max(1,Math.floor(previous/2))});}
   removeBand(index:number){if(this.bands.length>2)this.bands.splice(index,1);}
   async save():Promise<void>{
     if(this.saving()||this.year()?.status==='closed')return;

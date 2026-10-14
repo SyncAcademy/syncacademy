@@ -28,7 +28,6 @@
 .entry-slow { max-width: 320px; margin: 18px 20px 0; color: #475569; font-size: .9rem; line-height: 1.5; }
 .network-progress { position: fixed; inset: 0 0 auto; height: 3px; z-index: 100000; overflow: hidden; background: #fff4e8; pointer-events: none; }
 .network-progress span { display: block; width: 38%; height: 100%; background: #e87e24; animation: networkTravel 1.2s ease-in-out infinite alternate; }
-.network-wait { position: fixed; inset: auto 16px 16px auto; z-index: 100000; max-width: min(320px, calc(100vw - 32px)); padding: 10px 14px; border: 1px solid #fed7aa; border-radius: 10px; background: #fffaf5; color: #7c2d12; box-shadow: 0 8px 24px #1723381a; font-size: .8rem; }
 @keyframes networkTravel { from { transform: translateX(-100%); } to { transform: translateX(270%); } }
 
 .logo-container {

@@ -40,6 +40,14 @@ export class HeadOversightStore {
     return [{ assignmentId: a.id, assessmentId: this.academic.assessmentId(a), className: this.academic.classLabel(a), subject: a.subjectName, student: m.fullName, studentNumber: m.studentNumber, mark: m.marksValue, grade, passed: m.marksValue >= this.academic.teacher.policyFor(a).passMark, status: a.assessmentProgress.status } satisfies ResultRow & { assessmentId: string }];
   })));
   readonly academicSummary = computed(() => {
+    if(this.remote.data().view==='overview') {
+      const rows=this.remote.data().submissions;
+      const approved=rows.filter((r:any)=>r.assessmentProgress.status==='approved');
+      const count=approved.reduce((n:number,r:any)=>n+r.resultStats.count,0);
+      return {submitted:rows.filter((r:any)=>r.assessmentProgress.status==='submitted').length,approved:approved.length,
+        average:count?approved.reduce((n:number,r:any)=>n+r.resultStats.sum,0)/count:null,
+        passRate:count?approved.reduce((n:number,r:any)=>n+r.resultStats.passed,0)/count*100:null};
+    }
     const approved = this.results().filter(r => r.status === 'approved');
     return { submitted: this.assignments().filter(a => a.assessmentProgress.status === 'submitted').length,
       approved: this.assignments().filter(a => a.assessmentProgress.status === 'approved').length,

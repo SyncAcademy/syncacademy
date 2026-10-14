@@ -34,7 +34,7 @@
       <main #bursarContent class="bursar-content" role="main" (scroll)="onContentScroll($event)">
         <div class="bursar-content-inner">
           <app-portal-connection />
-          @if (api.schoolId() && !api.data() && !api.error()) { <app-loading-skeleton label="Loading finance records…" /> }
+          @if (api.schoolId() && !api.data() && !api.error()) { <app-loading-skeleton /> }
           @else { <router-outlet></router-outlet> }
         </div>
       </main>

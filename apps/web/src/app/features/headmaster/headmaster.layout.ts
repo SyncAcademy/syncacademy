@@ -44,7 +44,7 @@ export class HeadmasterLayout implements OnInit {
   store = inject(HeadStore);
   reports = inject(ReportStore);
   showNotifications = signal(false);
-  pendingReportCount = computed(() => this.reports.reports().filter(r=>r.status==='generated').length);
+  pendingReportCount = computed(() => 0);
   pendingInvitationCount = computed(() => this.store.invitations().filter(i=>i.status==='active'&&Date.parse(i.expiresAt)>Date.now()).length);
   notificationCount = computed(() => this.pendingInvitationCount() + this.pendingReportCount());
   @ViewChild('headContent') headContent?: ElementRef<HTMLElement>;

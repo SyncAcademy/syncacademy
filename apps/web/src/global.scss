@@ -77,7 +77,6 @@ router-outlet + * {
 .loading-skeleton__cards span { height: 86px; }
 .loading-skeleton__table { display: grid; gap: 10px; }
 .loading-skeleton__table span { height: 35px; }
-.loading-skeleton__label { margin: 14px 0 0; color: #64748b; font-size: .8rem; }
 .loading-spinner, button[aria-busy="true"]::before { display: inline-block; width: 14px; height: 14px; flex: 0 0 14px; margin-right: 8px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; vertical-align: -2px; animation: loadingSpin .7s linear infinite; }
 .auth-progress { display: flex; align-items: center; gap: 2px; margin: 14px 0 0; color: #92400e; font-size: .85rem; }
 .auth-card[aria-busy="true"] button.primary:disabled::before { content: ''; }
@@ -90,6 +89,8 @@ button[aria-busy="true"]::before { content: ''; }
 
 html.landing-route,
 body.landing-route,
+html:has(.legal-page),
+body:has(.legal-page),
 html:has(.auth-layout, .auth-screen),
 body:has(.auth-layout, .auth-screen) {
   position: static;
@@ -105,6 +106,7 @@ body:has(.auth-layout, .auth-screen) {
 }
 
 body.landing-route app-root,
+body:has(.legal-page) app-root,
 body:has(.auth-layout, .auth-screen) app-root {
   display: block;
   height: auto;
@@ -130,6 +132,19 @@ html.landing-route {
 body.landing-route {
   overflow-x: clip !important;
 }
+
+/* Public legal documents scroll with the browser, like the landing page. */
+html:has(.legal-page),
+body:has(.legal-page),
+body:has(.legal-page) ion-app,
+body:has(.legal-page) app-root {
+  height: auto !important;
+  min-height: 100%;
+  overflow-y: visible !important;
+}
+
+html:has(.legal-page) { overflow-y: auto !important; }
+body:has(.legal-page) { overflow-x: clip !important; }
 
 html,
 body,
@@ -222,6 +237,19 @@ ion-menu app-sidebar {
   background-repeat: no-repeat;
   background-position: right 16px center;
   padding-right: 40px;
+  cursor: pointer;
+}
+
+/* Keep native selects consistent across the portal, including filters that use
+   component-level background shorthands. Leave selects with their own icon alone. */
+select:not([multiple]):not([size]):not(.custom-chevron) {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%2364758b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  background-size: 16px 16px !important;
+  padding-inline-end: 38px !important;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 

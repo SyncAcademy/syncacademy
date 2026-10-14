@@ -58,7 +58,7 @@ export const HEADMASTER_ROUTES: Routes = [
       },
       {
         path: 'teaching-assignments',
-        loadComponent: () => import('./head-oversight.page').then(m => m.HeadOversightPage),
+        loadComponent: () => import('../academic/teaching-responsibilities.page').then(m => m.TeachingResponsibilitiesPage),
         data: { title: 'Teaching Assignments', breadcrumb: 'Headmaster / Teaching Assignments', section: 'teaching-assignments' },
       },
       {

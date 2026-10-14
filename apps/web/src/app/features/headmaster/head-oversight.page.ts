@@ -22,10 +22,10 @@ import { newestFirst } from '../../shared/recent-records';
 })
 export class HeadOversightPage {
  pendingInvitations(){return (this.api.data()?.invitations||[]).filter((i:any)=>!i.acceptedAt&&!i.revokedAt&&new Date(i.expiresAt)>new Date()).length;}
- readonly api=inject(SchoolApiService);editor:{title:string;path:string;fields:EditorField[];key:string}|null=null;editorError='';saving=false;
+ readonly api=inject(SchoolApiService);editor:{title:string;path:string;fields:EditorField[];key:string}|null=null;editorError='';saving=false;readonly notice=signal('');
  addClass(){this.editorError='';this.editor={title:'Create class',path:'classes',key:requestId(),fields:[{key:'name',label:'Class name',required:true},{key:'yearId',label:'Academic year',choices:(this.api.data()?.years||[]).filter((y:any)=>!y.closed).map((y:any)=>({value:y.id,label:y.name})),required:true}]};}
  assignTeacher(){this.editorError='';this.editor={title:'Assign teacher',path:'assignments',key:requestId(),fields:[{key:'membershipId',label:'Teacher',choices:(this.api.data()?.members||[]).filter((m:any)=>m.role==='TEACHER'&&m.active).map((m:any)=>({value:m.id,label:m.user.name})),required:true},{key:'classroomId',label:'Class',choices:(this.api.data()?.classes||[]).filter((c:any)=>!c.year.closed).map((c:any)=>({value:c.id,label:displayClassName(c.name)+' / '+c.year.name})),required:true}]};}
- async saveRecord(values:Record<string,any>){if(!this.editor||this.saving)return;this.saving=true;this.editorError='';try{await this.api.write(this.editor.path,values,'POST',this.editor.key);this.editor=null;}catch(e){this.editorError=this.api.auth.error(e);}finally{this.saving=false;}}
+ async saveRecord(values:Record<string,any>){if(!this.editor||this.saving)return;this.saving=true;this.editorError='';try{await this.api.write(this.editor.path,values,'POST',this.editor.key);this.editor=null;this.notice.set('School record saved.');}catch(e){this.editorError=this.api.auth.error(e);}finally{this.saving=false;}}
 
   readonly store = inject(HeadOversightStore);
   readonly bursar = inject(BursarStore);
@@ -51,7 +51,7 @@ export class HeadOversightPage {
   termName(key: string): string { return this.store.year()?.terms.find(term => term.key === key)?.name ?? key; }
   readonly activeStudents = computed(() => this.store.enrolments().filter(e => e.status === 'active').length);
   readonly pendingAdmissions = computed(() => this.store.admissions().filter(a => a.status === 'pending').length);
-  readonly readyReports = computed(() => this.store.reports().filter(r => r.status === 'generated').length);
+  readonly readyReports = computed(() => this.store.remote.data().reportCount ?? this.store.reports().length);
   readonly assessmentsForTerm = computed(() => this.store.academicData().assessments.filter(a => !this.assessmentTerm() || a.term === this.assessmentTerm()));
   inAssessmentTerm(date: string): boolean { const term = this.store.year()?.terms.find(item => item.key === this.assessmentTerm()); return !this.assessmentTerm() || !!term && date >= term.startsAt && date <= term.endsAt; }
   readonly assessment = computed<Assessment | undefined>(() => this.assessmentsForTerm().find(a => a.id === this.assessmentId()) ?? this.assessmentsForTerm()[0]);
@@ -140,6 +140,7 @@ export class HeadOversightPage {
     if (context !== this.context()) return;
     if (error) { this.feeError.set(error); return; }
     this.feeDialog.set(false);
+    this.notice.set('Fee structure saved.');
   }
   async applyFee(id: string): Promise<void> {
     if (this.feeBusy() || this.feeReadOnly()) return;

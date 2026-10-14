@@ -1,0 +1,14 @@
+:host { display: block; min-height: 100dvh; background: #f6f8fb; color: #172338; }
+.legal-page { min-height: 100dvh; display: flex; flex-direction: column; font-family: inherit; font-size: 16px; line-height: 1.7; }
+.legal-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1.25rem max(1.5rem, calc((100vw - 1100px)/2)); background: #fff; border-bottom: 1px solid #e2e8f0; }
+.brand { display: inline-flex; align-items: center; flex: none; }
+nav { display: flex; flex-wrap: wrap; gap: 1.25rem; }
+a { color: #a84a09; text-underline-offset: 3px; }
+.legal-header nav a { color: #64748b; text-decoration: none !important; transition: color .2s ease; }
+.legal-header nav a:hover, .legal-header nav a:focus-visible { color: #e87e24; text-decoration: underline !important; }
+a:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+.legal-content { width: min(100% - 3rem, 780px); margin: 2.5rem auto 4rem; padding: clamp(1.5rem, 4vw, 3rem); background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 12px 40px #17233809; }
+.eyebrow { color: #64748b; font-size: .85rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+h1 { margin: .25rem 0 1.5rem; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.2; }
+h2 { margin: 2rem 0 .5rem; font-size: 1.25rem; line-height: 1.3; }
+p { margin: .75rem 0; line-height: 1.75; }

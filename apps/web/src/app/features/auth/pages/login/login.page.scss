@@ -28,7 +28,6 @@
   min-height: 92px;
   padding: 14px;
   border: 1px solid #d8e2df;
-  border-left: 3px solid #287a68;
   border-radius: 6px;
   background: #fff;
   color: #172b28;
@@ -42,7 +41,6 @@
   }
 
   &:focus-visible { outline: 3px solid #9bd2c4; outline-offset: 2px; }
-  &[data-role="SUPER_ADMIN"] { border-left-color: #d87937; }
 }
 
 .role-card__mark {

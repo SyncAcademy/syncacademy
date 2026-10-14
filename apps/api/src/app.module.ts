@@ -6,5 +6,6 @@ import { AcademicController } from './academic.controller';
 import { BursarController } from './bursar.controller';
 import { Database } from './database/database.service';
 import { PlatformService } from './platform.service';
-@Module({ controllers: [ApiController, RegistryController, RegistryWorkflowsController, BursarController, AcademicController], providers: [Database, PlatformService] })
+import { RealtimeGateway } from './realtime.gateway';
+@Module({ controllers: [ApiController, RegistryController, RegistryWorkflowsController, BursarController, AcademicController], providers: [Database, PlatformService, RealtimeGateway] })
 export class AppModule {}

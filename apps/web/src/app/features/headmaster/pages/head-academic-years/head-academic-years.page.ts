@@ -48,6 +48,7 @@ export class HeadAcademicYearsPage implements OnInit {
   formEndDate = signal<string>('');
   formStatus = signal<AcademicYearStatus>('draft');
   formError = signal<string>('');
+  notice = signal<string>('');
   formTerms = signal<AcademicTerm[]>([]);
   readonly termCounts = [1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -125,9 +126,9 @@ export class HeadAcademicYearsPage implements OnInit {
     this.formError.set('');
   }
 
-  saving=false;private requestKey='';private fingerprint='';async saveYear():Promise<void>{if(this.saving)return;const body={name:this.formLabel().trim(),startsAt:this.formStartDate(),endsAt:this.formEndDate(),terms:this.formTerms()};if(!body.name||!body.startsAt||body.endsAt<=body.startsAt){this.formError.set('Enter a name and a valid start and end date.');return;}if(body.terms.some((term,index)=>!term.name.trim()||!term.startsAt||!term.endsAt||term.startsAt<body.startsAt||term.endsAt>body.endsAt||term.endsAt<term.startsAt||(index>0&&term.startsAt<=body.terms[index-1].endsAt))){this.formError.set('Give every term a name and ordered dates within the academic year. Terms cannot overlap.');return;}if(new Set(body.terms.map(term=>term.name.trim().toLowerCase())).size!==body.terms.length){this.formError.set('Each term needs a different name.');return;}const fp=JSON.stringify(body);if(fp!==this.fingerprint){this.fingerprint=fp;this.requestKey=requestId();}this.saving=true;this.formError.set('');try{const id=this.editingYear()?.id;await this.store.api.write(id?'years/'+id:'years',body,id?'PATCH':'POST',this.requestKey);this.closeDialog();}catch(e){this.formError.set(this.store.api.auth.error(e));}finally{this.saving=false;}}
+  saving=false;private requestKey='';private fingerprint='';async saveYear():Promise<void>{if(this.saving)return;const body={name:this.formLabel().trim(),startsAt:this.formStartDate(),endsAt:this.formEndDate(),terms:this.formTerms()};if(!body.name||!body.startsAt||body.endsAt<=body.startsAt){this.formError.set('Enter a name and a valid start and end date.');return;}if(body.terms.some((term,index)=>!term.name.trim()||!term.startsAt||!term.endsAt||term.startsAt<body.startsAt||term.endsAt>body.endsAt||term.endsAt<term.startsAt||(index>0&&term.startsAt<=body.terms[index-1].endsAt))){this.formError.set('Give every term a name and ordered dates within the academic year. Terms cannot overlap.');return;}if(new Set(body.terms.map(term=>term.name.trim().toLowerCase())).size!==body.terms.length){this.formError.set('Each term needs a different name.');return;}const fp=JSON.stringify(body);if(fp!==this.fingerprint){this.fingerprint=fp;this.requestKey=requestId();}this.saving=true;this.formError.set('');try{const id=this.editingYear()?.id;await this.store.api.write(id?'years/'+id:'years',body,id?'PATCH':'POST',this.requestKey);this.closeDialog();this.notice.set(id?'Academic year updated.':'Academic year created.');}catch(e){this.formError.set(this.store.api.auth.error(e));}finally{this.saving=false;}}
 
-  async changeClosed(year:AcademicYear):Promise<void>{if(this.saving)return;this.saving=true;this.formError.set('');try{await this.store.api.write('years/'+year.id,{closed:year.status!=='closed'},'PATCH');}catch(e){this.formError.set(this.store.api.auth.error(e));}finally{this.saving=false;}}
+  async changeClosed(year:AcademicYear):Promise<void>{if(this.saving)return;this.saving=true;this.formError.set('');try{await this.store.api.write('years/'+year.id,{closed:year.status!=='closed'},'PATCH');this.notice.set(year.status==='closed'?'Academic year reopened.':'Academic year closed.');}catch(e){this.formError.set(this.store.api.auth.error(e));}finally{this.saving=false;}}
   readonly yearToClose=signal<AcademicYear|null>(null);
   requestStatusChange(year:AcademicYear){if(year.status==='closed')void this.changeClosed(year);else this.yearToClose.set(year);}
   async confirmClose(){const year=this.yearToClose();this.yearToClose.set(null);if(year)await this.changeClosed(year);}

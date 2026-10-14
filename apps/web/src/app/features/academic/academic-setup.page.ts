@@ -65,9 +65,11 @@ export class AcademicSetupPage {
   subjects: string[] = [];
   bands: GradeBand[] = [];
   passMark = 35;
-  readonly pageContext=computed(()=>`${this.store.remote.context()}:${this.store.policy().revision}:${this.section()}`);
+  readonly pageContext=computed(()=>`${this.store.remote.context()}:${this.section()}`);
+  private loadedPolicyKey='';
   constructor() {
-    effect(() => { this.pageContext(); untracked(() => { this.close(); this.notice.set(''); this.search.set(''); this.teacherSearch.set(''); this.invitationSearch.set(''); this.classPage.set(1); this.teacherPage.set(1); this.invitationPage.set(1); this.bands = structuredClone(this.store.policy().bands); this.passMark = this.store.policy().passMark; }); });
+    effect(() => { this.pageContext(); untracked(() => { this.close(); this.notice.set(''); this.search.set(''); this.teacherSearch.set(''); this.invitationSearch.set(''); this.classPage.set(1); this.teacherPage.set(1); this.invitationPage.set(1); }); });
+    effect(() => { const policy = this.store.policy(); const key = `${this.store.remote.context()}:${policy.revision}`; if (key === this.loadedPolicyKey) return; this.loadedPolicyKey = key; this.bands = structuredClone(policy.bands); this.passMark = policy.passMark; });
     effect(() => { this.search(); this.classPage.set(1); });
     effect(() => { this.teacherSearch(); this.teacherPage.set(1); });
     effect(() => { this.invitationSearch(); this.invitationPage.set(1); });
@@ -116,6 +118,7 @@ export class AcademicSetupPage {
   async confirmDeleteClass(): Promise<void> { const target=this.classToDelete();if(!target)return;const error=await this.store.deleteClass(target.id);if(error)this.error.set(error);else{this.classToDelete.set(null);this.notice.set(`${target.name} was deleted.`);} }
   expiryLabel(value: string): string { return this.expiryOptions.find(option => option.minutes === Number(value))?.label ?? '48 hours'; }
   invitationStatus(invitation: { status: string; expiresAt: string }): string { return invitation.status === 'active' && Date.parse(invitation.expiresAt) < Date.now() ? 'Expired' : invitation.status; }
+  addGradeBand(): void { const index = Math.max(0, this.bands.length - 1); const previous = this.bands[index - 1]?.minimum ?? 100; this.bands.splice(index, 0, { label: '', minimum: Math.max(1, Math.floor(previous / 2)) }); }
   async saveGrading(): Promise<void> {
     const labels=this.bands.map(b=>b.label.trim().toLowerCase());
     const invalidBand = this.bands.some((band, index) =>

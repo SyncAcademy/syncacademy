@@ -10,6 +10,8 @@ import helmet from 'helmet';
 import express, { Request, Response, NextFunction } from 'express';
 import { config } from './config';
 import { AppModule } from './app.module';
+import { RealtimeGateway, SchoolChange } from './realtime.gateway';
+import { SessionIoAdapter } from './session-io.adapter';
 
 @Catch()
 class SafeErrors implements ExceptionFilter {
@@ -40,7 +42,24 @@ async function main() {
   const pool = new Pool({ connectionString: config.DATABASE_URL, max: 5 });
   pool.on('error', () => console.error('Session database connection unavailable'));
   const PgStore = connectPgSimple(session);
-  app.use(session({ name: 'sa.sid', secret: config.SESSION_SECRET, store: new PgStore({ pool, tableName: 'session', createTableIfMissing: false, pruneSessionInterval: 900 }), resave: false, saveUninitialized: false, rolling: true, cookie: { httpOnly: true, secure: config.NODE_ENV === 'production', sameSite: 'lax', maxAge: 8 * 3600000, path: '/' } }));
+  const sessionMiddleware = session({ name: 'sa.sid', secret: config.SESSION_SECRET, store: new PgStore({ pool, tableName: 'session', createTableIfMissing: false, pruneSessionInterval: 900 }), resave: false, saveUninitialized: false, rolling: true, cookie: { httpOnly: true, secure: config.NODE_ENV === 'production', sameSite: 'lax', maxAge: 8 * 3600000, path: '/' } });
+  app.use(sessionMiddleware);
+  app.useWebSocketAdapter(new SessionIoAdapter(app, sessionMiddleware));
+  const realtime = app.get(RealtimeGateway);
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (!['GET','HEAD','OPTIONS'].includes(req.method)) res.once('finish', () => {
+      if (res.statusCode < 200 || res.statusCode >= 300) return;
+      const match = /^\/api\/v1\/schools\/([0-9a-f-]{36})(?:\/|$)/i.exec(req.path);
+      if (!match) return;
+      const academicCommand = req.path.endsWith('/academics/commands');
+      const action = academicCommand ? req.body?.action : undefined;
+      const change: SchoolChange = academicCommand && !['class','delete-class','copy-classes','class-teacher'].includes(action)
+        ? { area: 'academic', yearId: req.body?.yearId }
+        : { area: 'school' };
+      void realtime.changed(match[1], change).catch(() => console.error('School update notification failed'));
+    });
+    next();
+  });
   app.useGlobalFilters(new SafeErrors()); app.enableShutdownHooks();
   await app.listen(config.PORT, '0.0.0.0');
 }

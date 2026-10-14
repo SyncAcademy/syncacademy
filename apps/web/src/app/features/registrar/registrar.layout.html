@@ -34,7 +34,7 @@
       <main #registrarContent class="registrar-content" role="main" (scroll)="onContentScroll($event)">
         <div class="registrar-content-inner">
           <app-portal-connection />
-          @if (api.schoolId() && !api.data() && !api.error()) { <app-loading-skeleton label="Loading student records…" /> }
+          @if (api.schoolId() && !api.data() && !api.error()) { <app-loading-skeleton /> }
           @else { <router-outlet></router-outlet> }
         </div>
       </main>

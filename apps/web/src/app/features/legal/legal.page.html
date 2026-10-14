@@ -1,0 +1,52 @@
+<main class="legal-page">
+  <header class="legal-header">
+    <a class="brand" routerLink="/" aria-label="SyncAcademy home"><app-logo variant="dark" size="md"></app-logo></a>
+    <nav aria-label="Main navigation"><a routerLink="/">Home</a><a routerLink="/auth/login">Sign in</a></nav>
+  </header>
+  <article class="legal-content">
+    @if (isPrivacy) {
+      <h1>Privacy Policy</h1>
+      <p>SyncAcademy provides software for schools to administer learning, staff, and school operations. This notice explains the personal information handled through the service. A school decides how its own student, parent, and staff records are collected and used; SyncAcademy processes those records to provide the service under the school's instructions. For platform account and service administration, SyncAcademy also determines some processing purposes.</p>
+
+      <h2>Information we handle</h2>
+      <p>Depending on your role, this can include names, email addresses, contact details, account roles and login activity; student admission and class details; subjects, attendance, assessments and results; staff teaching assignments; parent or guardian details; and school finance records. We also handle technical logs needed to operate and secure the service. Schools should enter only information necessary for their legitimate educational and administrative purposes.</p>
+
+      <h2>Why it is used</h2>
+      <p>We use the information to provide school administration, teaching and reporting features, authenticate users, protect accounts, communicate service information, respond to requests, and meet applicable legal duties. A school is responsible for choosing and communicating the lawful basis for its collection and use of school records. Acceptance of these Terms does not substitute for a lawful basis to process students' or other people's information.</p>
+
+      <h2>Children and sensitive information</h2>
+      <p>School records can concern children and sensitive matters. Access is limited by assigned roles, and schools must ensure that any required parent or guardian authorization and additional safeguards are in place before entering such information. Users should avoid placing sensitive information in free-text fields unless necessary for school operations.</p>
+
+      <h2>Sharing and international transfers</h2>
+      <p>Authorized school users can access records according to their roles. Service providers may process limited information for hosting, email delivery and support under appropriate instructions and safeguards. We do not sell school records. Information may be disclosed where Tanzanian law requires it. Any transfer outside Tanzania must follow applicable data protection requirements, including a permit where required; the school and operator must confirm the actual hosting and processor locations before enabling such transfers.</p>
+
+      <h2>Retention and security</h2>
+      <p>School records are retained according to the school's instructions, applicable education and accounting obligations, and a documented retention schedule. Account and security records are kept only as long as needed for their purpose or legal duties. The service uses account permissions, password protection, session controls and audit records. No system can guarantee absolute security; suspected misuse or a data incident should be reported promptly to the school administrator and the operator.</p>
+
+      <h2>Your choices and rights</h2>
+      <p>Under Tanzania's Personal Data Protection Act, people may request information about their data, access, correction, erasure or restriction where applicable, and may object, withdraw consent where consent is the basis, or complain to the Personal Data Protection Commission. Some rights are subject to legal limits and school record duties. For school records, first contact your school administrator so the school can verify and handle the request. For platform matters, use the <a routerLink="/" fragment="contact">SyncAcademy contact page</a>. You may also contact the <a href="https://pdpc.go.tz/" target="_blank" rel="noopener noreferrer">Personal Data Protection Commission</a>.</p>
+
+      <h2>Cookies and updates</h2>
+      <p>The service uses essential session cookies to keep users signed in and protect account access. This notice may change when the service or law changes; the current version will be posted here. The operator's registered legal name, Tanzanian service address, dedicated privacy contact and PDPC registration details will be added here when provided.</p>
+    } @else {
+      <h1>Terms of Service</h1>
+      <p>These Terms govern use of SyncAcademy by invited school and platform users. Your school or platform administrator grants and manages your access. By accepting an invitation, you agree to use the service under these Terms and acknowledge the <a routerLink="/privacy">Privacy Policy</a>.</p>
+
+      <h2>Accounts and authorized use</h2>
+      <p>Use only the account and roles assigned to you. Keep your credentials private, use the required account protections, and tell your administrator promptly if you suspect unauthorized access. You may enter, view or change school information only for duties the school has authorized. Do not misuse another person's account, attempt to bypass permissions, interfere with the service, or upload unlawful or irrelevant material.</p>
+
+      <h2>School records and responsibilities</h2>
+      <p>The school controls its educational and administrative records and is responsible for their accuracy, lawful collection, access assignments, retention instructions and notices to students, parents and staff. SyncAcademy provides the service and processes those records to support the school's instructions. Users should report incorrect records through their school rather than changing information outside their authority.</p>
+
+      <h2>Service changes and availability</h2>
+      <p>We may update features to maintain, improve or secure the service. Planned interruptions should be communicated where practical. A school should retain appropriate backups and procedures for essential operations. Access may be suspended when needed to address misuse, security concerns, or a school's account status, subject to applicable agreements and law.</p>
+
+      <h2>Privacy, termination and governing law</h2>
+      <p>Personal information is handled as described in the <a routerLink="/privacy">Privacy Policy</a>. An administrator may remove your role or account access when your duties end. Your school remains responsible for its records and any legally required retention. These Terms are governed by the laws of the United Republic of Tanzania. If there is a concern, contact your school administrator or use the <a routerLink="/" fragment="contact">SyncAcademy contact page</a> so it can be reviewed.</p>
+
+      <h2>Updates</h2>
+      <p>Material changes to these Terms will be published here, and users may be asked to accept a new version before continuing. The operator's registered legal name and Tanzanian service address will be added when provided.</p>
+    }
+  </article>
+  <app-public-footer></app-public-footer>
+</main>

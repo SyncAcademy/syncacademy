@@ -51,7 +51,7 @@
         <tbody>
           <tr *ngFor="let s of visibleStaff()">
             <td>{{ s.fullName }}</td>
-            <td><app-status-badge variant="info" [label]="staffRoleLabels[s.role]"></app-status-badge></td>
+            <td><span class="staff-role-badge">{{ staffRoleLabels[s.role] }}</span></td>
             <td>
               <div style="font-size: 0.875rem">{{ s.email }}</div>
               <div style="font-size: 0.75rem; color: #6B7280">{{ s.phone }}</div>
@@ -76,7 +76,7 @@
           <app-status-badge [variant]="s.status === 'active' ? 'active' : 'inactive'" [label]="s.status"></app-status-badge>
         </div>
         <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 8px;">
-          <app-status-badge variant="info" [label]="staffRoleLabels[s.role]"></app-status-badge>
+          <span class="staff-role-badge">{{ staffRoleLabels[s.role] }}</span>
         </div>
         <div class="card-row">
           <span class="label">Email:</span>

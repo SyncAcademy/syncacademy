@@ -1,5 +1,6 @@
 const assert=require('node:assert/strict');
-const {randomUUID}=require('node:crypto');
+const {randomUUID,randomBytes}=require('node:crypto');
+const {io}=require('socket.io-client');
 module.exports=async({t,db,client,fixture})=>{
  await t.test('academic and teacher lifecycle persists with permissions, revisions, attendance and reports',async()=>{
   await db.rateBucket.deleteMany();
@@ -15,13 +16,38 @@ module.exports=async({t,db,client,fixture})=>{
   const membership=await db.membership.findFirst({where:{userId:teacherUser.id,schoolId:school.id}});
   const allocation=await db.teachingAssignment.create({data:{schoolId:school.id,classroomId:cls.id,subjectId:subject.id,membershipId:membership.id}});
   const academic=client(),head=client(),teacher=client(),other=client();await academic.login(academicUser.email,undefined,'ACADEMIC');await head.login(headUser.email,undefined,'HEADMASTER');await teacher.login(teacherUser.email,undefined,'TEACHER');await other.login(otherUser.email,undefined,'TEACHER');
+  const connect=async(agent,schoolId)=>{
+   const cookie=(await agent.call('GET','auth/me')).cookie;
+   const socket=io('http://localhost:3101',{transports:['websocket'],reconnection:false,timeout:5000,auth:{schoolId},extraHeaders:{Origin:process.env.APP_ORIGIN,Cookie:cookie}});
+   await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Socket did not authenticate')),5000);socket.once('school:ready',()=>{clearTimeout(timer);resolve();});socket.once('connect_error',error=>{clearTimeout(timer);reject(error);});});
+   return socket;
+  };
+  const headSocket=await connect(head,school.id),teacherSocket=await connect(teacher,school.id),academicSocket=await connect(academic,school.id);
+  t.after(()=>{headSocket.disconnect();teacherSocket.disconnect();academicSocket.disconnect();});
+  let headUpdates=0,teacherUpdates=0;
+  headSocket.on('school:changed',()=>headUpdates++);teacherSocket.on('school:changed',()=>teacherUpdates++);
   const route=`schools/${school.id}/academics`;
   const get=async(agent=academic)=>(await agent.call('GET',`${route}?yearId=${year.id}`)).body;
+  const revision=async(agent=academic)=>(await agent.call('GET',`${route}/revision?yearId=${year.id}`)).body.revision;
   const cmd=(agent,action,payload,key=randomUUID())=>agent.call('POST',route+'/commands',{yearId:year.id,action,payload},{'Idempotency-Key':key});
   const ok=async(agent,action,payload)=>{const r=await cmd(agent,action,payload);assert.equal(r.status,201,JSON.stringify(r.body));return r;};
+  const live=async(agent,action,payload)=>{
+   const started=performance.now();
+   const delivered=[headSocket,teacherSocket,academicSocket].map(socket=>new Promise((resolve,reject)=>{
+    const timeout=setTimeout(()=>reject(new Error(`${action} did not reach a connected role`)),5000);
+    socket.once('school:changed',event=>{clearTimeout(timeout);assert.equal(event.area,'academic');assert.equal(event.yearId,year.id);assert.deepEqual(Object.keys(event).sort(),['area','yearId']);resolve();});
+   }));
+   const [result]=await Promise.all([ok(agent,action,payload),...delivered]);
+   console.log(JSON.stringify({realtimeAction:action,connectedRoles:3,saveAndDeliveryMs:Math.round(performance.now()-started)}));return result;
+  };
+  assert.equal(await revision(),0,'an empty academic year has no workspace revision');
   assert.equal((await cmd(teacher,'assessment',{name:'Exam',term:'Term 1',deadline:'2026-12-01'})).status,403);
+  assert.equal(headUpdates,0,'failed writes do not broadcast changes');
   await ok(academic,'assessment',{name:'Midterm',term:'Term 1',deadline:'2026-12-01'});
-  let state=await get();const exam=state.assessments[0];
+  await new Promise(resolve=>setTimeout(resolve,100));
+  assert.ok(headUpdates>0&&teacherUpdates>0,'committed academic changes reach connected school roles');
+  assert.equal(await revision(),1,'a committed academic change advances the revision');
+  let state=await get();assert.equal(state.workspaceRevision,1,'full academic responses expose the same revision');const exam=state.assessments[0];
   await ok(academic,'assessment-status',{id:exam.id,status:'open'});await ok(academic,'allocate',{id:exam.id});await ok(academic,'allocate',{id:exam.id});
   state=await get(teacher);assert.equal(state.submissions.length,1,'allocation is duplicate-safe');let sub=state.submissions[0];
   assert.equal((await get(other)).submissions.length,0,'unassigned teacher cannot read marks');
@@ -30,17 +56,26 @@ module.exports=async({t,db,client,fixture})=>{
   const marks={id:sub.id,revision:sub.revision,entries:[{studentId:student.id,marksValue:78,comments:'Good progress'}]};
   assert.equal((await cmd(teacher,'marks',{...marks,entries:[{...marks.entries[0],marksValue:101}]})).status,400);
   assert.equal((await cmd(teacher,'marks',{...marks,entries:[{...marks.entries[0],studentId:randomUUID()}]})).status,400);
-  const key=randomUUID();assert.equal((await cmd(teacher,'marks',marks,key)).status,201);assert.equal((await cmd(teacher,'marks',marks,key)).status,201);
+  const key=randomUUID();const savedMarks=await cmd(teacher,'marks',marks,key);assert.equal(savedMarks.status,201);
+  assert.equal(savedMarks.body.patch.upsert.submissions.length,1,'marks save returns only the affected submission');
+  assert.equal(savedMarks.body.patch.upsert.submissions[0].entries[0].marksValue,78);
+  const replay=await cmd(teacher,'marks',marks,key);assert.equal(replay.status,201);assert.equal(replay.body.patch,undefined,'idempotent replay never replays private record data');
   assert.equal((await cmd(teacher,'marks',marks)).status,409,'stale revision rejected');
   sub=(await get(teacher)).submissions[0];assert.equal(sub.entries[0].marksValue,78);
-  await ok(teacher,'submit',{id:sub.id,revision:sub.revision});
+  const competingMarks=await Promise.all([teacher,academic].map((agent,index)=>cmd(agent,'marks',{...marks,revision:sub.revision,entries:[{...marks.entries[0],comments:'Concurrent editor '+index}]})));
+  assert.deepEqual(competingMarks.map(r=>r.status).sort(),[201,409],'teacher and academic edits to the same marks revision cannot overwrite each other');
+  sub=(await get(teacher)).submissions[0];
+  assert.equal(sub.entries[0].comments,'Concurrent editor '+competingMarks.findIndex(r=>r.status===201));
+  await live(teacher,'submit',{id:sub.id,revision:sub.revision});
   assert.equal((await cmd(teacher,'review',{id:sub.id,decision:'approved'})).status,403);
-  await ok(academic,'review',{id:sub.id,decision:'returned',reason:'Please check the recorded score.'});
+  await live(academic,'review',{id:sub.id,decision:'returned',reason:'Please check the recorded score.'});
   state=await get(teacher);assert.equal(state.notifications.length,1);assert.equal(state.notifications[0].read,false);await ok(teacher,'read-notifications',{});assert.equal((await get(teacher)).notifications[0].read,true);
-  sub=(await get(teacher)).submissions[0];await ok(teacher,'marks',{...marks,revision:sub.revision,entries:[{...marks.entries[0],marksValue:82}]});sub=(await get(teacher)).submissions[0];await ok(teacher,'submit',{id:sub.id,revision:sub.revision});await ok(academic,'review',{id:sub.id,decision:'approved'});
+  sub=(await get(teacher)).submissions[0];await ok(teacher,'marks',{...marks,revision:sub.revision,entries:[{...marks.entries[0],marksValue:82}]});sub=(await get(teacher)).submissions[0];await ok(teacher,'submit',{id:sub.id,revision:sub.revision});assert.equal((await cmd(head,'review-class',{assessmentId:exam.id,classId:cls.id})).status,403);await ok(academic,'review-class',{assessmentId:exam.id,classId:cls.id});
   await ok(academic,'grading',{passMark:50,bands:[{label:'Pass',minimum:50},{label:'Fail',minimum:0}]});
   sub=(await get()).submissions[0];assert.equal(sub.gradingPolicy.bands[0].label,'A','submitted policy is frozen');
   await ok(academic,'reports',{assessmentId:exam.id,className:cls.name});state=await get();assert.equal(state.reports.length,1);assert.equal(state.reports[0].results[0].grade,'A');
+  const beforeGrading=await revision();const gradingSave=await ok(head,'grading',{passMark:45,bands:[{label:'Excellent',minimum:75},{label:'Pass',minimum:45},{label:'Below',minimum:0}]});assert.equal((await get(head)).policy.passMark,45,'headmaster can save the grading scheme');
+  assert.equal(gradingSave.body.patch.baseRevision,beforeGrading);assert.equal(gradingSave.body.patch.workspaceRevision,await revision());assert.equal(gradingSave.body.patch.replace.policy.passMark,45);
   await ok(academic,'assessment',{name:'No Mark Assessment',term:'Term 2',deadline:'2026-12-01'});
   state=await get();const noMarkExam=state.assessments.find(a=>a.name==='No Mark Assessment');
   await ok(academic,'assessment-status',{id:noMarkExam.id,status:'open'});await ok(academic,'allocate',{id:noMarkExam.id});
@@ -51,16 +86,43 @@ module.exports=async({t,db,client,fixture})=>{
   sub=(await get(teacher)).submissions.find(s=>s.id===sub.id);
   assert.equal(sub.assessmentProgress.completed,noMarkDraft.length,'a dash completes the student entry without a comment');
   assert.equal(sub.entries[0].comments,'');
-  await ok(teacher,'submit',{id:sub.id,revision:sub.revision});await ok(academic,'review',{id:sub.id,decision:'approved'});
+  await ok(teacher,'submit',{id:sub.id,revision:sub.revision});await ok(academic,'review-class',{assessmentId:noMarkExam.id,classId:cls.id});
   await ok(academic,'reports',{assessmentId:noMarkExam.id,className:cls.name});
   state=await get();const noMarkReport=state.reports.find(r=>r.assessmentId===noMarkExam.id);
   assert.ok(noMarkReport,'a completed no-mark decision can be included in report generation');
   assert.deepEqual(noMarkReport.results,[],'a no-mark decision does not become a numeric result');
   assert.deepEqual(noMarkReport.noMarks,['Mathematics'],'the dash remains visible on the prepared student report');
+  const overview=async(agent=academic)=>(await agent.call('GET',`${route}?yearId=${year.id}&view=overview`)).body;
+  for(const agent of [academic,head,teacher,other]) {
+   const full=await get(agent),small=await overview(agent);
+   assert.equal(small.workspaceRevision,full.workspaceRevision);
+   assert.equal(small.reportCount,full.reports.length,'overview report count respects class-teacher visibility');
+   assert.deepEqual(small.reports,[]);assert.deepEqual(small.attendance,[]);
+   assert.deepEqual(small.submissions.map(s=>s.id),full.submissions.map(s=>s.id));
+   for(const s of small.submissions) {
+    const original=full.submissions.find(row=>row.id===s.id);
+    const marks=original.entries.filter(m=>typeof m.marksValue==='number'&&m.marksValue>=0&&m.marksValue<=100);
+    assert.equal(s.entries,undefined);assert.equal(s.archives,undefined);
+    assert.deepEqual(s.resultStats,{count:marks.length,sum:marks.reduce((n,m)=>n+m.marksValue,0),below50:marks.filter(m=>m.marksValue<50).length,passed:marks.filter(m=>m.marksValue>=(original.gradingPolicy?.passMark??35)).length});
+   }
+  }
   const slot={assessmentId:exam.id,className:cls.name,subject:subject.name,teacher:'Test invigilator',room:'Room A',date:'2026-10-01',start:'08:00',end:'10:00'};await ok(academic,'slot',slot);assert.equal((await cmd(academic,'slot',{...slot,start:'09:00',end:'11:00'})).status,409);
   await ok(academic,'topic',{assignmentId:allocation.id,topic:'Algebra',due:'2026-11-01'});let topic=(await get(teacher)).syllabus[0];await ok(teacher,'toggle-topic',{id:topic.id});assert.equal((await get()).syllabus[0].completed,true);
   const supportInput={studentNumber:student.admissionNumber,className:cls.name,subject:subject.name,action:'Weekly practice and review.',teacherMembershipId:membership.id,due:'2026-11-01'};
-  await ok(academic,'support',supportInput);
+  const beforeSupport=await get(),supportKey=randomUUID();
+  assert.equal((await cmd(teacher,'support',supportInput)).status,403);
+  assert.equal((await cmd(academic,'support',{...supportInput,due:'2027-01-01'})).status,400);
+  assert.equal((await cmd(academic,'support',{...supportInput,studentNumber:'NOT-ENROLLED'})).status,400);
+  const supportSave=await cmd(academic,'support',supportInput,supportKey);
+  assert.equal(supportSave.status,201,JSON.stringify(supportSave.body));
+  assert.equal(supportSave.body.patch.baseRevision,beforeSupport.workspaceRevision);
+  assert.equal(supportSave.body.patch.workspaceRevision,beforeSupport.workspaceRevision+1);
+  assert.equal(supportSave.body.patch.upsert.support.length,1);
+  assert.equal(supportSave.body.patch.replace.notifications.some(n=>n.teacherId),false);
+  assert.deepEqual((await cmd(academic,'support',supportInput,supportKey)).body,{saved:true});
+  const afterSupport=await get();assert.equal(afterSupport.support.length,beforeSupport.support.length+1,'retry must not duplicate the plan');
+  for(const field of ['submissions','assessments','attendance','reports','policy','syllabus','classTeachers'])assert.deepEqual(afterSupport[field],beforeSupport[field],`support must preserve ${field}`);
+
   let support=(await get(teacher)).support[0];assert.equal(support.status,'pending');assert.equal(support.owner,teacherUser.name);
   assert.equal((await get(other)).support.length,0,'other teachers cannot view an assigned support plan');
   assert.equal((await cmd(other,'support-response',{id:support.id,decision:'accepted',reason:''})).status,403);
@@ -83,7 +145,7 @@ module.exports=async({t,db,client,fixture})=>{
   await ok(academic,'complete-support',{id:support.id});
   assert.equal((await get()).support.find(p=>p.id===support.id).status,'completed');
   await ok(academic,'class-teacher',{classId:cls.id,teacherId:membership.id});
-  const attendance={classId:cls.id,date:'2026-10-01',revision:0,entries:[{studentId:student.id,status:'Present',note:''}]};assert.equal((await cmd(other,'attendance',attendance)).status,403);await ok(teacher,'attendance',attendance);
+  const attendance={classId:cls.id,date:'2026-10-01',revision:0,entries:[{studentId:student.id,status:'Present',note:''}]};assert.equal((await cmd(other,'attendance',attendance)).status,403);await live(teacher,'attendance',attendance);
   await ok(teacher,'attendance',{...attendance,revision:1,reason:'Correcting the attendance status.',entries:[{...attendance.entries[0],status:'Late'}]});assert.equal((await get(teacher)).attendance.length,2,'attendance keeps correction history');
   await ok(academic,'class-teacher',{classId:cls.id,teacherId:otherMembership.id});
   assert.equal((await get(other)).reports.length,2,'new class teacher sees class reports');
@@ -97,6 +159,25 @@ module.exports=async({t,db,client,fixture})=>{
   await ok(academic,'class-teacher',{classId:cls.id,teacherId:null});
   assert.equal((await get(other)).reports.length,0,'unassigned class teacher loses reports');
   assert.equal((await cmd(other,'attendance',{...attendance,revision:2,reason:'Changing the attendance record.'})).status,403);
+  // Both management roles can transfer subjects without changing marks, topics or roster identity.
+  const reassign=(agent,target,previous=membership.id)=>agent.call('PATCH',`schools/${school.id}/assignments/${allocation.id}`,{membershipId:target,previousMembershipId:previous},{'Idempotency-Key':randomUUID()});
+  assert.equal((await reassign(teacher,otherMembership.id)).status,403,'teacher cannot change responsibilities');
+  const oldMarks=JSON.stringify((await get()).submissions.map(s=>s.entries));
+  assert.equal((await reassign(head,otherMembership.id)).status,200,'headmaster can reassign a subject');
+  assert.equal((await get(teacher)).submissions.length,0,'former teacher loses subject access');
+  assert.equal((await get(other)).submissions.length,2,'replacement teacher receives existing submissions');
+  assert.equal((await get(other)).syllabus[0].id,topic.id,'syllabus moves with the teaching assignment');
+  assert.equal(JSON.stringify((await get()).submissions.map(s=>s.entries)),oldMarks,'marks remain unchanged');
+  assert.equal((await reassign(academic,membership.id)).status,409,'stale assignment cannot overwrite a newer change');
+  assert.equal((await reassign(academic,membership.id,otherMembership.id)).status,200,'academic master can reassign back');
+  assert.equal((await db.teachingAssignment.findUnique({where:{id:allocation.id}})).confirmedAt,null,'replacement must confirm roster');
+  await ok(head,'class-teacher',{classId:cls.id,teacherId:membership.id});
+  await ok(head,'class-teacher',{classId:cls.id,teacherId:otherMembership.id});
+  assert.equal((await get()).classTeachers.filter(a=>a.classId===cls.id&&!a.endedAt).length,1,'one current class teacher');
+  await ok(head,'class-teacher',{classId:cls.id,teacherId:null});
+  assert.equal((await get()).attendance.length,2,'headmaster dismissal preserves attendance history');
+  assert.equal(await db.teachingAssignment.count({where:{classroomId:cls.id,subjectId:null}}),0);
+  assert.equal((await head.call('POST',`schools/${school.id}/assignments`,{membershipId:membership.id,classroomId:cls.id},{'Idempotency-Key':randomUUID()})).status,400,'generic endpoint cannot bypass unique class-teacher workflow');
   const profile={name:'Academic workflow school',region:'Test region',schoolType:'Public',address:'Main Road',phone:'+255700000001',email:'office@example.test',website:'https://example.test'};
   assert.equal((await teacher.call('PATCH',`schools/${school.id}/profile`,profile)).status,403);
   assert.equal((await head.call('PATCH',`schools/${school.id}/profile`,profile)).status,200);
@@ -104,7 +185,7 @@ module.exports=async({t,db,client,fixture})=>{
   assert.equal((await head.call('PATCH',`schools/${school.id}/years/${year.id}`,{name:'2026 edited',startsAt:'2026-01-01',endsAt:'2026-12-31'})).status,200);
   assert.equal((await teacher.call('PATCH',`schools/${school.id}/years/${year.id}`,{closed:true})).status,403);
   assert.equal((await head.call('PATCH',`schools/${school.id}/years/${year.id}`,{closed:true})).status,400,'open assessments prevent closing the year');
-  const report=(await get(head)).reports[0];assert.equal((await cmd(academic,'approve-report',{id:report.id})).status,403);await ok(head,'approve-report',{id:report.id});assert.equal((await get(head)).reports[0].status,'approved');
+  const report=(await get(head)).reports[0];assert.equal(report.status,'approved');assert.equal((await cmd(head,'approve-report',{id:report.id})).status,400,'headmaster cannot approve individual reports');
   const target=await db.academicYear.create({data:{schoolId:school.id,name:'2027',startsAt:new Date('2027-01-01'),endsAt:new Date('2027-12-31')}});
   await ok(academic,'copy-classes',{targetYearId:target.id});assert.equal(await db.classroom.count({where:{schoolId:school.id,yearId:target.id}}),1);
   const secondSubject=await db.subject.create({data:{schoolId:school.id,name:'History',code:'HIST'}});
@@ -129,7 +210,46 @@ module.exports=async({t,db,client,fixture})=>{
   assert.equal((await db.subject.findUnique({where:{id:subject.id}})).code,'MAT');
   assert.equal((await get(teacher)).submissions[0].subjectName,'Mathematics corrected','existing teacher records show the corrected subject');
   assert.equal((await get(head)).reports[0].results[0].subject,'Mathematics corrected','prepared reports show the corrected subject');
+  const largeWorkspaceValue=JSON.stringify(randomBytes(10_000_000).toString('base64'));
+  await db.$executeRaw`UPDATE "AcademicWorkspace" SET data=jsonb_set(data,'{stressPadding}',${largeWorkspaceValue}::jsonb) WHERE "yearId"=${year.id}::uuid`;
+  await ok(head,'grading',{passMark:40,bands:[{label:'A',minimum:80},{label:'B',minimum:60},{label:'C',minimum:40},{label:'F',minimum:0}]});
+  const savedPolicy=await db.$queryRaw`SELECT data->'policy' AS policy FROM "AcademicWorkspace" WHERE "yearId"=${year.id}::uuid`;
+  assert.equal(savedPolicy[0].policy.passMark,40,'grading saves without loading a large academic workspace');
   const differentSchool=await db.school.create({data:{name:'Other academic school',code:'ACAD-OTHER',region:'Test'}});
   assert.equal((await teacher.call('GET',`schools/${differentSchool.id}/academics?yearId=${year.id}`)).status,403);
+  assert.equal((await teacher.call('GET',`schools/${differentSchool.id}/academics/revision?yearId=${year.id}`)).status,403,'revision checks cannot cross schools');
+  const alienUser=await fixture('other-school-live@example.test','HEADMASTER',differentSchool.id),alien=client();await alien.login(alienUser.email,undefined,'HEADMASTER');
+  const alienSocket=await connect(alien,differentSchool.id);t.after(()=>alienSocket.disconnect());
+  let alienUpdates=0;alienSocket.on('school:changed',()=>alienUpdates++);
+  await ok(head,'grading',{passMark:35,bands:[{label:'Pass',minimum:35},{label:'Fail',minimum:0}]});
+  await new Promise(resolve=>setTimeout(resolve,100));
+  assert.equal(alienUpdates,0,'academic notifications stay within the school');
+  const wrongSchoolCookie=(await head.call('GET','auth/me')).cookie;
+  const wrongSchoolSocket=io('http://localhost:3101',{transports:['websocket'],reconnection:false,timeout:3000,auth:{schoolId:differentSchool.id},extraHeaders:{Origin:process.env.APP_ORIGIN,Cookie:wrongSchoolCookie}});
+  let unauthorizedReady=false;wrongSchoolSocket.on('school:ready',()=>unauthorizedReady=true);
+  await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Unauthorized socket was not disconnected')),3000);wrongSchoolSocket.once('disconnect',()=>{clearTimeout(timer);resolve();});});
+  assert.equal(unauthorizedReady,false,'a client cannot choose another school room');
+  wrongSchoolSocket.disconnect();
+  for(const headers of [{Origin:process.env.APP_ORIGIN},{Origin:'https://invalid.example',Cookie:wrongSchoolCookie}]) {
+   const rejected=io('http://localhost:3101',{transports:['websocket'],reconnection:false,timeout:3000,auth:{schoolId:school.id,role:'HEADMASTER'},extraHeaders:headers});
+   t.after(()=>rejected.disconnect());let ready=false;rejected.on('school:ready',()=>ready=true);
+   await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('Unauthorized socket remained connected')),3000);rejected.once('disconnect',()=>{clearTimeout(timeout);resolve();});rejected.once('connect_error',()=>{clearTimeout(timeout);resolve();});});
+   assert.equal(ready,false,'anonymous and wrong-origin sockets cannot authorize');
+  }
+  const suspendedSocket=await connect(other,school.id);t.after(()=>suspendedSocket.disconnect());
+  await db.membership.update({where:{id:otherMembership.id},data:{active:false}});
+  const suspended=new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('Suspended member socket stayed authorized')),3000);suspendedSocket.once('disconnect',()=>{clearTimeout(timeout);resolve();});});
+  await ok(head,'grading',{passMark:38,bands:[{label:'Pass',minimum:38},{label:'Fail',minimum:0}]});await suspended;
+  headSocket.disconnect();
+  const reconnected=new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Authorized socket did not reconnect')),3000);headSocket.once('school:ready',()=>{clearTimeout(timer);resolve();});});
+  headSocket.connect();await reconnected;
+  const beforeReconnectUpdate=headUpdates;
+  await ok(academic,'grading',{passMark:40,bands:[{label:'Pass',minimum:40},{label:'Fail',minimum:0}]});
+  await new Promise(resolve=>setTimeout(resolve,100));
+  assert.ok(headUpdates>beforeReconnectUpdate,'a reconnected Headmaster receives later changes');
+  assert.equal((await teacher.call('POST','auth/logout',{})).status,201);
+  const revoked=new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Logged-out socket remained connected')),3000);teacherSocket.once('disconnect',()=>{clearTimeout(timer);resolve();});});
+  await ok(head,'grading',{passMark:45,bands:[{label:'Pass',minimum:45},{label:'Fail',minimum:0}]});
+  await revoked;
  });
 };

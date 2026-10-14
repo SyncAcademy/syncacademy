@@ -31,7 +31,7 @@ export class TeacherStore {
   readonly activeTeacher=computed(()=>!!this.api.auth.identity()?.memberships.some(m=>m.school.id===this.api.schoolId()&&m.role==='TEACHER'));
   readonly grading = inject(GradingPolicyService);
   policyFor(a: TeacherAssignment) { return ['submitted', 'approved'].includes(a.assessmentProgress.status) ? a.gradingPolicy ?? DEFAULT_GRADING : this.grading.forYear(a.academicYearId); }
-  grade(id: string, mark: number | null) { const a = this.state().assignments.find(a => a.id === id); return a ? gradeWithPolicy(mark, this.policyFor(a)) : null; }
+  grade(id: string, mark: number | null) { const a = this.assignmentsById().get(id); return a ? gradeWithPolicy(mark, this.policyFor(a)) : null; }
   readonly yearContext = inject(AcademicYearService);
   readonly selectedYear = this.yearContext.teacherYear;
   readonly remote=inject(AcademicDataService);
@@ -39,6 +39,7 @@ export class TeacherStore {
   readonly period = computed(() => `${this.selectedYear()?.label ?? 'No academic year'} - Academic records`);
   readonly storageAvailable = signal(true);
   readonly state = computed<TeacherState>(()=>this.buildState());
+  private readonly assignmentsById = computed(() => new Map(this.state().assignments.map(a => [a.id, a])));
   readonly assignments = computed(() => this.state().assignments.filter(a => this.activeTeacher() && a.academicYearId === this.selectedYear()?.id && (!a.teacherId || a.teacherId === this.teacherId)));
   readonly notifications = computed(() => this.state().notifications.filter(n => n.relatedAssignmentId ? this.assignments().some(a => a.id === n.relatedAssignmentId) : n.createdAt.slice(0, 4) === this.selectedYear()?.startDate.slice(0, 4)));
   readonly unreadCount = computed(() => this.notifications().filter(n => !n.read).length);
