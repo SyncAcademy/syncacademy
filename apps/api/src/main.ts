@@ -31,6 +31,11 @@ async function main() {
   server.set('trust proxy', config.TRUST_PROXY_HOPS);
   app.use(helmet());
   app.use((req: Request, res: Response, next: NextFunction) => {
+    const started = performance.now();
+    res.once('finish', () => {
+      const durationMs = Math.round(performance.now() - started);
+      if (config.REQUEST_METRICS === 'true' || durationMs >= 1000) console.log(JSON.stringify({ event: 'http_request', method: req.method, route: req.route?.path ?? 'unmatched', status: res.statusCode, durationMs, requestId: res.getHeader('X-Request-ID') }));
+    });
     res.setHeader('X-Request-ID', randomUUID()); res.setHeader('Cache-Control', 'no-store');
     if (!['GET','HEAD','OPTIONS'].includes(req.method) && (req.get('Origin') !== config.APP_ORIGIN || req.get('X-Requested-With') !== 'SyncAcademy' || !req.is('application/json'))) {
       return res.status(403).json({ message: 'Request origin or content type is not allowed.' });
@@ -40,6 +45,10 @@ async function main() {
   app.use('/api/v1/schools/:schoolId/registry/imports/preview', express.json({ limit: '8mb' }));
   app.use(express.json({ limit: '32kb' }));
   const pool = new Pool({ connectionString: config.DATABASE_URL, max: 5 });
+  if (config.REQUEST_METRICS === 'true') {
+    const metricsTimer = setInterval(() => { const memory = process.memoryUsage(); console.log(JSON.stringify({ event: 'runtime_metrics', rssBytes: memory.rss, heapUsedBytes: memory.heapUsed, sessionConnections: pool.totalCount, sessionIdleConnections: pool.idleCount, sessionWaiting: pool.waitingCount })); }, 5000);
+    metricsTimer.unref();
+  }
   pool.on('error', () => console.error('Session database connection unavailable'));
   const PgStore = connectPgSimple(session);
   const sessionMiddleware = session({ name: 'sa.sid', secret: config.SESSION_SECRET, store: new PgStore({ pool, tableName: 'session', createTableIfMissing: false, pruneSessionInterval: 900 }), resave: false, saveUninitialized: false, rolling: true, cookie: { httpOnly: true, secure: config.NODE_ENV === 'production', sameSite: 'lax', maxAge: 8 * 3600000, path: '/' } });
@@ -50,6 +59,9 @@ async function main() {
     if (!['GET','HEAD','OPTIONS'].includes(req.method)) res.once('finish', () => {
       if (res.statusCode < 200 || res.statusCode >= 300) return;
       const match = /^\/api\/v1\/schools\/([0-9a-f-]{36})(?:\/|$)/i.exec(req.path);
+      if (match || /^\/api\/v1\/(?:platform(?:\/|$)|schools$|contact$|invitations\/accept$)/.test(req.path)) {
+        void realtime.platformChanged().catch(() => console.error('Platform update notification failed'));
+      }
       if (!match) return;
       const academicCommand = req.path.endsWith('/academics/commands');
       const action = academicCommand ? req.body?.action : undefined;

@@ -25,7 +25,7 @@ let deferred = false;
 const writes: any[] = [];
 const api = {
   schoolId: signal('school-a'), role: signal('REGISTRAR'), data: signal<any>(snapshot()), schoolName: () => 'Test school',
-  auth: { request: async (_method: string, path: string) => {
+  auth: { identity: signal({id:'registrar-test'}), request: async (_method: string, path: string) => {
     if (deferred) return new Promise(resolve => requests.push({ path, resolve }));
     return path.includes('/summary?') ? { classes: [], active: 1 } : { items: [], total: 0 };
   }, error: (e: any) => e.message },

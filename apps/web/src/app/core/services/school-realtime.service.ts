@@ -21,11 +21,9 @@ export class SchoolRealtimeService {
     this.identityKey = identityKey;
     if (!schoolId) return;
     const socket = io({ path: '/socket.io', transports: ['websocket'], withCredentials: true, autoConnect: false, auth: { schoolId } });
-    let wasReady = false;
     socket.on('school:ready', () => {
       if(this.socket!==socket)return;
-      if (wasReady) this.change.set({ schoolId, area: 'school', sequence: ++this.sequence });
-      wasReady = true;
+      this.change.set({ schoolId, area: 'school', sequence: ++this.sequence });
     });
     socket.on('school:changed', (event: { area?: unknown; yearId?: unknown }) => {
       if (this.socket !== socket || (event?.area !== 'academic' && event?.area !== 'school')) return;

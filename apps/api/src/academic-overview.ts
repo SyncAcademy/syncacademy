@@ -20,3 +20,15 @@ export function academicOverviewQuery(schoolId: string, yearId: string) {
         FROM jsonb_array_elements(COALESCE(data->'reports','[]'::jsonb)) r),'[]'::jsonb)
     ) AS data FROM "AcademicWorkspace" WHERE "schoolId"=${schoolId}::uuid AND "yearId"=${yearId}::uuid`;
 }
+
+// A submission identifies exactly one class, subject and assessment. Filter inside
+// PostgreSQL so unrelated marks, attendance histories and reports never cross the wire.
+export function academicMarksQuery(schoolId: string, yearId: string, submissionId: string) {
+  return Prisma.sql`
+    SELECT revision, jsonb_build_object(
+      'policy', data->'policy',
+      'assessments', COALESCE((SELECT jsonb_agg(a) FROM jsonb_array_elements(COALESCE(data->'assessments','[]'::jsonb)) a
+        WHERE a->>'id' IN (SELECT s->>'assessmentId' FROM jsonb_array_elements(COALESCE(data->'submissions','[]'::jsonb)) s WHERE s->>'id'=${submissionId})), '[]'::jsonb),
+      'submissions', COALESCE((SELECT jsonb_agg(s - 'archives') FROM jsonb_array_elements(COALESCE(data->'submissions','[]'::jsonb)) s WHERE s->>'id'=${submissionId}), '[]'::jsonb)
+    ) AS data FROM "AcademicWorkspace" WHERE "schoolId"=${schoolId}::uuid AND "yearId"=${yearId}::uuid`;
+}

@@ -71,9 +71,9 @@ export class TeacherStore {
     });
   }
   entries(id: string): MarkEntry[] { return this.assignments().some(a => a.id === id) ? (this.state().marks[id] ?? []).map(m => ({ ...m, noMark: m.noMark ?? false, grade: this.grade(id, m.marksValue) })) : []; }
-  async save(id:string,entries:MarkEntry[]):Promise<string|null>{const a=this.assignments().find(a=>a.id===id);return this.remote.command('marks',{id,revision:a?.revision,entries:entries.map(e=>({studentId:e.studentId,marksValue:e.marksValue,noMark:e.noMark??false,comments:e.comments??''}))});}
+  async save(id:string,entries:MarkEntry[],draftRevision:number|undefined):Promise<string|null>{if(draftRevision===undefined)return 'Reload the marks before editing.';return this.remote.command('marks',{id,revision:draftRevision,entries:entries.map(e=>({studentId:e.studentId,marksValue:e.marksValue,noMark:e.noMark??false,comments:e.comments??''}))});}
   confirmRoster(id:string){return this.remote.command('confirm-roster',{id});}
-  submit(id:string):Promise<string|null>{const a=this.assignments().find(a=>a.id===id);return this.remote.command('submit',{id,revision:a?.revision});}
+  submit(id:string,draftRevision:number|undefined):Promise<string|null>{if(draftRevision===undefined)return Promise.resolve('Reload the marks before submitting.');return this.remote.command('submit',{id,revision:draftRevision});}
   markRead(id?:string){return this.remote.command('read-notifications',id?{id}:{});}
   private restore():TeacherState { return {assignments:[],marks:{},issues:[],notifications:[]}; }
 }

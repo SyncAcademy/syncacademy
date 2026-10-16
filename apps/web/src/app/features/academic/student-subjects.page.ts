@@ -56,8 +56,10 @@ export class StudentSubjectsPage {
   readonly classSearch = signal('');
   readonly page = signal(1);
   readonly pageSize = 25;
+  readonly total = signal(0);
   readonly editingEnrollmentId = signal('');
   readonly editingSubjects = signal<string[]>([]);
+  private editingVersion: number | undefined;
   readonly yearClosed = signal(false);
   private classesGeneration = 0;
   private studentsGeneration = 0;
@@ -66,12 +68,9 @@ export class StudentSubjectsPage {
     const q = this.classSearch().trim().toLowerCase();
     return this.classes().filter(classroom => !q || `${classroom.name} ${classroom.subjects.map(subject => `${subject.name} ${subject.code}`).join(' ')}`.toLowerCase().includes(q));
   });
-  readonly filteredStudents = computed(() => {
-    const q = this.search().trim().toLowerCase();
-    return this.students().filter(student => !q || `${student.name} ${student.admissionNumber}`.toLowerCase().includes(q));
-  });
-  readonly pages = computed(() => Math.max(1, Math.ceil(this.filteredStudents().length / this.pageSize)));
-  readonly visibleStudents = computed(() => this.filteredStudents().slice((this.page() - 1) * this.pageSize, this.page() * this.pageSize));
+  readonly filteredStudents = this.students;
+  readonly pages = computed(() => Math.max(1, Math.ceil(this.total() / this.pageSize)));
+  readonly visibleStudents = this.students;
   readonly readOnly = computed(() => !this.year());
 
   constructor() {
@@ -97,8 +96,25 @@ export class StudentSubjectsPage {
         }
       });
     });
-    effect(() => { this.search(); this.page.set(1); });
+    effect((onCleanup) => {
+      this.search(); this.page();
+      const timer = setTimeout(() => { if (this.selectedClassId() && !this.editingEnrollmentId()) void this.loadStudents(this.selectedClassId()); }, 250);
+      onCleanup(() => clearTimeout(timer));
+    });
     effect(() => { if (this.page() > this.pages()) this.page.set(this.pages()); });
+
+    // Gap fix: reload data when another session changes school records (subjects, enrollments)
+    effect(() => {
+      this.api.schoolRevisionNotice();
+      untracked(() => {
+        const schoolId = this.api.schoolId();
+        const yearId = this.year()?.id;
+        const classroomId = this.selectedClassId();
+        if (!schoolId || !yearId) return;
+        if (classroomId) void this.loadStudents(classroomId);
+        else void this.loadClasses(schoolId, yearId);
+      });
+    });
   }
 
   private async loadClasses(schoolId: string, yearId: string): Promise<void> {
@@ -119,7 +135,7 @@ export class StudentSubjectsPage {
   }
 
   async openClass(classroomId: string): Promise<void> {
-    if (this.busy()) return;
+    if (!this.canLeave()) return;
     this.selectedClassId.set(classroomId);
     this.students.set([]);
     this.search.set('');
@@ -130,7 +146,7 @@ export class StudentSubjectsPage {
   }
 
   backToClasses(): void {
-    if (this.busy()) return;
+    if (!this.canLeave()) return;
     this.studentsGeneration++;
     this.selectedClassId.set('');
     this.students.set([]);
@@ -147,11 +163,19 @@ export class StudentSubjectsPage {
     this.loadingStudents.set(true);
     this.error.set('');
     try {
-      const query = new URLSearchParams({ yearId, classroomId });
+      const query = new URLSearchParams({ yearId, classroomId, page: String(this.page()), pageSize: String(this.pageSize), q: this.search() });
       const result: any = await this.api.auth.request('GET', `schools/${schoolId}/registry/student-subjects?${query}`);
       if (generation !== this.studentsGeneration || classroomId !== this.selectedClassId() || schoolId !== this.api.schoolId() || yearId !== this.year()?.id) return;
       this.classes.set(result.classes ?? this.classes());
-      this.students.set(result.students ?? []);
+      this.total.set(result.total ?? 0);
+      // Keep the editing row visible even if it moved out of this page.
+      const draftRow = this.students().find(row => row.enrollmentId === this.editingEnrollmentId());
+      const rows: SubjectRosterStudent[] = result.students ?? [];
+      this.students.set(draftRow && !rows.some(row => row.enrollmentId === draftRow.enrollmentId) ? [draftRow, ...rows] : rows);
+      const edited = this.students().find(student => student.enrollmentId === this.editingEnrollmentId());
+      if (this.editingEnrollmentId() && (!edited || edited.version !== this.editingVersion)) {
+        this.error.set('Student subjects changed in another session. Your selection is preserved. Review it, then cancel and reopen the current record.');
+      }
       this.yearClosed.set(!!result.year?.closed);
     } catch (error) {
       if (generation === this.studentsGeneration) this.error.set(this.api.auth.error(error));
@@ -161,10 +185,11 @@ export class StudentSubjectsPage {
   }
 
   startEditing(student: SubjectRosterStudent): void {
-    if (this.readOnly() || this.busy()) return;
+    if (this.readOnly() || this.busy() || this.editingEnrollmentId()) return;
     this.error.set('');
     this.notice.set('');
     this.editingEnrollmentId.set(student.enrollmentId);
+    this.editingVersion = student.version;
     this.editingSubjects.set([...student.subjectIds]);
   }
 
@@ -190,7 +215,7 @@ export class StudentSubjectsPage {
     this.notice.set('');
     try {
       await this.api.write(`registry/enrollments/${student.enrollmentId}/subjects`, {
-        version: student.version,
+        version: this.editingVersion,
         subjectIds: this.editingSubjects(),
       }, 'PATCH');
       if (schoolId === this.api.schoolId() && yearId === this.year()?.id && classroomId === this.selectedClassId()) {
@@ -218,7 +243,10 @@ export class StudentSubjectsPage {
     return Math.max(0, classroom.subjects.length - 4);
   }
 
+  canLeave(): boolean { if (this.busy() || this.editingEnrollmentId()) { this.error.set('Save or cancel your subject selection before leaving.'); return false; } return true; }
+  changeSearch(value: string): void { if (!this.canLeave()) return; this.search.set(value); this.page.set(1); }
   changePage(value: number): void {
+    if (!this.canLeave()) return;
     this.page.set(Math.min(this.pages(), Math.max(1, value)));
     this.editingEnrollmentId.set('');
   }

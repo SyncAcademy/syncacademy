@@ -8,7 +8,9 @@ async function main() {
   const roles = await db.$queryRaw<{rolname:string}[]>`SELECT rolname FROM pg_roles WHERE rolname = ${role}`;
   if (!roles.length) await db.$executeRawUnsafe(`CREATE ROLE ${role} LOGIN PASSWORD '${secret}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT`);
   else await db.$executeRawUnsafe(`ALTER ROLE ${role} PASSWORD '${secret}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT`);
-  await db.$executeRawUnsafe(`GRANT CONNECT ON DATABASE syncacademy TO ${role}`);
+  const [{ database }] = await db.$queryRaw<{database:string}[]>`SELECT current_database() AS database`;
+  const quotedDatabase = '"' + database.replace(/"/g, '""') + '"';
+  await db.$executeRawUnsafe(`GRANT CONNECT ON DATABASE ${quotedDatabase} TO ${role}`);
   await db.$executeRawUnsafe(`GRANT USAGE ON SCHEMA public TO ${role}`);
   const tables = await db.$queryRaw<{tablename:string}[]>`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
   for (const {tablename} of tables) {

@@ -27,5 +27,5 @@ export class AttendanceService {
     if (saved) return saved.entries.map(e => ({ studentId: e.studentId, student: e.student, number: e.number }));
     return this.registry.enrolmentsFor(year.id).filter(e => e.classId === classId && e.status === 'active' && e.joined.slice(0, 10) <= date).map(e => ({ studentId: e.studentId, student: e.studentName, number: this.registry.student(e.studentId)!.number }));
   }
-  save(classId:string,date:string,entries:AttendanceEntry[],reason=''):Promise<string|null>{const current=this.forYear(this.years.teacherYear()?.id??'').find(s=>s.classId===classId&&s.date===date);return this.remote.command('attendance',{classId,date,reason,revision:current?.revision??0,entries:entries.map(e=>({studentId:e.studentId,status:e.status,note:e.note??''}))});}
+  save(classId:string,date:string,entries:AttendanceEntry[],reason:string,revision:number):Promise<string|null>{return this.remote.command('attendance',{classId,date,reason,revision,entries:entries.map(e=>({studentId:e.studentId,status:e.status,note:e.note??''}))});}
 }

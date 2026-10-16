@@ -25,8 +25,8 @@
   </section>
 } @else {
   <section class="panel subjects-panel">
-    <div class="subjects-heading"><div><button type="button" class="subjects-back" (click)="backToClasses()">&#8592; All classes</button><h2>{{ selectedClass()?.name }} students</h2><p>{{ students().length }} active students &middot; {{ selectedClass()?.subjects?.length || 0 }} class subjects</p></div><span class="subjects-count">{{ filteredStudents().length }} shown</span></div>
-    <div class="subjects-tools subjects-tools--roster"><p>Review each student below. Class offerings are their default subjects.</p><label class="subjects-search"><span class="sr-only">Search student name or number</span><input type="search" placeholder="Search student or number" [ngModel]="search()" (ngModelChange)="search.set($event)"></label></div>
+    <div class="subjects-heading"><div><button type="button" class="subjects-back" (click)="backToClasses()">&#8592; All classes</button><h2>{{ selectedClass()?.name }} students</h2><p>{{ students().length }} active students &middot; {{ selectedClass()?.subjects?.length || 0 }} class subjects</p></div><span class="subjects-count">{{ total() }} shown</span></div>
+    <div class="subjects-tools subjects-tools--roster"><p>Review each student below. Class offerings are their default subjects.</p><label class="subjects-search"><span class="sr-only">Search student name or number</span><input type="search" placeholder="Search student or number" [ngModel]="search()" (ngModelChange)="changeSearch($event)" [disabled]="!!editingEnrollmentId() || busy()"></label></div>
     @if (!selectedClass()?.subjects?.length) { <p class="portal-notice">This class has no subject offerings. Set its subjects in Subject Setup first.</p> }
     @if (loadingStudents()) { <app-loading-skeleton /> }
     @else { <div class="subject-student-list">
@@ -44,7 +44,7 @@
         </article>
       } @empty { <p class="subjects-empty">{{ search() ? 'No students match your search.' : 'No active students are enrolled in this class.' }}</p> }
     </div>
-    @if (filteredStudents().length) { <div class="subject-pagination" role="navigation" aria-label="Class student pages"><span>{{ filteredStudents().length }} students &middot; Page {{ page() }} of {{ pages() }}</span><div class="subject-pagination__actions"><button type="button" class="action-btn" [disabled]="page() <= 1" (click)="changePage(page() - 1)">Previous</button><button type="button" class="action-btn" [disabled]="page() >= pages()" (click)="changePage(page() + 1)">Next</button></div></div> }
+    @if (total()) { <div class="subject-pagination" role="navigation" aria-label="Class student pages"><span>{{ total() }} students &middot; Page {{ page() }} of {{ pages() }}</span><div class="subject-pagination__actions"><button type="button" class="action-btn" [disabled]="page() <= 1" (click)="changePage(page() - 1)">Previous</button><button type="button" class="action-btn" [disabled]="page() >= pages()" (click)="changePage(page() + 1)">Next</button></div></div> }
     }
   </section>
 }

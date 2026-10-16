@@ -1,4 +1,5 @@
-import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked, DestroyRef } from '@angular/core';
+import { Router, NavigationEnd } from '@angular/router';
 import { AuthService } from './auth.service';
 import { requestId } from './request-id';
 import { SchoolRealtimeService } from './school-realtime.service';
@@ -18,11 +19,25 @@ export class SchoolApiService {
   readonly schoolRevisionNotice = signal(0);
   readonly schoolName = computed(() => this.data()?.school?.name || 'Select a school');
   readonly choices = computed(() => this.auth.identity()?.memberships.filter(m => !this.role() || m.role === this.role()).map(m => m.school).filter((s,i,a)=>a.findIndex(x=>x.id===s.id)===i) || []);
+  private readonly router = inject(Router, {optional:true});
+  private readonly destroyRef = inject(DestroyRef);
+  private workspaceView(url: string) {
+    const path = url.split(/[?#]/)[0].replace(/\/$/, '');
+    return ['/head', '/head/dashboard', '/academic', '/academic/dashboard', '/academic/student-subjects', '/teacher/my-class/student-subjects'].includes(path)
+      || /^\/teacher\/[0-9a-f-]{36}\/marks$/i.test(path) ? 'summary' : 'full';
+  }
+  private view = this.workspaceView(this.router?.getCurrentNavigation()?.extractedUrl.toString() ?? this.router?.url ?? '');
   private generation = 0;
   private activeRefresh:Promise<void>|null=null;
   private refreshAgain=false;
   private readonly writeKeys = new Map<string, string>();
   constructor() {
+    const navigation = this.router?.events.subscribe(event => {
+      if (!(event instanceof NavigationEnd)) return;
+      const view = this.workspaceView(event.urlAfterRedirects);
+      if (view !== this.view) { this.view = view; this.generation++; this.data.set(null); void this.refresh(); }
+    });
+    this.destroyRef.onDestroy(() => navigation?.unsubscribe());
     effect(() => { const id = this.auth.identity()?.id; if (!id) { this.generation++; this.data.set(null); this.schoolId.set(''); } });
     effect(() => { const identity = this.auth.identity(); const school = this.schoolId(); this.realtime.select(identity && !identity.mustChangePassword && !identity.needsMfa && !identity.needsMfaSetup ? school : '', identity ? `${identity.id}:${identity.selectedRole}` : ''); });
     effect(() => { const change = this.realtime.change(); if (!change || change.schoolId !== this.schoolId()) return; untracked(()=>{if (change.area === 'academic') this.academicRevisionNotice.update(value => value + 1); else {this.schoolRevisionNotice.update(value=>value+1);void this.refresh();}}); });
@@ -42,11 +57,11 @@ export class SchoolApiService {
   }
   private async fetchSnapshot() {
     const id = this.schoolId(); const generation = ++this.generation;
-    const identity=this.auth.identity()?.id,role=this.role();
-    const current=()=>generation===this.generation&&id===this.schoolId()&&identity===this.auth.identity()?.id&&role===this.role();
+    const identity=this.auth.identity()?.id,role=this.role(),view=this.view;
+    const current=()=>generation===this.generation&&id===this.schoolId()&&identity===this.auth.identity()?.id&&role===this.role()&&view===this.view;
     this.error.set(''); if (!id) { this.data.set(null); this.loading.set(false); return; }
     this.loading.set(true);
-    try { const data = await this.auth.request('GET', `schools/${id}/workspace`); if (current()) this.data.set(data); }
+    try { const data = await this.auth.request('GET', `schools/${id}/workspace${view === 'summary' ? '?view=summary' : ''}`); if (current()) this.data.set(data); }
     catch(e) { if (current()) { this.data.set(null); this.error.set(this.auth.error(e)); } }
     finally { if (current()) this.loading.set(false); }
   }

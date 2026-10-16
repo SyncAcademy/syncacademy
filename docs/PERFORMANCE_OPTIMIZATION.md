@@ -38,7 +38,7 @@ This improves the saving user's transfer. Other connected users receive metadata
 
 ### Phase 3: client requests, rendering and real-time reconciliation
 
-School snapshot reads coalesce and queue one follow-up when changes arrive during a read. Late responses cannot overwrite another school/user/role or logged-out state. Socket listeners are removed on replacement, and old connection callbacks cannot act on the new session. Reconnect reconciles school state and checks academic revision. Finance year caches invalidate on relevant school changes, including in-flight loads. Teacher grade rendering uses a computed assignment Map: a synthetic 99,000-mark/1,980-assignment comparison reduced lookup work from 1,198–1,554 ms to 3–12 ms with identical results.
+School snapshot reads coalesce and queue one follow-up when changes arrive during a read. Late responses cannot overwrite another school/user/role or logged-out state. Socket listeners are removed on replacement, and old connection callbacks cannot act on the new session. Reconnect reconciles school state and checks academic revision. Finance year caches invalidate on relevant school changes, including in-flight loads. Teacher grade rendering uses a computed assignment Map: a synthetic 99,000-mark/1,980-assignment comparison reduced lookup work from 1,198â€“1,554 ms to 3â€“12 ms with identical results.
 
 Client checks passed for school synchronization, academic workflows, bursar workflows and head oversight. These cover queued writes, request coalescing, logout/school switching, reconnect, permissions and finance cache invalidation. The production Angular build passed; existing warnings remain for the approximately 737 kB initial bundle versus its 500 kB warning budget, unused SaEditor and ExcelJS CommonJS.
 
@@ -46,9 +46,9 @@ Client checks passed for school synchronization, academic workflows, bursar work
 
 An additional actual bottleneck was found after the earlier fast individual lookups. The dashboard's correlated finance calculation repeatedly scanned payments and adjustments for 1,800 students. Replacing it with school-scoped grouped CTEs preserved the balance formula and non-void payment rule. EXPLAIN ANALYZE reduced execution from 11,853.415 to 638.711 ms and shared buffer hits from 573,674 to 2,555, with the same 1,727 owing students.
 
-Prisma's nested enrollment-subject query also generated a 55,856-character composite-key IN expression, taking about 12–16 seconds. The workspace now batches subjects using the authorized enrollment IDs plus schoolId, then reconstructs the same response shape. No new index or schema change was needed.
+Prisma's nested enrollment-subject query also generated a 55,856-character composite-key IN expression, taking about 12â€“16 seconds. The workspace now batches subjects using the authorized enrollment IDs plus schoolId, then reconstructs the same response shape. No new index or schema change was needed.
 
-After both fixes, three sequential controller runs measured 1,669/1,450/1,454 ms for the school workspace, compared with approximately 20,676–23,140 ms before these fixes. Response size remained 4,538,523 bytes. Enrollment-subject queries took 106/82/141 ms. The existing 25-student endpoint measured 94/87/59 ms (63,538 bytes), and registry summary 28/32/25 ms (12,280 bytes). Authorization runs in these benchmarks, but HTTP transport/session-store and browser rendering are excluded. Reproduce with `node scripts/benchmark-academic.cjs --docker-local --controllers`; omit `--controllers` for academic payload measurements. Benchmarks are read-only.
+After both fixes, three sequential controller runs measured 1,669/1,450/1,454 ms for the school workspace, compared with approximately 20,676â€“23,140 ms before these fixes. Response size remained 4,538,523 bytes. Enrollment-subject queries took 106/82/141 ms. The existing 25-student endpoint measured 94/87/59 ms (63,538 bytes), and registry summary 28/32/25 ms (12,280 bytes). Authorization runs in these benchmarks, but HTTP transport/session-store and browser rendering are excluded. Reproduce with `node scripts/benchmark-academic.cjs --docker-local --controllers`; omit `--controllers` for academic payload measurements. Benchmarks are read-only.
 
 ### Requirements audit and remaining limitations
 
@@ -97,3 +97,115 @@ Concurrency is a separate concern from event delivery:
 - Not every settings action has an expected revision (for example grading settings). Such actions are serialized, but the later accepted save can replace the earlier setting. Socket delivery does not implement record locking or collaborative editing.
 
 This turn is an audit plus additional regression tests, not a claim that these newly identified client gaps have been repaired. No application code or deployment was changed during this audit. The existing single-API-instance and browser-level verification limitations still apply.
+
+### Audit recheck on 15 October 2026
+
+On resuming, the workspace already contained additional frontend edits that were not present during the earlier audit: a captured `draftRevision` in the marks page, an attendance dirty guard, and a student-subjects school-revision listener. This audit preserves those edits and does not claim authorship or deployment of them. The earlier findings describe the earlier implementation; these newer changes are only partial protection:
+
+- Attendance now preserves dirty input values, but AttendanceService.save still takes the newest stored revision, rather than a revision captured with the draft. Old inputs can therefore be sent with a newer revision.
+- StudentSubjectsPage now listens for school changes, but saves `student.version` from the refreshed list while keeping editingSubjects separately. It needs a captured edit version to prevent a live list refresh from giving an old selection a new version.
+- Marks now captures a draft revision, but the save-success path does not explicitly advance it before a following save/submit. The effect checks dirty/saving with untracked reads; correctness must not depend on its scheduling relative to save completion.
+
+Existing school synchronization, academic workflow and class-teacher client checks passed. Those checks do not establish the correctness of these newly identified draft scenarios. No runtime source was changed or deployed by this audit recheck.
+Final recheck: all 34 API integration tests passed (110.7 seconds), including the simultaneous profile/marks tests, school isolation, reconnect and session revocation. Output is retained locally in .tmp/websocket-audit-tests.log. Three-role save-to-event timings were 166 ms for submission, 140 ms for review and 196 ms for attendance. These validate server behavior and event delivery, not unsaved browser draft safety.
+
+### Implementation continuation on 15 October 2026
+
+The workspace now includes draft-version protection for marks, attendance and student subjects, bounded submission reads, server-paginated subject rosters, compact school dashboard reads, platform live updates and an optional PostgreSQL invalidation bus. The earlier audit findings above describe the prior code. The dedicated draft checks pass for stale input preservation, repeat saves, save-then-submit, date/class guards and refreshed enrollment versions.
+
+This continuation corrected a regression where internal bus routing fields were emitted in school socket payloads. The client contract remains {area, yearId?}. Integration listeners now distinguish academic notices from preceding school notices and reject assertions through their promises rather than producing uncaught asynchronous failures. The test listener connection is explicitly pinned to the disposable database.
+
+Additional checks verify that the compact school response preserves authorized counts/reference data, denies foreign-school access, and cannot overwrite a detail route after navigation. All six client checks listed in [Scalability validation](SCALABILITY_VALIDATION.md) passed. API TypeScript and Angular production builds passed; the web build retains the 737.49 kB initial bundle warning, unused SaEditor warning and ExcelJS CommonJS warning.
+
+The synthetic benchmark smoke attempt could not create its disposable database with the configured database account. No workload was seeded and no capacity result was produced. The validation document records setup commands, transport behavior and remaining measurement gates. No deployment or academic storage migration was performed in this continuation.
+
+Final verification: the PostgreSQL integration suite passed 35/35, with zero failures or skips, in 72.9 seconds. The final log is .tmp/scalability-integration-final.log. Three-role save-to-event checks measured submission/review/attendance at 170/140/132 ms in this local functional run; these are not browser latency or capacity results.
+
+## Measured continuation, 15â€“16 October 2026
+
+### Preserved work and environment
+
+Reviewed this log and existing changes first. Preserved the overview/marks projections, summary school endpoint, paginated subject rosters, draft protection, finance queries and Socket.IO/PostgreSQL invalidation work already present. Docker is unavailable in this session; the configured Windows PostgreSQL instance is not the populated Kigoma Docker database. Earlier Kigoma figures remain historical. No real school was seeded, reset or edited.
+
+The benchmark's explicit `--integration-database` option appends synthetic fixtures to the already provisioned `syncacademy_auth_test` and refuses to run alongside integration APIs. No database-creation privileges were granted. Fixed synthetic session expiry on the database's Africa/Nairobi time zone by using connect-pg-simple's timestamp conversion; added authentication preflight, startup diagnostics and failing exit status for non-conflict HTTP errors. Initial 401 samples are excluded. The subsequent two-school/120-student smoke had no non-conflict errors and one attendance 409. Conflicts are recorded separately, not automatically assumed to be expected stale drafts.
+
+### Bounded marks saving
+
+The existing marks view rejected every save patch and downloaded the submission again. Optional `view: 'marks'` command receipts now contain the authorized changed submission without archives or unrelated audit/notifications. Angular applies one only for the same context/submission, matching workspace base revision, and no active load. The regression check reproduced **one follow-up GET before and zero after**, including the saving client's socket notice. Stale or wrong-submission receipts and idempotent replay acknowledgements retain the authorized bounded refresh. Other views retain their patch contracts.
+
+This does not eliminate every full post-save download. Commands without patches, including allocation, class approval and support lifecycle operations, can still refresh a full view. Other connected clients receive invalidations and reload their current authorized view; they do not receive record-level streaming updates.
+
+The larger workload exposed a server bottleneck too: all four concurrent marks saves over two 31,050,464-byte workspaces returned HTTP 500. An always-rolled-back probe confirmed **P2028 transaction expiry in all four attempts**, taking 30,187/31,735/37,425/41,575 ms.
+
+Explicit bounded marks saves now read the selected submission/assessment, execute the **same marks validation**, and merge the submission and audit entry inside PostgreSQL. This preserves unknown root fields, other submissions, reports, notifications, selected roster archives and audit history. Submission/document revision checks, serialization retries, idempotency and authorization remain. No timeout increase or storage migration was made. This follows the existing support-save technique. Submit/review receipts can be bounded, but their persistence remains the original full-document path.
+
+The identical four rollback probes succeeded in **9,221/9,190/7,059/7,058 ms**, with 13,731-byte receipts. These exclude HTTP/session lookup and disable serialization retries; they are not capacity or sub-second-save results. Reproduce with `node scripts/benchmark-marks-save.cjs --concurrent` after creating disposable fixtures. Logs: `.tmp/performance-marks-before.log` and `.tmp/performance-marks-after.log`.
+
+### Initial reads and dashboard measurements
+
+The first large HTTP run used **two schools, 1,800 students each, eight subjects, three assessments, 90 attendance days, two clients per school, one round**. Four samples per operation means p95/p99 equal the observed maximum, not reliable tail estimates. Loopback HTTP, sessions, authorization and JSON transfer are included; browser painting, WAN, TLS and proxy gzip are excluded. These are synthetic documents, not new Kigoma measurements.
+
+| Read | p50 ms | Maximum ms | Maximum response bytes |
+| --- | ---: | ---: | ---: |
+| Selected marks | 779 | 914 | 14,219 |
+| Academic full | 4,895 | 10,730 | 31,069,206 |
+| Academic overview | 2,529 | 8,279 | 662,759 |
+| Academic revision | 19 | 3,894 | 14 |
+| School workspace | 3,383 | 5,810 | 1,688,065 |
+| School summary | 924 | 3,770 | 160,977 |
+| Paginated subject search | 4,306 | 4,566 | 34,580 |
+
+The existing projections reduce academic response bytes by **97.9% for overview and 99.95% for selected marks**, and school summary bytes by **90.5%**. Unmigrated results, attendance, reports and exports retain full reads; no consumer was silently switched to incomplete data.
+
+Three separate sequential read-only DB measurements gave median read/serialization/parse times of **2,951/208/336 ms** for full, **1,607/6/9 ms** for overview, and **558/<1/<1 ms** for marks (rounded zero for the last serialization/parse measurements). JSON sizes were 31,050,464 / 643,967 / 14,024 bytes; gzip level 5 produced 718,558 / 43,025 / 2,599 bytes. Synthetic repetition compresses especially well; these are not observed browser transfers. Log: `.tmp/performance-payloads.log`. `benchmark-academic.cjs` now includes marks and summary paths and supports `--synthetic`, preserving historical Kigoma mode.
+
+The first mixed run also failed **all four attendance saves and all four report commands** with HTTP 500. Attendance p50/max were 18,195/20,381 ms; reports 21,707/25,690 ms. Peak sampled API RSS was **2,904,002,560 bytes**, heap 770,619,736 bytes; database connections/active queries peaked at 12/5. No lock wait happened to be sampled; this does not establish absence of contention. Artifacts: `.tmp/performance-large.json` and `.tmp/performance-large.log`. The marks fix does not repair attendance/report persistence. The 12-school capacity gate remains open because this smaller gate already fails.
+
+### Service and synchronization audit
+
+- Academic visible-page polling remains a small revision check every 30 seconds, covering missed invalidations/direct database changes. Matching marks receipts now avoid the redundant bounded GET as well. School coalescing, late-response guards, summary/detail navigation guards, reconnect reconciliation and finance invalidation remain intact.
+- Registrar filters/pages still request summary and subject references beside the bounded list. This is repeated work, but a browser-level cache benefit and complete invalidation policy have not been established; no cache was added on that basis. Platform visible-page polling remains a recovery fallback. The landing-page interval is a slideshow, not API polling.
+- Submission, Academic Master return/class approval, attendance, support and school writes already use authorized invalidations. Headmasters observe authorized changes; class approval remains an Academic Master operation. No new approval authority or announcement workflow was invented.
+- A loaded integration run passed the new marks checks but failed a positive reconnect assertion after its fixed 100 ms sleep. Positive delivery checks now await the existing five-second bounded event promises. Socket behavior was not weakened. Origin rejection, selected-role/membership authorization, school isolation, logout, reconnect and cross-process delivery remain required tests.
+
+No dependencies, indexes, migrations, Redis, backend cache, pool-size changes or additional infrastructure were introduced. The existing optional PostgreSQL bus was retained. [The storage migration plan](ACADEMIC_STORAGE_MIGRATION.md) remains a proposal. The overall optimization is **not complete**: attendance/report writes, remaining full detail consumers, production browser latency and broad capacity still need work. No deployment was performed.
+
+### Verification of this continuation
+
+- API TypeScript build passed. Final PostgreSQL integration suite passed **36/36**, zero failures/skips, in **97.6 seconds** after the raw SQL retry correction. It verifies bounded receipt equality, preserved archives/audit/other submissions/reports, mixed bounded/original concurrent marks writes, forced database serialization conflicts, retry limits, authorization, replay behavior and existing school/socket workflows. Three-role submission/review/attendance save-to-event timings were **201/158/237 ms**; reconnect grading delivery was 1,343 ms on the stress-padded test record. Log: `.tmp/performance-final-integration.log`.
+- Eight Angular checks passed: school sync, super admin, academic workflow, head oversight, class teacher, concurrent drafts, bursar workflow and registrar workflow. Updated the registrar test's outdated mock to supply the current identity signal. The academic request-count regression was rerun after adding self-notice reconciliation coverage.
+- Angular production build passed, output to `apps/web/.tmp/codex-web-build` to preserve existing tracked deployment artifacts. Existing warnings remain: 737.49 kB initial bundle against 500 kB warning budget, unused SaEditor and ExcelJS CommonJS. Log: `.tmp/performance-web-build.log`.
+- The browser harness initially exited under sandboxing, then exposed a missing academic revision signal in its old mock. Added that fixture signal and reran headless Chrome outside the sandbox. Results passed **45 desktop, 45 mobile, 26 support, 33 notifications and 37 feedback checks**. Screenshots are under `apps/web/.tmp/academic-browser`; log `.tmp/performance-browser.log`. These are small-fixture rendering/workflow checks, **not** production-size browser performance measurements.
+
+### Committed-write follow-up and retry correction
+
+The first post-change mixed HTTP run was deliberately retained even though it failed: **two of four marks saves succeeded and two returned 500**. All four attendance saves and all four report commands still returned 500; peak sampled RSS was 2,821,488,640 bytes, with two lock-waiting connections sampled. Artifacts: `.tmp/performance-large-after.json` / `.log`. A cold API startup timeout before that run produced no latency results; the harness startup allowance and diagnostics were expanded without changing application timeouts.
+
+An explicit committed probe (`benchmark-marks-save.cjs --concurrent --commit`, disposable fixtures only) identified the marks failures as **Prisma P2010 / PostgreSQL SQLSTATE 40001**, not a business validation failure. Raw SQL reports serialization conflicts differently from Prisma model updates. The transaction helper previously retried only P2034. It now also retries exactly P2010/40001 under the existing three-retry limit; exhausted raw serialization conflicts become 409 and other raw SQL errors are unchanged. A regression test forces two real PostgreSQL snapshots to compete, verifies exactly-once committed changes after retry, and checks retry exhaustion and unrelated-error propagation.
+
+The repeated committed same-submission probe then produced the correct two successful writes (**5,124/9,085 ms**) and two stale-revision **409s** (**5,956/9,772 ms**), with no 500s. Logs: `.tmp/performance-marks-commit-before.log` and `.tmp/performance-marks-commit-after.log`. Rollback-only probes cannot reveal this committed serialization case; they must not be used alone for concurrency sign-off.
+
+Sequential, read-only controller measurements on the post-change synthetic fixture (Academic Master role; authorization included, HTTP/session lookup excluded) gave:
+
+| Controller | Three runs, ms | Bytes | Queries per call |
+| --- | --- | ---: | ---: |
+| Full school workspace | 960 / 879 / 690 | 1,759,947 | 26 |
+| School summary | 218 / 149 / 115 | 232,859 | 21 |
+| 25-student page | 79 / 66 / 68 | 71,313 | 11 |
+| Registry summary | 41 / 17 / 18 | 5,828 | 5 |
+
+Enrollment-subject query times were 54/52/34 ms. These results support retaining the existing batched query and selective summary endpoint. They do not justify another index or backend cache. The synthetic fixture has no representative finance payment history, so it cannot replace the earlier populated-school finance plan measurements. Log: `.tmp/performance-controllers.log`.
+
+### Final independent-marks HTTP gate
+
+After the retry correction and **36/36** integration pass, ran fresh two-school fixtures with the same 1,800 students/eight subjects/three assessments/90 attendance days and `--marks-only`. All **four selected reads returned 200 and four independent submission saves returned 201**, with zero conflicts or errors. Reads measured p50/max **1,173/1,276 ms** and 14,219 bytes; saves measured **11,900/20,211 ms** (minimum 6,888 ms) and **13,731 bytes**. Total measured workload duration was 21,490 ms. Four samples do not establish a production latency distribution.
+
+Peak sampled API RSS/heap were **114,982,912 / 35,672,144 bytes**, database connections/active queries/lock-waiting connections **10/5/2**. This is a marks-only workload and its memory peak must not be compared as if it were the same mixed workload as the earlier 2.9 GB result. It verifies committed marks saving with HTTP, authorization, sessions and retries; it does **not** certify concurrent attendance/report processing or meet a sub-second write target. The full mixed workload has not been re-certified after the retry correction; its earlier attendance/report failures remain unaddressed.
+
+Artifacts: `.tmp/performance-marks-http-final.json` and `.tmp/performance-marks-http-final.log`. Reproduce with:
+
+```text
+node scripts/benchmark-multischool.cjs --run --integration-database --marks-only --schools 2 --students 1800 --subjects 8 --assessments 3 --days 90 --users-per-school 2 --rounds 1
+```
+
+Next justified work is bounded attendance-register reads/writes and class/assessment-scoped report generation, with history/permission/output equivalence tests before cutover. Broader independent-row storage still follows the existing migration proposal. No timeout/pool increase, cache or index is substituted for that unresolved document-processing work.

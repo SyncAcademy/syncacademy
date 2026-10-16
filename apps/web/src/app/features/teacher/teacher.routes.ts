@@ -15,6 +15,7 @@ export const TEACHER_ROUTES: Routes = [
       { path: 'my-class/performance/:classId', loadComponent: () => import('../academic/class-results.page').then(m => m.ClassResultsPage), data: { title: 'Class Results', breadcrumb: 'Teacher / My Class / Class Results', audience: 'teacher' } },
       ...[{ path: 'my-class', title: 'Class Overview', section: 'class-overview' }, { path: 'my-class/attendance', title: 'Attendance', section: 'attendance' }, { path: 'my-class/performance', title: 'Class Performance', section: 'class-performance' }, { path: 'my-class/reports', title: 'Student Reports', section: 'class-reports' }].map(page => ({
         path: page.path,
+        canDeactivate: [(component:any)=>component.canLeave()],
         loadComponent: () => import('./teacher-class.page').then(m => m.TeacherClassPage), data: { title: page.title, breadcrumb: `Teacher / My Class / ${page.title}`, section: page.section },
       })),
       {

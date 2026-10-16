@@ -17,13 +17,15 @@ export class TeacherMarksPage implements OnInit {
   route = inject(ActivatedRoute);
   loading = computed(()=>this.store.remote.loading() || this.store.api.loading());
   dirty=signal(false); saving=signal(false);
-  constructor(){effect(()=>{const rows=this.store.entries(this.assignmentId());untracked(()=>{if(!this.dirty()&&!this.saving()){this.marks.set(structuredClone(rows));this.markInputs.set({});}});});}
+  constructor(){effect(()=>{const rows=this.store.entries(this.assignmentId());const assignment=this.store.assignments().find(a=>a.id===this.assignmentId());untracked(()=>{if(!this.dirty()&&!this.saving()){this.marks.set(structuredClone(rows));this.markInputs.set({});this.draftRevision.set(assignment?.revision);}else if(!this.saving()&&assignment?.revision!==this.draftRevision()){this.autoSaveFailed.set(true);this.autoSaveStatus.set('Marks changed in another session. Your draft is preserved. Review it before discarding and reloading.');}});});}
   @HostListener('window:beforeunload',['$event']) beforeUnload(event:BeforeUnloadEvent){if(this.dirty()||this.saving()){event.preventDefault();event.returnValue='';}}
-  async discard(){if(this.saving())return;await this.store.remote.load();this.marks.set(structuredClone(this.store.entries(this.assignmentId())));this.markInputs.set({});this.dirty.set(false);this.autoSaveFailed.set(false);this.autoSaveStatus.set('Local changes discarded.');}
+  async discard(){if(this.saving())return;await this.store.remote.load();if(this.store.remote.error()){this.autoSaveFailed.set(true);this.autoSaveStatus.set(this.store.remote.error());return;}this.marks.set(structuredClone(this.store.entries(this.assignmentId())));this.markInputs.set({});this.draftRevision.set(this.store.assignments().find(a=>a.id===this.assignmentId())?.revision);this.dirty.set(false);this.autoSaveFailed.set(false);this.autoSaveStatus.set('Local changes discarded.');}
   async canLeave(){if(this.saving())return false;return !this.dirty()||await this.save();}
   marks = signal<MarkEntry[]>([]);
   markInputs = signal<Record<string,string>>({});
   assignmentId = signal('');
+  /** Revision that was current when the draft was loaded. Sent on save to ensure conflict detection. */
+  draftRevision = signal<number | undefined>(undefined);
   assignment = computed(() => this.store.assignments().find(a => a.id === this.assignmentId()));
   assignmentLabel = computed(() => { const a = this.assignment(); return a ? `${a.classStream || a.className} / ${a.subjectName}` : 'Assignment unavailable'; });
   readOnly = computed(() => this.store.readOnly() || !this.assignment() || ['submitted', 'approved'].includes(this.assignment()!.assessmentProgress.status) || this.assignment()!.rosterStatus !== 'confirmed' || !this.assignment()?.assessmentId || this.assignment()?.assessmentStatus !== 'open');
@@ -50,6 +52,7 @@ export class TeacherMarksPage implements OnInit {
     this.assignmentId.set(this.route.snapshot.paramMap.get('assignmentId') || '');
     this.marks.set(structuredClone(this.store.entries(this.assignmentId())));
     this.markInputs.set({});
+    this.draftRevision.set(this.store.assignments().find(a => a.id === this.assignmentId())?.revision);
   }
   markInput(mark: MarkEntry): string { return this.markInputs()[mark.studentId] ?? (mark.noMark ? '-' : mark.marksValue === null ? '' : String(mark.marksValue)); }
   invalidInput(mark: MarkEntry): boolean { const value=this.markInput(mark); return value !== '' && value !== '-' && (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(value) || Number(value)>100); }
@@ -78,14 +81,18 @@ export class TeacherMarksPage implements OnInit {
     if(this.saving()||this.readOnly())return false;
     if(this.marks().some(m=>this.invalidInput(m) || m.marksValue!==null&&!this.valid(m) || (m.noMark && m.marksValue!==null))){this.autoSaveFailed.set(true);this.autoSaveStatus.set('Use a number from 0 to 100 or a single dash for no mark.');return false;}
     this.saving.set(true);this.autoSaveStatus.set('Saving draft...');
-    const error=await this.store.save(this.assignmentId(),this.marks());this.saving.set(false);
-    this.autoSaveFailed.set(!!error);this.autoSaveStatus.set(error??'Draft saved to school records.');if(!error){this.markInputs.set({});this.dirty.set(false);}return !error;
+    const revision=this.draftRevision();
+    const error=await this.store.save(this.assignmentId(),this.marks(),revision);
+    // Advance only our successful write, never a possibly newer live snapshot.
+    if(!error){this.draftRevision.set(revision!+1);this.markInputs.set({});this.dirty.set(false);}
+    this.saving.set(false);
+    this.autoSaveFailed.set(!!error);this.autoSaveStatus.set(error??'Draft saved to school records.');return !error;
   }
   openSubmitDialog(): void { if (this.canSubmit()) this.showSubmitDialog.set(true); }
   async confirmSubmit():Promise<void>{
     if(!this.canSubmit()||this.saving())return;
     if(this.dirty()&&!await this.save())return;
-    this.saving.set(true);const error=await this.store.submit(this.assignmentId());this.saving.set(false);
+    this.saving.set(true);const error=await this.store.submit(this.assignmentId(),this.draftRevision());this.saving.set(false);
     if(!error){this.submitted.set(true);this.showSubmitDialog.set(false);}else {this.autoSaveFailed.set(true);this.autoSaveStatus.set(error);}
   }
   cancelSubmit(): void { if(this.saving())return; this.showSubmitDialog.set(false); }

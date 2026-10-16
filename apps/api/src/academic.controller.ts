@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { PlatformService } from './platform.service';
 import { addClassSubjectsToEnrollments } from './registry-support';
 import { requireYearTerm } from './academic-terms';
-import { academicOverviewQuery } from './academic-overview';
+import { academicOverviewQuery, academicMarksQuery } from './academic-overview';
 const classLabel=(name:string)=>name.replace(/(\d)\s+([A-Za-z])$/, '$1$2');
 const uuid = z.string().uuid();
 const text = z.string().trim().min(1).max(200);
@@ -104,10 +104,10 @@ export class AcademicController {
   await tx.auditEvent.create({data:{schoolId,actorId:user.id,action:'ACADEMIC_CLASS-TEACHER',target:p.classId}});
   return {saved:true};
  }
- private async context(tx:Prisma.TransactionClient,schoolId:string,yearId:string,overview=false) {
+ private async context(tx:Prisma.TransactionClient,schoolId:string,yearId:string,overview=false,submissionId?:string) {
   const year=await tx.academicYear.findFirst({where:{id:yearId,schoolId}});if(!year)throw new BadRequestException('Choose an academic year in this school.');
   const allocations=await tx.teachingAssignment.findMany({where:{schoolId,classroom:{yearId},membership:{active:true,user:{enabled:true}}},include:{membership:{include:{user:true}},classroom:true,subject:true}});
-  const record=overview?(await tx.$queryRaw<Array<{data:any;revision:number}>>(academicOverviewQuery(schoolId,yearId)))[0]:await tx.academicWorkspace.findUnique({where:{yearId}});
+  const record=submissionId?(await tx.$queryRaw<Array<{data:any;revision:number}>>(academicMarksQuery(schoolId,yearId,submissionId)))[0]:overview?(await tx.$queryRaw<Array<{data:any;revision:number}>>(academicOverviewQuery(schoolId,yearId)))[0]:await tx.academicWorkspace.findUnique({where:{yearId}});
   return {year,allocations,state:{...empty(),...(record?.data as any ?? {})},revision:record?.revision??0};
  }
  private async roster(tx:Prisma.TransactionClient,schoolId:string,classId:string,subjectId?:string|null) {
@@ -125,8 +125,8 @@ export class AcademicController {
   return {...state,submissions,slots:state.slots.filter((s:any)=>!teacher||own.some(a=>classLabel(a.classroom.name)===s.className)),syllabus:state.syllabus.filter((s:any)=>!teacher||own.some(a=>a.id===s.assignmentId)),support:teacher?state.support.filter((p:any)=>p.teacherId===userId):state.support,reports:teacher?state.reports.filter((r:any)=>classIds.includes(r.classId)):state.reports,audit:teacher?[]:state.audit,attendance:state.attendance.filter((s:any)=>!teacher||classIds.includes(s.classId)),classTeachers:state.classTeachers.filter((a:any)=>!teacher||a.teacherId===userId),notifications:state.notifications.filter((n:any)=>teacher?((n.teacherId===userId&&(!n.relatedSupportId||state.support.some((p:any)=>p.id===n.relatedSupportId&&p.teacherId===userId)))||submissions.some((s:any)=>s.id===n.relatedAssignmentId)):!n.teacherId).map((n:any)=>({...n,read:(n.readBy??[]).includes(userId),readBy:undefined}))};
  }
  @Get() async get(@Req() req:Request,@Param('schoolId') schoolId:string,@Query() query:unknown) {
-  const {user}=await this.svc.authorize(req,parse(uuid,schoolId),['ACADEMIC','HEADMASTER','TEACHER']);const {yearId,view}=parse(z.object({yearId:uuid,view:z.literal('overview').optional()}).strict(),query);
-  const {state,allocations,revision}=await this.context(this.svc.db,schoolId,yearId,view==='overview');
+  const {user}=await this.svc.authorize(req,parse(uuid,schoolId),['ACADEMIC','HEADMASTER','TEACHER']);const {yearId,view,submissionId}=parse(z.object({yearId:uuid,view:z.enum(['overview','marks']).optional(),submissionId:uuid.optional()}).strict().refine(q=>(q.view==='marks')===!!q.submissionId,'Marks view requires a submission.'),query);
+  const {state,allocations,revision}=await this.context(this.svc.db,schoolId,yearId,view==='overview',submissionId);
   const projected=this.projection(state,allocations,user.id,req.session.selectedRole==='TEACHER');
   return {...projected,...(view?{view,reportCount:projected.reports.length,reports:[]}:{}),workspaceRevision:revision};
  }
@@ -139,14 +139,16 @@ export class AcademicController {
  }
  @Post('commands') async command(@Req() req:Request,@Param('schoolId') schoolId:string,@Body() body:unknown) {
   const {user}=await this.svc.authorize(req,parse(uuid,schoolId),['ACADEMIC','HEADMASTER','TEACHER']);
-  const b=parse(z.object({yearId:uuid,action:text,payload:z.unknown()}).strict(),body);const teacher=req.session.selectedRole==='TEACHER';
+  const b=parse(z.object({yearId:uuid,action:text,payload:z.unknown(),view:z.literal('marks').optional()}).strict(),body);const teacher=req.session.selectedRole==='TEACHER';
   let freshResult:unknown;
   const fresh=<T>(value:T):T=>{freshResult=value;return value;};
   const result=await this.svc.idempotent(`${user.id}:academics:${schoolId}`,parse(uuid,req.header('Idempotency-Key')),b,async tx=>{
    if(b.action==='class-teacher')return this.assignClassTeacher(tx,schoolId,b.yearId,b.payload,user,teacher);
    if(b.action==='support')return fresh(await this.saveSupport(tx,schoolId,b.yearId,b.payload,user,teacher));
    if(b.action==='grading')return fresh(await this.saveGrading(tx,schoolId,b.yearId,b.payload,user,teacher));
-   const {year,state:s,allocations,revision:baseRevision}=await this.context(tx,schoolId,b.yearId);
+   const boundedMarks=b.view==='marks'&&b.action==='marks';
+   const marksId=boundedMarks?parse(uuid,(b.payload as any)?.id):undefined;
+   const {year,state:s,allocations,revision:baseRevision}=await this.context(tx,schoolId,b.yearId,false,marksId);
    const academic=()=>{if(teacher)throw new ForbiddenException('Academic Master or Headmaster access required.');};
    const within=(value:string)=>{if(value<year.startsAt.toISOString().slice(0,10)||value>year.endsAt.toISOString().slice(0,10))throw new BadRequestException('Date must fall within the academic year.');};
    const assessment=(id:string)=>{const a=s.assessments.find((a:any)=>a.id===id);if(!a)throw new BadRequestException('Assessment not found.');return a;};
@@ -286,7 +288,22 @@ export class AcademicController {
     default: throw new BadRequestException('Unknown academic action.');
    }
    log(`${b.action.replaceAll('-',' ')} saved`);
-   const saved=await tx.academicWorkspace.upsert({where:{yearId:b.yearId},create:{yearId:b.yearId,schoolId,data:s},update:{data:s,revision:{increment:1}},select:{revision:true}});
+   let saved:{revision:number};
+   if(boundedMarks) {
+    // Preserve the original root, other submissions, and selected roster archives.
+    // The same marks validation above runs against the bounded read. Serializable
+    // retries and both document/submission revisions still protect concurrent edits.
+    const submissionJson=JSON.stringify(s.submissions[0]),auditJson=JSON.stringify(s.audit);
+    const rows=await tx.$queryRaw<Array<{revision:number}>>`UPDATE "AcademicWorkspace" SET
+     data=jsonb_set(data,'{submissions}',(SELECT jsonb_agg(
+      CASE WHEN item->>'id'=${marksId} THEN item||${submissionJson}::jsonb ELSE item END ORDER BY ordinal)
+      FROM jsonb_array_elements(data->'submissions') WITH ORDINALITY AS entries(item,ordinal)))
+      ||jsonb_build_object('audit',${auditJson}::jsonb||COALESCE(data->'audit','[]'::jsonb)),
+     revision=revision+1 WHERE "schoolId"=${schoolId}::uuid AND "yearId"=${b.yearId}::uuid AND revision=${baseRevision}
+     RETURNING revision`;
+    if(!rows.length)throw new ConflictException('Marks changed in another session. Reload before saving.');
+    saved=rows[0];
+   }else saved=await tx.academicWorkspace.upsert({where:{yearId:b.yearId},create:{yearId:b.yearId,schoolId,data:s},update:{data:s,revision:{increment:1}},select:{revision:true}});
    await tx.auditEvent.create({data:{schoolId,actorId:user.id,action:'ACADEMIC_'+b.action.toUpperCase(),target:b.yearId}});
    if(['marks','submit','review','attendance','toggle-topic','read-notifications'].includes(b.action)) {
     const visible=this.projection(s,allocations,user.id,teacher);
@@ -295,6 +312,11 @@ export class AcademicController {
     if(['marks','submit','review'].includes(b.action))upsert.submissions=visible.submissions.filter((r:any)=>r.id===id);
     if(b.action==='attendance')upsert.attendance=visible.attendance.filter((r:any)=>r.id===s.attendance.at(-1)?.id);
     if(b.action==='toggle-topic')upsert.syllabus=visible.syllabus.filter((r:any)=>r.id===id);
+    if(b.view==='marks'&&['marks','submit','review'].includes(b.action)) {
+     // Match the bounded GET: archives and unrelated metadata stay on the server.
+     return fresh({saved:true,patch:{baseRevision,workspaceRevision:saved.revision,marksSafe:true,
+      upsert:{submissions:upsert.submissions.map(({archives,...record}:any)=>record)}}});
+    }
     return fresh({saved:true,patch:{baseRevision,workspaceRevision:saved.revision,overviewSafe:['toggle-topic','read-notifications'].includes(b.action),replace:{audit:visible.audit,notifications:visible.notifications},upsert}});
    }
    return {saved:true};

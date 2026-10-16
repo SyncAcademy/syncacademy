@@ -11,6 +11,7 @@ x-app: &app
     SESSION_SECRET: ${SESSION_SECRET:?Generate local secrets first}
     DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?Generate local secrets first}
     PORT: 3000
+    REALTIME_TRANSPORT: ${REALTIME_TRANSPORT:-local}
     SMTP_HOST: ${DOCKER_SMTP_HOST:-smtp.gmail.com}
     SMTP_PORT: ${SMTP_PORT:-465}
     SMTP_SECURE: ${SMTP_SECURE:-true}

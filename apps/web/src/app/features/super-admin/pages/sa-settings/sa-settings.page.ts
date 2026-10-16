@@ -1,5 +1,5 @@
 import { requestId } from '../../../../core/services/request-id';
-import { Component, inject } from '@angular/core';
+import { Component, inject, effect, untracked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SuperAdminStore, PlatformAdmin } from '../../super-admin.store';
@@ -32,7 +32,7 @@ export class SaSettingsPage {
     { value: '2880', label: '48 hours' },
     { value: '10080', label: '7 days' },
   ];
-  constructor() { void this.loadInvitations(); }
+  constructor() { effect(() => { this.store.realtime.revision(); untracked(() => void this.loadInvitations()); }); }
   preferences(): void {
     this.error = ''; this.editor = { title: 'Platform preferences', mode: 'settings', values: { ...this.store.settings() }, fields: [
       { key: 'platformName', label: 'Platform name', required: true }, { key: 'supportEmail', label: 'Support email', type: 'email' },
@@ -54,7 +54,8 @@ export class SaSettingsPage {
     };
   }
   async loadInvitations(): Promise<void> {
-    try { const query=new URLSearchParams({page:String(this.invitePage),q:this.inviteSearch});const result=await this.store.auth.request('GET', 'platform/invitations?'+query);this.invitations=result.items;this.inviteTotal=result.total; }
+    const identity = this.store.auth.identity()?.id;
+    try { const query=new URLSearchParams({page:String(this.invitePage),q:this.inviteSearch});const result=await this.store.auth.request('GET', 'platform/invitations?'+query);if(identity !== this.store.auth.identity()?.id)return;this.invitations=result.items;this.inviteTotal=result.total; }
     catch (error) { this.error = this.store.auth.error(error); }
   }
   async save(values: Record<string, any>): Promise<void> {

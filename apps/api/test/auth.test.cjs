@@ -12,8 +12,10 @@ require("dotenv").config({
 const url = new URL(process.env.DATABASE_URL);
 url.pathname = "/syncacademy_auth_test";
 process.env.DATABASE_URL = url.toString();
+process.env.REALTIME_DATABASE_URL = url.toString();
 process.env.NODE_ENV = "test";
 process.env.PORT = "3101";
+process.env.REALTIME_TRANSPORT = "postgres";
 if (new URL(process.env.DATABASE_URL).pathname !== "/syncacademy_auth_test")
   throw new Error("Tests require isolated database");
 const db = new PrismaClient();
@@ -1048,6 +1050,14 @@ test(
           assert.equal(t.students[0].address, undefined);
           assert.equal(t.students[0].dateOfBirth, undefined);
           assert.equal(t.audit.length, 0);
+          const compact = await teacher.call("GET", `schools/${schoolA.id}/workspace?view=summary`);
+          assert.equal(compact.status, 200);
+          assert.equal(compact.body.studentsComplete, false);
+          assert.deepEqual(compact.body.students, []);
+          for (const key of ['studentCount', 'classes', 'years', 'assignments', 'permissions']) {
+            assert.deepEqual(compact.body[key], t[key], `summary preserves authorized ${key}`);
+          }
+          assert.equal((await teacher.call("GET", `schools/${schoolB.id}/workspace?view=summary`)).status, 403);
         },
       );
       await t.test(
@@ -1142,6 +1152,7 @@ test(
         },
       );
       await require('./platform-operations.cjs')({ t, db, client, admin: c });
+      await require('./realtime-platform.cjs')({ t, db, client, fixture, admin: c });
       await t.test(
         "password recovery works for every supported role",
         async () => {
@@ -1352,6 +1363,7 @@ test(
       await require('./student-subjects.cjs')({ t, db, client, fixture });
       await require('./assessment-allocation.cjs')({ t, db, client, fixture });
       await require('./academic-workflows.cjs')({ t, db, client, fixture });
+      await require('./transaction-retries.cjs')({ t, db });
       await require('./finance-workflows.cjs')({ t, db, client, fixture });
 
       await t.test("expired invitation is rejected", async () => {

@@ -29,13 +29,17 @@ module.exports=async({t,db,client,fixture})=>{
   const route=`schools/${school.id}/academics`;
   const get=async(agent=academic)=>(await agent.call('GET',`${route}?yearId=${year.id}`)).body;
   const revision=async(agent=academic)=>(await agent.call('GET',`${route}/revision?yearId=${year.id}`)).body.revision;
-  const cmd=(agent,action,payload,key=randomUUID())=>agent.call('POST',route+'/commands',{yearId:year.id,action,payload},{'Idempotency-Key':key});
+  const cmd=(agent,action,payload,key=randomUUID(),view)=>agent.call('POST',route+'/commands',{yearId:year.id,action,payload,...(view?{view}:{})},{'Idempotency-Key':key});
   const ok=async(agent,action,payload)=>{const r=await cmd(agent,action,payload);assert.equal(r.status,201,JSON.stringify(r.body));return r;};
   const live=async(agent,action,payload)=>{
+   // Drain notices from preceding writes before timing this mutation. The shared
+   // transport coalesces events and may deliver a prior school notice later.
+   await new Promise(resolve=>setTimeout(resolve,150));
    const started=performance.now();
    const delivered=[headSocket,teacherSocket,academicSocket].map(socket=>new Promise((resolve,reject)=>{
-    const timeout=setTimeout(()=>reject(new Error(`${action} did not reach a connected role`)),5000);
-    socket.once('school:changed',event=>{clearTimeout(timeout);assert.equal(event.area,'academic');assert.equal(event.yearId,year.id);assert.deepEqual(Object.keys(event).sort(),['area','yearId']);resolve();});
+    const listener=event=>{if(event.area!=='academic')return;clearTimeout(timeout);socket.off('school:changed',listener);try{assert.equal(event.yearId,year.id);assert.deepEqual(Object.keys(event).sort(),['area','yearId']);resolve();}catch(error){reject(error);}};
+    const timeout=setTimeout(()=>{socket.off('school:changed',listener);reject(new Error(`${action} did not reach a connected role`));},5000);
+    socket.on('school:changed',listener);
    }));
    const [result]=await Promise.all([ok(agent,action,payload),...delivered]);
    console.log(JSON.stringify({realtimeAction:action,connectedRoles:3,saveAndDeliveryMs:Math.round(performance.now()-started)}));return result;
@@ -43,8 +47,7 @@ module.exports=async({t,db,client,fixture})=>{
   assert.equal(await revision(),0,'an empty academic year has no workspace revision');
   assert.equal((await cmd(teacher,'assessment',{name:'Exam',term:'Term 1',deadline:'2026-12-01'})).status,403);
   assert.equal(headUpdates,0,'failed writes do not broadcast changes');
-  await ok(academic,'assessment',{name:'Midterm',term:'Term 1',deadline:'2026-12-01'});
-  await new Promise(resolve=>setTimeout(resolve,100));
+  await live(academic,'assessment',{name:'Midterm',term:'Term 1',deadline:'2026-12-01'});
   assert.ok(headUpdates>0&&teacherUpdates>0,'committed academic changes reach connected school roles');
   assert.equal(await revision(),1,'a committed academic change advances the revision');
   let state=await get();assert.equal(state.workspaceRevision,1,'full academic responses expose the same revision');const exam=state.assessments[0];
@@ -56,13 +59,29 @@ module.exports=async({t,db,client,fixture})=>{
   const marks={id:sub.id,revision:sub.revision,entries:[{studentId:student.id,marksValue:78,comments:'Good progress'}]};
   assert.equal((await cmd(teacher,'marks',{...marks,entries:[{...marks.entries[0],marksValue:101}]})).status,400);
   assert.equal((await cmd(teacher,'marks',{...marks,entries:[{...marks.entries[0],studentId:randomUUID()}]})).status,400);
-  const key=randomUUID();const savedMarks=await cmd(teacher,'marks',marks,key);assert.equal(savedMarks.status,201);
+  const scoped = await teacher.call('GET', `${route}?yearId=${year.id}&view=marks&submissionId=${sub.id}`);
+  assert.equal(scoped.status, 200); assert.deepEqual(scoped.body.submissions, (await get(teacher)).submissions.map(({archives,...record})=>record));
+  assert.equal(scoped.body.attendance.length, 0); assert.equal(scoped.body.reports.length, 0);
+  assert.equal((await other.call('GET', `${route}?yearId=${year.id}&view=marks&submissionId=${sub.id}`)).body.submissions.length, 0, 'scoped marks preserve teacher authorization');
+  assert.equal((await teacher.call('GET', `${route}?yearId=${year.id}&view=marks`)).status, 400);
+  const beforeBoundedSave=(await db.academicWorkspace.findUniqueOrThrow({where:{yearId:year.id}})).data;
+  const key=randomUUID();const savedMarks=await cmd(teacher,'marks',marks,key,'marks');assert.equal(savedMarks.status,201);
+  const afterBoundedSave=(await db.academicWorkspace.findUniqueOrThrow({where:{yearId:year.id}})).data;
+  for(const field of Object.keys(beforeBoundedSave).filter(field=>!['submissions','audit'].includes(field)))assert.deepEqual(afterBoundedSave[field],beforeBoundedSave[field],`bounded marks preserve ${field}`);
+  assert.deepEqual(afterBoundedSave.submissions[0].archives,beforeBoundedSave.submissions[0].archives,'bounded marks preserve roster archives');
+  assert.deepEqual(afterBoundedSave.audit.slice(1),beforeBoundedSave.audit,'bounded marks append audit history without replacing it');
   assert.equal(savedMarks.body.patch.upsert.submissions.length,1,'marks save returns only the affected submission');
   assert.equal(savedMarks.body.patch.upsert.submissions[0].entries[0].marksValue,78);
-  const replay=await cmd(teacher,'marks',marks,key);assert.equal(replay.status,201);assert.equal(replay.body.patch,undefined,'idempotent replay never replays private record data');
+  const boundedAfterSave=(await teacher.call('GET',`${route}?yearId=${year.id}&view=marks&submissionId=${sub.id}`)).body;
+  assert.equal(savedMarks.body.patch.marksSafe,true);
+  assert.deepEqual(savedMarks.body.patch.upsert.submissions,boundedAfterSave.submissions,'bounded receipt matches authorized GET');
+  assert.equal(savedMarks.body.patch.upsert.submissions[0].archives,undefined,'bounded receipt excludes roster history');
+  assert.equal(savedMarks.body.patch.replace,undefined,'bounded receipt excludes unrelated audit and notifications');
+  assert.equal(savedMarks.body.patch.workspaceRevision,boundedAfterSave.workspaceRevision);
+  const replay=await cmd(teacher,'marks',marks,key,'marks');assert.equal(replay.status,201);assert.equal(replay.body.patch,undefined,'idempotent replay never replays private record data');
   assert.equal((await cmd(teacher,'marks',marks)).status,409,'stale revision rejected');
   sub=(await get(teacher)).submissions[0];assert.equal(sub.entries[0].marksValue,78);
-  const competingMarks=await Promise.all([teacher,academic].map((agent,index)=>cmd(agent,'marks',{...marks,revision:sub.revision,entries:[{...marks.entries[0],comments:'Concurrent editor '+index}]})));
+  const competingMarks=await Promise.all([teacher,academic].map((agent,index)=>cmd(agent,'marks',{...marks,revision:sub.revision,entries:[{...marks.entries[0],comments:'Concurrent editor '+index}]},randomUUID(),index===0?'marks':undefined)));
   assert.deepEqual(competingMarks.map(r=>r.status).sort(),[201,409],'teacher and academic edits to the same marks revision cannot overwrite each other');
   sub=(await get(teacher)).submissions[0];
   assert.equal(sub.entries[0].comments,'Concurrent editor '+competingMarks.findIndex(r=>r.status===201));
@@ -82,7 +101,11 @@ module.exports=async({t,db,client,fixture})=>{
   sub=(await get(teacher)).submissions.find(s=>s.assessmentId===noMarkExam.id);
   await ok(teacher,'confirm-roster',{id:sub.id});sub=(await get(teacher)).submissions.find(s=>s.id===sub.id);
   const noMarkDraft=sub.entries.map(e=>({studentId:e.studentId,marksValue:null,noMark:true,comments:''}));
-  await ok(teacher,'marks',{id:sub.id,revision:sub.revision,entries:noMarkDraft});
+  const beforeNoMark=await get();
+  const noMarkSave=await cmd(teacher,'marks',{id:sub.id,revision:sub.revision,entries:noMarkDraft},randomUUID(),'marks');assert.equal(noMarkSave.status,201);
+  const afterNoMark=await get();
+  assert.deepEqual(afterNoMark.submissions.filter(s=>s.id!==sub.id),beforeNoMark.submissions.filter(s=>s.id!==sub.id),'bounded marks preserve other assessments and submissions');
+  assert.deepEqual(afterNoMark.reports,beforeNoMark.reports,'bounded marks preserve generated reports');
   sub=(await get(teacher)).submissions.find(s=>s.id===sub.id);
   assert.equal(sub.assessmentProgress.completed,noMarkDraft.length,'a dash completes the student entry without a comment');
   assert.equal(sub.entries[0].comments,'');
@@ -151,7 +174,7 @@ module.exports=async({t,db,client,fixture})=>{
   assert.equal((await get(other)).reports.length,2,'new class teacher sees class reports');
   assert.equal((await get(other)).attendance.length,2,'new class teacher sees attendance history');
   assert.equal((await get(other)).submissions.length,2,'new class teacher can read approved class marks');
-  assert.equal((await cmd(other,'marks',{...marks,revision:(await get(other)).submissions[0].revision})).status,403,'class role cannot edit another teacher subject marks');
+  assert.equal((await cmd(other,'marks',{...marks,revision:(await get(other)).submissions[0].revision},randomUUID(),'marks')).status,403,'class role cannot edit another teacher subject marks');
   assert.equal((await get(teacher)).submissions.length,2,'former class teacher keeps normal subject assignment');
   assert.equal((await get(teacher)).attendance.length,0,'former class teacher loses class attendance access');
   assert.equal(await db.teachingAssignment.count({where:{schoolId:school.id,classroomId:cls.id,membershipId:membership.id,subjectId:null}}),0,'old whole-class allocation removed');
@@ -244,8 +267,7 @@ module.exports=async({t,db,client,fixture})=>{
   const reconnected=new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Authorized socket did not reconnect')),3000);headSocket.once('school:ready',()=>{clearTimeout(timer);resolve();});});
   headSocket.connect();await reconnected;
   const beforeReconnectUpdate=headUpdates;
-  await ok(academic,'grading',{passMark:40,bands:[{label:'Pass',minimum:40},{label:'Fail',minimum:0}]});
-  await new Promise(resolve=>setTimeout(resolve,100));
+  await live(academic,'grading',{passMark:40,bands:[{label:'Pass',minimum:40},{label:'Fail',minimum:0}]});
   assert.ok(headUpdates>beforeReconnectUpdate,'a reconnected Headmaster receives later changes');
   assert.equal((await teacher.call('POST','auth/logout',{})).status,201);
   const revoked=new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Logged-out socket remained connected')),3000);teacherSocket.once('disconnect',()=>{clearTimeout(timer);resolve();});});

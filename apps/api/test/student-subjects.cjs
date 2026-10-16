@@ -36,6 +36,11 @@ module.exports = async function studentSubjects({ t, db, client, fixture }) {
     assert.equal(academicRoster.body.classes.length, 2, 'academic master sees cards for all classes');
     assert.equal(academicRoster.body.selectedClass.studentCount, 2);
     assert.ok(academicRoster.body.students.every(student => student.subjectIds.includes(math.id)), 'omitted registrar selection inherits class subjects');
+    const paged = await academic.call('GET', route + `student-subjects?yearId=${year.id}&classroomId=${classroom.id}&pageSize=1&page=2`);
+    assert.equal(paged.body.total, 2); assert.equal(paged.body.students.length, 1);
+    const searched = await academic.call('GET', route + `student-subjects?yearId=${year.id}&classroomId=${classroom.id}&pageSize=1&q=Later`);
+    assert.equal(searched.body.total, 1); assert.equal(searched.body.students[0].studentId, late.body.id, 'search covers the authorized dataset before paging');
+    assert.equal((await academic.call('GET', route + `student-subjects?yearId=${year.id}&classroomId=${classroom.id}&pageSize=10000`)).status, 400);
     const oldVersion = academicRoster.body.students.find(student => student.studentId === registered.body.id).version;
     assert.equal((await post(academic, 'class-subjects', { classroomId: classroom.id, subjectIds: [math.id, science.id] })).status, 201);
     academicRoster = await roster(academic, classroom.id);

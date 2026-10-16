@@ -3,6 +3,9 @@ import { z } from 'zod';
 
 const schema = z.object({
   DATABASE_URL: z.string().url(),
+  REQUEST_METRICS: z.enum(['true', 'false']).default('false'),
+  REALTIME_TRANSPORT: z.enum(['local', 'postgres']).default('local'),
+  REALTIME_DATABASE_URL: z.string().url().optional(),
   APP_ORIGIN: z.string().url(),
   SESSION_SECRET: z.string().min(48),
   DATA_ENCRYPTION_KEY: z.string().regex(/^[a-f0-9]{64}$/i),

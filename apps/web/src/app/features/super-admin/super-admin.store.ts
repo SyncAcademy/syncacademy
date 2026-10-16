@@ -1,5 +1,6 @@
 import { requestId } from '../../core/services/request-id';
-import { inject } from '@angular/core';
+import { inject, untracked, DestroyRef } from '@angular/core';
+import { PlatformRealtimeService } from '../../core/services/platform-realtime.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Injectable, signal, computed, effect } from '@angular/core';
 
@@ -159,15 +160,42 @@ export class SuperAdminStore {
     return total ? this.invoices().filter(i => i.status === 'paid').reduce((sum, i) => sum + i.amount, 0) / total * 100 : 0;
   });
 
-  constructor(){effect(()=>{if(!this.auth.identity()){this.schools.set([]);this.leads.set([]);this.auditLog.set([]);this.admins.set([]);this.summary.set(null);}});}
+  readonly realtime = inject(PlatformRealtimeService);
+  private readonly destroyRef = inject(DestroyRef);
+  private context() { const identity = this.auth.identity(); return identity ? `${identity.id}:${identity.selectedRole}` : ''; }
+  private canSync() { const identity = this.auth.identity(); return !!identity?.platformAdmin && !identity.mustChangePassword && !identity.needsMfa && !identity.needsMfaSetup; }
+  private refreshTimer?: ReturnType<typeof setTimeout>;
+  private activeLoad: Promise<void> | null = null;
+  private reloadPending = false;
+  constructor() {
+    effect(() => {
+      const identity = this.auth.identity();
+      this.realtime.select(this.canSync() ? this.context() : '');
+      if (!identity?.platformAdmin) {
+        this.schoolRequest++; this.leadRequest++; this.auditRequest++;
+        this.schools.set([]); this.leads.set([]); this.auditLog.set([]); this.admins.set([]); this.summary.set(null);
+        this.settings.set({platformName:'SyncAcademy',supportEmail:'',maintenanceMessage:''});
+        this.loading.set(false); this.schoolsLoading.set(false);
+      }
+    });
+    const refresh = () => { if (!this.canSync()) return; clearTimeout(this.refreshTimer); this.refreshTimer = setTimeout(() => void this.load(), 250); };
+    effect(() => { this.realtime.revision(); untracked(refresh); });
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      const visible = () => { if (document.visibilityState === 'visible') refresh(); };
+      const timer = setInterval(visible, 30000);
+      document.addEventListener('visibilitychange', visible);
+      this.destroyRef.onDestroy(() => { clearInterval(timer); document.removeEventListener('visibilitychange', visible); });
+    }
+    this.destroyRef.onDestroy(() => { clearTimeout(this.refreshTimer); this.realtime.select(''); });
+  }
   private params(values:Record<string,string|number>){return new URLSearchParams(Object.entries(values).filter(([,value])=>String(value).length).map(([key,value])=>[key,String(value)])).toString();}
   private schoolRequest=0;private leadRequest=0;private auditRequest=0;
   async loadSchools() {
-    const request = ++this.schoolRequest;
+    const request = ++this.schoolRequest; const context = this.context();
     this.schoolsLoading.set(true);
     try {
       const list = await this.auth.request('GET', 'schools?' + this.params({page:this.page(),q:this.schoolSearch(),status:this.schoolStatus()}));
-      if (request !== this.schoolRequest) return;
+      if (request !== this.schoolRequest || context !== this.context()) return;
       this.total.set(list.total);
       this.schoolPageSize.set(list.pageSize || 25);
       this.schools.set(list.items.map((s:any)=>({id:s.id,name:s.name,code:s.code,location:s.region,type:s.schoolType||'',plan:'',status:s.active?'active':'suspended',students:s._count.students,staff:s._count.memberships,createdAt:new Date(s.createdAt),lastActive:null,contactName:'',contactEmail:s.email||'',contactPhone:s.phone||''})));
@@ -175,22 +203,32 @@ export class SuperAdminStore {
       if (request === this.schoolRequest) this.schoolsLoading.set(false);
     }
   }
-  async loadLeads(){const request=++this.leadRequest;const list=await this.auth.request('GET','platform/leads?'+this.params({page:this.leadPage(),q:this.leadSearch(),status:this.leadStatus(),source:this.leadSource()}));if(request!==this.leadRequest)return;this.leads.set(list.items);this.leadTotal.set(list.total);this.leadStages.set(list.stages);}
-  async loadAudit(){const request=++this.auditRequest;const list=await this.auth.request('GET','audit?'+this.params({page:this.auditPage(),q:this.auditSearch(),actor:this.auditActor(),action:this.auditAction(),from:this.auditFrom(),to:this.auditTo()}));if(request!==this.auditRequest)return;this.auditTotal.set(list.total);this.auditLog.set(list.items.map((a:any)=>({id:a.id,action:a.action,actor:a.actor?.name||a.actorId||'System',target:a.target,details:'',ip:'Not recorded',timestamp:new Date(a.createdAt)})));}
-  async load() {
+  async loadLeads(){const request=++this.leadRequest;const context=this.context();const list=await this.auth.request('GET','platform/leads?'+this.params({page:this.leadPage(),q:this.leadSearch(),status:this.leadStatus(),source:this.leadSource()}));if(request!==this.leadRequest||context!==this.context())return;this.leads.set(list.items);this.leadTotal.set(list.total);this.leadStages.set(list.stages);}
+  async loadAudit(){const request=++this.auditRequest;const context=this.context();const list=await this.auth.request('GET','audit?'+this.params({page:this.auditPage(),q:this.auditSearch(),actor:this.auditActor(),action:this.auditAction(),from:this.auditFrom(),to:this.auditTo()}));if(request!==this.auditRequest||context!==this.context())return;this.auditTotal.set(list.total);this.auditLog.set(list.items.map((a:any)=>({id:a.id,action:a.action,actor:a.actor?.name||a.actorId||'System',target:a.target,details:'',ip:'Not recorded',timestamp:new Date(a.createdAt)})));}
+  load(): Promise<void> {
+    if (this.activeLoad) { this.reloadPending = true; return this.activeLoad; }
+    const promise = (async () => { try { do { this.reloadPending = false; await this.fetch(); } while (this.reloadPending && this.canSync()); } finally { this.activeLoad = null; } })();
+    this.activeLoad = promise;
+    return promise;
+  }
+  private async fetch() {
+    const context = this.context();
     this.loading.set(true);
     this.storageError.set('');
     this.summaryError.set('');
     const results = await Promise.allSettled([
       this.auth.request('GET', 'platform/summary').then(summary => {
+        if (context !== this.context()) return;
         this.summary.set(summary);
         this.admins.set(summary.admins.map((a:any)=>({id:a.id,name:a.name,email:a.email,role:'Super Admin',status:a.enabled?'active':'revoked'})));
-      }).catch(error => { this.summaryError.set(this.auth.error(error)); throw error; }),
+      }).catch(error => { if (context === this.context()) this.summaryError.set(this.auth.error(error)); throw error; }),
       this.auth.request('GET', 'platform/settings').then(settings => {
+        if (context !== this.context()) return;
         this.settings.set({platformName:settings?.platformName || 'SyncAcademy',supportEmail:settings?.supportEmail || '',maintenanceMessage:settings?.maintenanceMessage || ''});
       }),
       this.loadSchools(), this.loadLeads(), this.loadAudit(),
     ]);
+    if (context !== this.context()) return;
     const labels = ['Dashboard totals', 'Platform settings', 'Schools', 'Leads', 'Audit log'];
     this.storageError.set(results.flatMap((result, index) => result.status === 'rejected' ? [labels[index] + ': ' + this.auth.error(result.reason)] : []).join(' '));
     this.loading.set(false);

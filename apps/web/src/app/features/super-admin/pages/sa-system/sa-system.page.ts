@@ -1,4 +1,4 @@
-﻿import { Component, inject, signal } from '@angular/core';
+﻿import { Component, inject, signal, effect, untracked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SuperAdminStore } from '../../super-admin.store';
 
@@ -10,7 +10,7 @@ export class SaSystemPage {
   readonly mail = signal<{ queued: number; failed: number; sent: number } | null>(null);
   readonly error = signal('');
   readonly checking = signal(false);
-  constructor() { void this.check(); }
+  constructor() { effect(() => { this.store.realtime.revision(); untracked(() => void this.check()); }); }
   async check() {
     if (this.checking()) return;
     this.checking.set(true);

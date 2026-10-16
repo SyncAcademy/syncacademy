@@ -30,7 +30,7 @@ export class RegistryController {
   }
   @Get('student-subjects') async studentSubjects(@Req() req: Request, @Param('schoolId') schoolId: string, @Query() query: unknown) {
     const { user } = await this.svc.authorize(req, parse(uuid, schoolId), ['HEADMASTER', 'ACADEMIC', 'TEACHER']);
-    const b = parse(z.object({ yearId: uuid, classroomId: uuid.optional() }).strict(), query);
+    const b = parse(z.object({ yearId: uuid, classroomId: uuid.optional(), ...paging }).strict(), query);
     const role = req.session.selectedRole;
     const year = await this.svc.db.academicYear.findFirst({ where: { id: b.yearId, schoolId } });
     if (!year) throw new BadRequestException('Choose an academic year in this school.');
@@ -54,12 +54,17 @@ export class RegistryController {
     if (!b.classroomId) return { classes: cards, year: { id: year.id, name: year.name, closed: year.closed } };
     const selectedClass = cards.find(classroom => classroom.id === b.classroomId);
     if (!selectedClass) throw new ForbiddenException('You do not manage subjects for this class.');
-    const enrollments = await this.svc.db.enrollment.findMany({
-      where: { schoolId, classroomId: selectedClass.id, status: 'active' },
+    const where: Prisma.EnrollmentWhereInput = { schoolId, classroomId: selectedClass.id, status: 'active',
+      ...(b.q ? { student: { OR: [{ name: { contains: b.q, mode: 'insensitive' } }, { admissionNumber: { contains: b.q, mode: 'insensitive' } }] } } : {}) };
+    const [total, enrollments] = await this.svc.db.$transaction([
+      this.svc.db.enrollment.count({ where }),
+      this.svc.db.enrollment.findMany({
+      where, skip: (b.page - 1) * b.pageSize, take: b.pageSize,
       orderBy: [{ student: { name: 'asc' } }, { id: 'asc' }],
       include: { student: { select: { id: true, name: true, admissionNumber: true } }, subjects: { select: { subjectId: true } } },
-    });
+    })]);
     return {
+      total, page: b.page, pageSize: b.pageSize,
       classes: cards,
       year: { id: year.id, name: year.name, closed: year.closed },
       selectedClass,

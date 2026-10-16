@@ -8,6 +8,8 @@ import {BrowserDynamicTestingModule,platformBrowserDynamicTesting} from '@angula
 import {SchoolApiService} from '../src/app/core/services/school-api.service';
 import {SchoolRealtimeService} from '../src/app/core/services/school-realtime.service';
 import {AuthService} from '../src/app/core/services/auth.service';
+import {Router, NavigationEnd} from '@angular/router';
+import {Subject} from 'rxjs';
 const requests:{path:string;resolve:(value:any)=>void}[]=[];
 const identity=signal<any>({id:'user',selectedRole:'HEADMASTER',memberships:[]});
 const auth={identity,error:()=>'',request:(_method:string,path:string)=>new Promise(resolve=>requests.push({path,resolve}))};
@@ -27,4 +29,18 @@ realtime.change.set({schoolId:'two',area:'school',sequence:2});TestBed.flushEffe
 identity.set({...identity()});TestBed.flushEffects();assert.equal(requests.length,5,'auth revalidation does not replay the previous socket event');
 const beforeLogout=api.refresh();identity.set(null);TestBed.flushEffects();requests[5].resolve({school:'two',private:true});await beforeLogout;
 assert.equal(api.data(),null,'late responses cannot restore records after logout');assert.equal(api.schoolId(),'');
-TestBed.resetTestingModule();console.log('School sync checks passed: request coalescing, queued writes, event routing, school switching and logout.');
+TestBed.resetTestingModule();
+identity.set({id:'user',selectedRole:'HEADMASTER',memberships:[]});
+const navigation = new Subject<any>();
+TestBed.configureTestingModule({providers:[{provide:DOCUMENT,useValue:{body:null,querySelectorAll:()=>[]}},{provide:RendererFactory2,useValue:{begin(){},end(){},whenRenderingDone:()=>Promise.resolve()}},{provide:AuthService,useValue:auth},{provide:SchoolRealtimeService,useValue:realtime},{provide:Router,useValue:{url:'/head/dashboard',getCurrentNavigation:()=>null,events:navigation}}]});
+const routed=TestBed.inject(SchoolApiService);routed.schoolId.set('three');routed.role.set('HEADMASTER');TestBed.flushEffects();
+const dashboard=routed.refresh();
+assert.equal(requests.at(-1)?.path,'schools/three/workspace?view=summary');
+const dashboardRequest=requests.at(-1)!;
+navigation.next(new NavigationEnd(1,'/head/reports','/head/reports'));
+dashboardRequest.resolve({view:'summary',students:[]});await tick();
+assert.equal(routed.data(),null,'summary response cannot populate a detail route');
+assert.equal(requests.at(-1)?.path,'schools/three/workspace');
+requests.at(-1)!.resolve({view:'full',students:[{id:'student'}]});await dashboard;
+assert.equal(routed.data().students.length,1,'detail navigation restores the complete roster');
+TestBed.resetTestingModule();console.log('School sync checks passed: request coalescing, queued writes, event routing, school switching, logout and summary/detail navigation.');

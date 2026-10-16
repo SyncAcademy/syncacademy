@@ -212,7 +212,7 @@ export class ApiController {
     });
   }
   @Get('schools/:id/workspace') async workspace(@Req() req: Request, @Param('id') id: string, @Query() query: unknown) {
-    const { page, pageSize } = parse(z.object({ page: listPage.optional(), pageSize: listSize.optional() }).strict(), query);
+    const { page, pageSize, view } = parse(z.object({ page: listPage.optional(), pageSize: listSize.optional(), view: z.literal('summary').optional() }).strict(), query);
     const { user, memberships } = await this.svc.authorize(req, schoolId(id));
     const roles = memberships.map(m => m.role); const staffManager = user.platformAdmin || roles.includes('HEADMASTER');
     const registrar = staffManager || roles.includes('REGISTRAR'); const academic = staffManager || roles.includes('ACADEMIC');
@@ -226,7 +226,7 @@ export class ApiController {
       this.svc.db.school.findUnique({ where: { id }, select: { id: true, name: true, code: true, region: true, schoolType: true, address: true, phone: true, email: true, website: true } }),
       this.svc.db.academicYear.findMany({ where: { schoolId: id, ...(!registrar && !academic && !bursar ? { classes: { some: classroomWhere } } : {}) }, orderBy: { startsAt: 'desc' } }),
       this.svc.db.classroom.findMany({ where: classroomWhere, include: { year: { select: { name: true, closed: true } }, _count: { select: { enrollments: { where: { status: 'active' } } } } }, orderBy: { name: 'asc' } }),
-      this.svc.db.student.findMany({ where: studentWhere, select: { id: true, name: true, admissionNumber: true, dateOfBirth: registrar ? true : false, gender: true, address: registrar ? true : false, userId: true, enrollments: { orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], where: { ...visibleEnrollments, ...(!registrar && !academic && !bursar ? { classroom: classroomWhere } : {}) }, select: { id: true, classroomId: true, createdAt: true, status: true, version: true, classroom: { select: { name: true, yearId: true, year: { select: { name: true } } } } } } }, orderBy: { createdAt: 'desc' }, ...(page ? { skip: (page - 1) * (pageSize ?? 25), take: pageSize ?? 25 } : {}) }),
+      view === 'summary' ? [] : this.svc.db.student.findMany({ where: studentWhere, select: { id: true, name: true, admissionNumber: true, dateOfBirth: registrar ? true : false, gender: true, address: registrar ? true : false, userId: true, enrollments: { orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], where: { ...visibleEnrollments, ...(!registrar && !academic && !bursar ? { classroom: classroomWhere } : {}) }, select: { id: true, classroomId: true, createdAt: true, status: true, version: true, classroom: { select: { name: true, yearId: true, year: { select: { name: true } } } } } } }, orderBy: { createdAt: 'desc' }, ...(page ? { skip: (page - 1) * (pageSize ?? 25), take: pageSize ?? 25 } : {}) }),
       this.svc.db.student.count({ where: studentWhere }),
       staffManager || academic ? this.svc.db.membership.findMany({ where: { schoolId: id }, select: { id: true, role: true, active: true, createdAt: true, user: { select: { id: true, name: true, email: true, enabled: true } } }, orderBy: { createdAt: 'desc' } }) : [],
       staffManager || academic ? this.svc.db.invitation.findMany({ where: { schoolId: id, ...(staffManager ? {} : { role: 'TEACHER' }) }, select: { id: true, name: true, email: true, role: true, createdAt: true, expiresAt: true, expiresInMinutes: true, acceptedAt: true, revokedAt: true }, orderBy: { createdAt: 'desc' } }) : [],
@@ -295,7 +295,7 @@ export class ApiController {
         studentsOwing: owingStudents[0]?.count ?? 0
       };
     }
-    return { school, years: years.map(year => ({ ...year, terms: termsForYear(year) })), classes, students, studentCount, registryAdmissions, registryIssues, subjects, classSubjects, members, invitations, assignments, audit, financeSummary: bursar ? financeSummaryData : null, permissions: { staffManager, registrar, academic, bursar } };
+    return { view: view ?? 'full', studentsComplete: view !== 'summary' && !page, school, years: years.map(year => ({ ...year, terms: termsForYear(year) })), classes, students, studentCount, registryAdmissions, registryIssues, subjects, classSubjects, members, invitations, assignments, audit, financeSummary: bursar ? financeSummaryData : null, permissions: { staffManager, registrar, academic, bursar } };
   }
   @Post('schools/:id/invitations') async invite(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
     const { user, memberships } = await this.svc.authorize(req, schoolId(id));
