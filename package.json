@@ -2,6 +2,7 @@
   "name": "syncacademy-mvp",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
   "description": "SyncAcademy - A smarter way to manage your school",
   "workspaces": [
     "apps/*",
