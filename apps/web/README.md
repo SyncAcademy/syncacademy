@@ -4,8 +4,8 @@ The SyncAcademy web client is an **Angular 18 + Ionic 8** single-page applicatio
 
 ## Key References
 - Workspace Agent Rules: [`apps/web/AGENTS.md`](./AGENTS.md)
-- Frontend Architecture: [`docs/architecture/frontend-architecture.md`](../../docs/architecture/frontend-architecture.md)
-- UI & Responsive Layout Guidelines: [`docs/UX/responsive-layout-guidelines.md`](../../docs/UX/responsive-layout-guidelines.md)
+- System Design & Frontend Architecture: [`docs/system-design-and-architecture.md`](../../docs/system-design-and-architecture.md)
+
 
 ## Commands
 ```bash

@@ -1,0 +1,102 @@
+# SyncAcademy — Product Overview, MVP Scope & Portal Workflows
+
+## 1. Product Vision & Executive Summary
+
+**SyncAcademy** is a multi-tenant education management SaaS platform built initially for Tanzanian primary and secondary schools. Its long-term vision is to provide **one connected education ecosystem** uniting school administrators, headmasters, registrars, bursars, class teachers, subject teachers, students, and families—including unified cross-school guardian accounts for parents with children enrolled across multiple SyncAcademy schools.
+
+### Core Problems Solved
+1. **Fragmented School Operations**: Unifies Admissions (Registrar), Academics (Academic Master & Teachers), Finance (Bursar), and Executive Oversight (Headmaster) on a single real-time database with immutable audit logs.
+2. **Tanzanian Academic & NECTA Alignment**: Supports multi-term calendars (`Term 1`, `Term 2`, mid-term and annual assessments), NECTA-aligned grading scales (`A`–`F` divisions and points), and multi-stage marks approval (`DRAFT` -> `SUBMITTED` -> `ACADEMIC_APPROVED` -> `HEADMASTER_APPROVED` -> `PUBLISHED`).
+3. **Multi-Channel Guardian Connectivity**: Reaches parents via **SMS**, **WhatsApp**, **Email**, and **secure, expiring report-access links** without requiring complex portal onboarding, while laying the foundation for a cross-school Parent Portal.
+
+---
+
+## 2. MVP Scope Matrix
+
+| Domain | In-Scope MVP Capabilities | Status |
+|---|---|---|
+| **Super Admin & Tenant Onboarding** | Provision and suspend schools (`School`), convert prospective leads, invite school administrators, configure platform SMTP settings (`PlatformSetting`), and inspect platform audit logs. | **Implemented** (`/super-admin`) |
+| **School Administration & Setup** | Configure school profile, academic years (`AcademicYear`), terms (`Term`), levels (`Level`), classes/streams (`SchoolClass`), subjects (`Subject`), staff invitations (`Invitation`), and role memberships (`SchoolMembership`). | **Implemented** (`/school-setup`) |
+| **Student & Guardian Registry (Registrar)** | Manage student applications (`StudentApplication`), admissions (`Student`), CSV/`.xlsx` bulk imports, guardian contacts (`Guardian`, `StudentGuardian`), class enrollments (`Enrollment`), promotions (`PromotionRecord`), transfers (`TransferRecord`), and certificates (`CertificateRecord`). | **Implemented** (`/registrar`) |
+| **Teacher Management & Assignments** | Assign Class Teachers (`CLASS_TEACHER`) to homeroom classes and Subject Teachers (`TEACHER`) to specific class-subject pairs (`TeacherSubjectAssignment`, `AcademicClassAssignment`). | **Implemented** (`/school-setup`, `/academic`, `/class-teacher`) |
+| **Examinations, Marks & Automated Grading** | Create assessments (`AcademicExamItem`), configure grading scales (`AcademicGradingScale`), enter/validate marks (`AcademicScoreRecord`), compute automated grades/averages/positions, and enforce Academic Master and Headmaster approvals (`AcademicApprovalItem`). | **Implemented** (`/academic`, `/class-teacher`, `/headmaster`) |
+| **Academic Reports & Report Cards** | Generate student term result summaries and printable/publishable report cards (`AcademicReportCardRecord`) once marks are approved. | **Implemented** (`/academic`, `/class-teacher`, `/headmaster`) |
+| **Daily Attendance** | Record and review daily student attendance (`PRESENT`, `ABSENT`, `LATE`, `EXCUSED`) by class and date (`AcademicAttendanceSession`, `AcademicAttendanceEntry`) with revision history. | **Implemented** (`/class-teacher`, `/academic`) |
+| **Bursar & Student Fee Workflows** | Define class/term fee structures (`FeeStructure`), issue student invoices (`Invoice`), record installment payments and sequential receipts (`Payment`), and process fee adjustments (`BursarAdjustmentRequest`). | **Implemented** (`/bursar`) |
+| **Parent Communication Engine** | Transactional email notifications via PostgreSQL `Outbox` (`worker.ts`), plus SMS, WhatsApp, cross-school guardian identity, and expiring report-access links (`ReportAccessLink`). | **Email Live; SMS/WhatsApp/Report Links Designed for Phase 3** |
+
+### Explicitly Out of Scope for Initial MVP
+- Native iOS/Android mobile apps (the MVP is a responsive web application).
+- Complex general-ledger accounting, payroll, and HR management.
+- AI tutoring/content generation and full LMS video/quiz hosting.
+- Heavyweight external infrastructure (Kafka, RabbitMQ, or microservices).
+
+---
+
+## 3. User Roles & Authorization Matrix
+
+SyncAcademy separates **Global User Identity** (`User`) from **Tenant Authorization** (`SchoolMembership` scoped by `schoolId`, `MembershipRole`, and `MembershipStatus`).
+
+| Role Enum | Role Title | Primary Portal Route | Core Responsibilities |
+|---|---|---|---|
+| `SUPER_ADMIN` | Platform Super Administrator | `/super-admin` | Onboard/suspend schools, convert leads, invite school admins, manage platform SMTP settings, and audit platform activity. |
+| `SCHOOL_ADMIN` | School Administrator / Director | `/school-setup`, `/academic` | Configure school profile, academic years, terms, levels, classes, subjects, grading scales, staff invitations, and teacher assignments. |
+| `HEAD_TEACHER` | Headmaster / Principal | `/headmaster`, `/academic` | Executive oversight across academics, admissions, and finance; final approval (`HEADMASTER_APPROVED`) and publication of report cards; approval of fee adjustments. |
+| `REGISTRAR` | Admissions & Records Officer | `/registrar` | Manage applications, student admissions, CSV/Excel imports, guardian records, class enrollments, promotions, transfers, and certificates. |
+| `BURSAR` | School Bursar / Finance Officer | `/bursar` | Manage fee structures, student invoices, payments, receipts, and fee adjustment requests. |
+| `CLASS_TEACHER` | Homeroom / Class Teacher | `/class-teacher` | Record daily class attendance, manage student subject selections for assigned class, enter marks for assigned subjects, and review class report cards. |
+| `TEACHER` | Subject Teacher | `/class-teacher` (`/teaching-responsibilities`) | Enter and submit examination marks for assigned class-subject pairs and track syllabus topics. |
+| `PARENT` | Guardian / Parent | Expiring Report Link / Future `/parent` | Receive SMS, WhatsApp, and Email notifications; view published report cards via expiring links; (Phase 4) cross-school Parent Portal. |
+| `STUDENT` | Enrolled Student | Future `/student` | Core domain record (`Student`) for enrollment, attendance, marks, and report cards. |
+
+| Capability / Domain Action | `SUPER_ADMIN` | `SCHOOL_ADMIN` | `HEAD_TEACHER` | `REGISTRAR` | `BURSAR` | `CLASS_TEACHER` | `TEACHER` | `PARENT` |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Provision / Suspend Schools & Platform Settings | Yes | No | No | No | No | No | No | No |
+| Manage School Staff Invitations | Yes | Yes | Yes | No | No | No | No | No |
+| Configure Academic Years, Terms, Classes & Subjects | Yes | Yes | Yes | View | View | View | View | No |
+| Assign Teachers to Classes & Subjects | Yes | Yes | Yes | No | No | View | View | No |
+| Student Admissions, Imports, Promotions & Transfers | Yes | Yes | View/Approve | Yes | No | View Class | No | No |
+| Enter & Submit Subject Marks | Yes | Yes | View | No | No | Assigned Only | Assigned Only | No |
+| Approve Academic Results & Publish Report Cards | Yes | Academic | Final Approval | No | No | Submit Only | Submit Only | View Own Published |
+| Record Class Attendance | Yes | Yes | View | View | No | Assigned Class | No | View Own Child |
+| Manage Fee Structures, Invoices & Payments | Yes | View | View/Approve Adjustments | Payments/View | Yes | No | No | View Own Child |
+
+---
+
+## 4. End-to-End Portal Workflows
+
+### 4.1 Super Admin Portal (`/super-admin`)
+- **School Onboarding & Leads Conversion**: Register a school or convert a won lead into an active `School` tenant and queue a single-use Headmaster invitation in one transaction.
+- **Tenant Governance**: Search, filter, suspend, or reactivate schools with mandatory audit reasons; configure platform-wide SMTP settings and monitor `Outbox` email/notification delivery health.
+
+### 4.2 Headmaster & School Setup Portals (`/headmaster`, `/school-setup`)
+- **Academic Year & School Configuration**: Create/edit academic years and terms, configure grading bands and pass marks, and close completed academic years once all assessments and submissions are approved.
+- **Staff Lifecycle**: Invite Registrars, Academic Masters, Bursars, and Teachers; resend/revoke invitations; suspend memberships (immediately revoking active sessions while preserving historical records).
+- **Executive Oversight**: Monitor school-wide finance totals, review assessment results across classes, inspect staff audit activity, and grant final approval to student report cards.
+
+### 4.3 Registrar Portal (`/registrar`)
+- **Admissions, Enrollments & Movements**: Process admission applications, register students and guardian contacts, enroll students into classes, transfer students between streams, and execute atomic year-to-year cohort progressions.
+- **Two-Stage CSV / `.xlsx` Student Import**: Upload spreadsheets (up to 5 MB / 5,000 rows), map columns and explicit date formats, preview validation errors without mutating data, and confirm valid rows in resumable atomic batches of 50.
+- **Subject Selections & Roster Issues**: Adjust student subject combinations and resolve teacher-reported roster issues.
+
+### 4.4 Academic Master & Teacher Portals (`/academic`, `/class-teacher`)
+- **Assessments & Marks Lifecycle**:
+  1. Academic Master creates an assessment (`AcademicExamItem`) and allocates classes.
+  2. Assigned Teacher confirms the class/subject roster, records marks (`0`–`100`) with optimistic draft revision checks, and submits completed marks (`SUBMITTED`).
+  3. Academic Master reviews submissions in **Marks Review** and approves (`ACADEMIC_APPROVED`) or returns them with a reason.
+  4. Headmaster reviews prepared student reports and approves/publishes (`HEADMASTER_APPROVED` / `PUBLISHED`) official report cards.
+- **Attendance, Timetables & Planner**: Class teachers record daily attendance (with audited correction reasons); teachers track syllabus topics, exam slots, and student support plans.
+
+### 4.5 Bursar Portal (`/bursar`)
+- **Fee Creation & Application**: Create fee structures in whole Tanzanian Shillings (TZS) for `Term 1`, `Term 2`, or `Full year` across selected classes, and apply them atomically to charge all active, previously uncharged students.
+- **Payments, Receipts, Voids & Corrections**: Record full or installment payments against specific fee charges, issue sequential receipts, apply scholarships/adjustments, void erroneous receipts in open years, or replace a payment via **Save correction & replace receipt** while preserving full audit history.
+
+---
+
+## 5. Product & Engineering Roadmap
+
+- **Phase 0 (Completed)**: Comprehensive repository architecture, implementation, and security audit.
+- **Phase 1 (Completed)**: Security credential remediation, repository cleanup of 0-byte scaffolds and one-off scripts, `AGENTS.md` governance, and unified professional documentation.
+- **Phase 2 (Next)**: Backend multi-tenant RBAC hardening across all controllers (`assertSchoolAccess`), teacher assignment-scoped authorization, academic table consolidation, and cross-tenant IDOR integration tests.
+- **Phase 3**: Multi-channel Guardian Communication Engine (`SmsProvider`, `WhatsAppProvider`, `EmailProvider` via PostgreSQL `Outbox`) and cryptographically signed expiring report-access links (`ReportAccessLink`).
+- **Phase 4**: Cloudflare Pages + R2 + Managed PostgreSQL production pilot deployment for Tanzanian schools and unified cross-school Parent Portal.

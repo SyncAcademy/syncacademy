@@ -46,25 +46,17 @@ npm run docker:up
 
 ## 3. Canonical Documentation Index (`docs/`)
 
-### Product & Portal Workflows (`docs/product/`)
-- [Product Vision](./docs/product/vision.md)
-- [MVP Scope](./docs/product/mvp-scope.md)
-- [Product & Engineering Roadmap](./docs/product/roadmap.md)
-- [User Roles & Permissions Matrix](./docs/product/user-roles.md)
-- [Role Portal Workflows Guide (Super Admin, Headmaster, Registrar, Academic, Teacher, Bursar)](./docs/product/portal-workflows.md)
+The documentation is organized into 4 comprehensive specifications:
 
-### Architecture & Security (`docs/architecture/`)
-- [System Architecture](./docs/architecture/system-architecture.md)
-- [Frontend Architecture (`apps/web`)](./docs/architecture/frontend-architecture.md)
-- [Backend Architecture (`apps/api`)](./docs/architecture/backend-architecture.md)
-- [Database Architecture (`apps/api/prisma`)](./docs/architecture/database-architecture.md)
-- [Multi-Tenancy Architecture](./docs/architecture/multi-tenancy.md)
-- [Security Architecture & Credential Remediation](./docs/architecture/security.md)
-- [Performance, Concurrency & Scalability Architecture](./docs/architecture/performance-and-scalability.md)
-- [Architecture Decision Records (ADRs)](./docs/architecture/adr.md)
+1. **[Product Overview, MVP Scope & Portal Workflows](./docs/product-and-workflows.md)**
+   - Product vision, Tanzanian school context, MVP scope matrix, user roles and capability matrix, end-to-end portal workflows (Super Admin, Headmaster, Registrar, Academic Master, Class & Subject Teachers, Bursar), and the multi-phase engineering roadmap.
 
-### Communication, UX, Development & Deployment
-- [Guardian Identity & Multi-Channel Communication Architecture (SMS, WhatsApp, Email, Expiring Links)](./docs/communication/communication-architecture.md)
-- [Cloudflare-First & Low-Cost Production Deployment Architecture](./docs/deployment/cloudflare-deployment-architecture.md)
-- [UI Preservation & Responsive Layout Guidelines](./docs/UX/responsive-layout-guidelines.md)
-- [Development Setup & Testing Standards](./docs/development/setup-and-testing.md)
+2. **[End-to-End System Design & Architecture](./docs/system-design-and-architecture.md)**
+   - Complete technical architecture from frontend to backend: Angular 18 standalone components and reactive state, UI design system and responsive layout guidelines, NestJS 10 controller inventory and outbox worker, PostgreSQL 16 relational database schema, multi-tenancy isolation model, security architecture and credential governance, query and concurrency optimizations, and Architecture Decision Records (ADRs).
+
+3. **[Guardian Identity & Multi-Channel Communication Architecture](./docs/communication-architecture.md)**
+   - Cross-school family accounts (single parent identity linked to children in multiple SyncAcademy schools), pluggable SMS/WhatsApp/Email provider abstraction, PostgreSQL transactional outbox integration with retry/failover policies, secure expiring report-access links (`ReportAccessLink`), and delivery cost governance.
+
+4. **[Development, Testing & Cloud Deployment Guide](./docs/development-and-deployment.md)**
+   - Local environment bootstrap, automated test suites (backend unit/integration tests and frontend workflow checks), and the hybrid Cloudflare-first low-cost production deployment architecture (Cloudflare Pages + Cloudflare R2 + Containerized NestJS API/Worker + Managed PostgreSQL 16).
+

@@ -21,4 +21,4 @@ npm run build --workspace=apps/api
 npm run build --workspace=apps/web
 node --test apps/api/test/email-templates.test.cjs
 ```
-See [`docs/development/setup-and-testing.md`](./docs/development/setup-and-testing.md) for the complete verification suite.
+See [`docs/development-and-deployment.md`](./docs/development-and-deployment.md) for the complete verification suite.

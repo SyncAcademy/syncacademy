@@ -38,7 +38,7 @@ SyncAcademy uses an **npm workspaces** monorepo layout:
 - `packages/api-contracts/` — Reserved workspace package for shared API request/response contracts (`@syncacademy/api-contracts`).
 - `packages/shared-types/` — Reserved workspace package for shared TypeScript domain types (`@syncacademy/shared-types`).
 - `packages/shared-utils/` — Reserved workspace package for shared pure utility functions (`@syncacademy/shared-utils`).
-- `docs/` — Canonical product, architecture, security, communication, UX, and deployment documentation.
+- `docs/` — Canonical product, architecture, communication, and deployment documentation.
 - `infrastructure/` — Container routing (`infrastructure/nginx.conf`) and deployment reference configurations.
 - `scripts/` — Local environment bootstrap (`scripts/setup-local.mjs`).
 
@@ -48,26 +48,14 @@ SyncAcademy uses an **npm workspaces** monorepo layout:
 
 Before implementing any feature, bugfix, or refactoring, read the relevant canonical documentation:
 
-1. **Product & Scope**:
-   - [`docs/product/vision.md`](./docs/product/vision.md)
-   - [`docs/product/mvp-scope.md`](./docs/product/mvp-scope.md)
-   - [`docs/product/user-roles.md`](./docs/product/user-roles.md)
-   - [`docs/product/portal-workflows.md`](./docs/product/portal-workflows.md)
-   - [`docs/product/roadmap.md`](./docs/product/roadmap.md)
-2. **Architecture & Security**:
-   - [`docs/architecture/system-architecture.md`](./docs/architecture/system-architecture.md)
-   - [`docs/architecture/frontend-architecture.md`](./docs/architecture/frontend-architecture.md)
-   - [`docs/architecture/backend-architecture.md`](./docs/architecture/backend-architecture.md)
-   - [`docs/architecture/database-architecture.md`](./docs/architecture/database-architecture.md)
-   - [`docs/architecture/multi-tenancy.md`](./docs/architecture/multi-tenancy.md)
-   - [`docs/architecture/security.md`](./docs/architecture/security.md)
-   - [`docs/architecture/performance-and-scalability.md`](./docs/architecture/performance-and-scalability.md)
-   - [`docs/architecture/adr.md`](./docs/architecture/adr.md)
-3. **Domain & Infrastructure Guides**:
-   - [`docs/communication/communication-architecture.md`](./docs/communication/communication-architecture.md)
-   - [`docs/deployment/cloudflare-deployment-architecture.md`](./docs/deployment/cloudflare-deployment-architecture.md)
-   - [`docs/UX/responsive-layout-guidelines.md`](./docs/UX/responsive-layout-guidelines.md)
-   - [`docs/development/setup-and-testing.md`](./docs/development/setup-and-testing.md)
+1. **Product Overview, MVP Scope & Portal Workflows**:
+   - [`docs/product-and-workflows.md`](./docs/product-and-workflows.md)
+2. **End-to-End System Design & Architecture (Frontend, Backend, Database, Security, Multi-Tenancy & ADRs)**:
+   - [`docs/system-design-and-architecture.md`](./docs/system-design-and-architecture.md)
+3. **Guardian Identity & Multi-Channel Communication Architecture**:
+   - [`docs/communication-architecture.md`](./docs/communication-architecture.md)
+4. **Development Setup, Testing Standards & Cloudflare Deployment**:
+   - [`docs/development-and-deployment.md`](./docs/development-and-deployment.md)
 
 ---
 

@@ -4,9 +4,8 @@ The SyncAcademy backend (`@syncacademy/api`) is a **NestJS 10 + Prisma 5 + Postg
 
 ## Key References
 - Workspace Agent Rules: [`apps/api/AGENTS.md`](./AGENTS.md)
-- Backend Architecture: [`docs/architecture/backend-architecture.md`](../../docs/architecture/backend-architecture.md)
-- Database Architecture: [`docs/architecture/database-architecture.md`](../../docs/architecture/database-architecture.md)
-- Security Architecture: [`docs/architecture/security.md`](../../docs/architecture/security.md)
+- System Design & Backend Architecture: [`docs/system-design-and-architecture.md`](../../docs/system-design-and-architecture.md)
+
 
 ## Commands
 ```bash

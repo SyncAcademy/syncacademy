@@ -1,6 +1,6 @@
 # SyncAcademy — Guardian Identity & Multi-Channel Communication Architecture
 
-> **Status**: Architectural Design Proposal (Phase 1 Deliverable — Ready for Phase 3 Implementation)
+> **Status**: Architectural Design Specification (Ready for Phase 3 Implementation)
 > **Scope**: Multi-school Guardian Identity, SMS/WhatsApp/Email Provider Abstraction, PostgreSQL Transactional Outbox Integration, Secure Expiring Report-Access Links, Delivery Tracking, and Cost Governance.
 
 ---
@@ -13,7 +13,7 @@ This architecture extends SyncAcademy's existing PostgreSQL `Guardian`, `Student
 1. **Cross-School Family Accounts** (`User` <-> multiple school `Guardian` profiles <-> multiple `Student` records across schools).
 2. **Pluggable Multi-Channel Provider Abstractions** (`SmsProvider`, `WhatsAppProvider`, `EmailProvider`) with automatic failover and Tanzania E.164 phone normalization (`+255...`).
 3. **PostgreSQL-Backed Transactional Outbox** (reusing `Outbox` and `apps/api/src/worker.ts` without introducing Redis or Kafka).
-4. **Secure, Expiring Report-Access Links** allowing guardians to view/download published report cards via SMS/WhatsApp/Email links with optional phone-last-4/OTP verification, revocation, and full access auditing.
+4. **Secure, Expiring Report-Access Links** allowing guardians to view/download published report cards via SMS/WhatsApp/Email links with phone-last-4 verification, revocation, and full access auditing.
 
 ---
 
@@ -195,37 +195,24 @@ sequenceDiagram
 
 ### 5.1 Retry Policy & Dead-Letter Handling
 - **Max Attempts**: `MAX_OUTBOX_ATTEMPTS = 5`.
-- **Exponential Backoff with Jitter**:
-  - Attempt 1: immediate
-  - Attempt 2: `+30 seconds`
-  - Attempt 3: `+2 minutes`
-  - Attempt 4: `+10 minutes`
-  - Attempt 5: `+1 hour`
-- **Channel Failover**:
-  - If a message fails on `WHATSAPP` with a permanent channel error (e.g., number not registered on WhatsApp) or exceeds 2 transient failures, the worker automatically falls back to `SMS` (if `phoneE164` is available and not opted out) or `EMAIL`, logging both attempts in `CommunicationLog`.
-- **Dead-Letter State**:
-  - After 5 failed attempts across primary and fallback channels, `Outbox.status` transitions to `FAILED` with `lastError` populated, surfacing an alert in the School Admin / Super Admin communication monitor for manual contact correction.
+- **Exponential Backoff with Jitter**: Attempt 1 immediate, Attempt 2 `+30s`, Attempt 3 `+2m`, Attempt 4 `+10m`, Attempt 5 `+1h`.
+- **Channel Failover**: If a message fails on `WHATSAPP` with a permanent channel error or exceeds 2 transient failures, the worker automatically falls back to `SMS` or `EMAIL`, logging both attempts in `CommunicationLog`.
+- **Dead-Letter State**: After 5 failed attempts, `Outbox.status` transitions to `FAILED` with `lastError` populated for School Admin / Super Admin inspection.
 
 ---
 
 ## 6. Message Templates & Localization (`sw` / `en`)
-
-Templates are versioned in code (`apps/api/src/communication/templates/`) with strict variable schemas validated by Zod:
 
 | Template Key | Trigger Event | Channels | Example Kiswahili (`sw`) SMS Body (<= 160 chars) |
 |---|---|---|---|
 | `guardian.report_card.published` | Headmaster publishes term report cards | SMS, WhatsApp, Email | `Shule ya {{schoolShortName}}: Matokeo ya {{studentFirstName}} ({{termName}}) yapo tayari. Fungua: {{shortLink}} (Inaisha {{expiryDate}})` |
 | `guardian.attendance.absent` | Student marked `ABSENT` without excuse | SMS, WhatsApp | `Taarifa kutoka {{schoolShortName}}: {{studentFirstName}} hajafika shuleni leo {{date}}. Wasiliana na shule kwa maelezo zaidi.` |
 | `guardian.bursar.payment_received` | Bursar records fee payment | SMS, WhatsApp, Email | `{{schoolShortName}}: Tumepokea TZS {{amount}} kwa ada ya {{studentFirstName}} (Risiti {{receiptNo}}). Salio: TZS {{balance}}.` |
-| `staff.invitation.created` | Super Admin / School Admin invites staff | Email, SMS | Existing branded HTML email (`email-templates.ts`) + optional SMS link notification. |
+| `staff.invitation.created` | Super Admin / School Admin invites staff | Email, SMS | Branded HTML email (`email-templates.ts`) + optional SMS link notification. |
 
 ---
 
-## 7. Secure, Expiring Report-Access Links
-
-To allow guardians to view and download a child's official term report card directly from an SMS, WhatsApp message, or Email **without requiring pre-existing portal credentials**, SyncAcademy uses cryptographically random, single-scope expiring links.
-
-### 7.1 `ReportAccessLink` Data Model
+## 7. Secure, Expiring Report-Access Links (`ReportAccessLink`)
 
 ```prisma
 model ReportAccessLink {
@@ -251,24 +238,14 @@ model ReportAccessLink {
 }
 ```
 
-### 7.2 Security & Verification Mechanics
-1. **High-Entropy Unguessable Token**:
-   - When a report card is published, the backend generates a 32-byte (`256-bit`) cryptographically random base64url token (`rawToken`) and stores **only** `sha256(rawToken)` in `ReportAccessLink.tokenHash`.
-   - The URL sent to the guardian is `https://<app-domain>/r/<rawToken>`.
-2. **Lightweight Guardian Challenge (Defense-in-Depth)**:
-   - When a guardian opens `/r/<rawToken>`, the public verification endpoint (`POST /api/public/report-links/:token/verify`) checks:
-     - Token exists, `revokedAt IS NULL`, `expiresAt > NOW()`, and `accessCount < maxAccessCount`.
-     - If `requirePhoneLast4 = true`, the guardian enters the **last 4 digits of their registered phone number** (or Student Admission Number) before the report card payload/PDF is rendered. Rate-limited to 5 attempts per 15 minutes per IP/token.
-3. **Instant Link Revocation**:
-   - A Headmaster, School Admin, or Registrar can revoke any active report link immediately (`POST /api/schools/:schoolId/academics/report-links/:linkId/revoke`), or the system automatically revokes prior links if a report card is un-published or re-issued.
-4. **Comprehensive Audit Logging**:
-   - Every link creation, verification failure, successful view/download, and revocation writes an immutable `AuditLog` entry (`report_link.created`, `report_link.accessed`, `report_link.verify_failed`, `report_link.revoked`) recording `ipAddress`, `userAgent`, `schoolId`, `studentId`, and `guardianId`.
+1. **High-Entropy Unguessable Token**: Generates a 256-bit random base64url token (`rawToken`) and stores only `sha256(rawToken)` in `ReportAccessLink.tokenHash`.
+2. **Guardian Verification Challenge**: Opening `/r/<rawToken>` verifies that the link is unrevoked, unexpired, and within `maxAccessCount`, and prompts the guardian for the **last 4 digits of their registered phone number** (rate-limited to 5 attempts per 15 minutes).
+3. **Instant Revocation & Audit Logging**: Headmasters, School Admins, or Registrars can revoke any link immediately, and every link creation, verification attempt, view, and revocation writes an immutable `AuditLog` entry.
 
 ---
 
 ## 8. Cost Tracking & School Quota Governance
 
-Because SMS and WhatsApp utility messages incur per-message telecom charges in Tanzania (typically ~15–28 TZS per SMS segment), the communication architecture includes built-in cost controls:
-1. **Per-Message Cost Recording**: `CommunicationLog` stores `channel`, `segments`, `unitCostTzs`, and `providerName` for every dispatched message.
-2. **School Monthly Quota & Budget Caps**: Each `School` tenant can be assigned a monthly SMS/WhatsApp credit quota managed by Super Admin. Non-critical broadcasts pause automatically when a school's quota is exhausted, while critical security/transactional emails continue uninterrupted.
-3. **Deduplication Window**: Outbox enqueueing computes an `idempotencyKey` (`sha256(schoolId + guardianId + templateKey + targetEntityId)`) to prevent duplicate SMS charges if a staff member clicks "Publish & Notify" multiple times.
+1. **Per-Message Cost Recording**: `CommunicationLog` records `channel`, `segments`, `unitCostTzs`, and `providerName` for every dispatched message.
+2. **School Monthly Quotas**: Each `School` tenant has a configurable monthly SMS/WhatsApp quota managed by Super Admin.
+3. **Idempotency Deduplication**: Outbox enqueueing computes `sha256(schoolId + guardianId + templateKey + targetEntityId)` to prevent duplicate message billing on repeated clicks.
