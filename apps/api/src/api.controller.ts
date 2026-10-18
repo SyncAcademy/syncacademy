@@ -485,11 +485,14 @@ export class ApiController {
       message: b.message,
     });
     const { encrypt } = await import('./security');
+    const { config } = await import('./config');
+    const settings = await this.svc.db.platformSetting.findUnique({ where: { id: 1 }, select: { supportEmail: true } });
+    const recipient = config.CONTACT_NOTIFICATION_EMAIL || settings?.supportEmail?.trim() || config.MAIL_FROM;
 
     await this.svc.db.outbox.create({
       data: {
         payload: encrypt(JSON.stringify({
-          to: 'stanlymbilinyi@gmail.com',
+          to: recipient,
           subject: mail.subject,
           text: mail.text,
           html: mail.html,

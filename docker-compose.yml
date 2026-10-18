@@ -15,9 +15,10 @@ x-app: &app
     SMTP_HOST: ${DOCKER_SMTP_HOST:-smtp.gmail.com}
     SMTP_PORT: ${SMTP_PORT:-465}
     SMTP_SECURE: ${SMTP_SECURE:-true}
-    SMTP_USER: ${SMTP_USER:-stanlymbilinyi@gmail.com}
+    SMTP_USER: ${SMTP_USER:-}
     SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-    MAIL_FROM: ${MAIL_FROM:-stanlymbilinyi@gmail.com}
+    MAIL_FROM: ${MAIL_FROM:-noreply@syncacademy.local}
+    CONTACT_NOTIFICATION_EMAIL: ${CONTACT_NOTIFICATION_EMAIL:-}
     TRUST_PROXY_HOPS: 1
   init: true
   restart: unless-stopped

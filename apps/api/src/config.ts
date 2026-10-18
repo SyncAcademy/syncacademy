@@ -15,6 +15,7 @@ const schema = z.object({
   SMTP_USER: z.string().optional(), SMTP_PASSWORD: z.string().optional(),
   SMTP_SECURE: z.enum(['true','false']).default('false'),
   MAIL_FROM: z.string().email(),
+  CONTACT_NOTIFICATION_EMAIL: z.string().email().optional(),
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(2).default(0),
 });
 export const config = schema.parse(process.env);

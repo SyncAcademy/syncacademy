@@ -20,14 +20,15 @@ try {
   const teachers=await db.membership.findMany({where:{schoolId:school.id,role:'TEACHER',active:true},include:{user:true}});
   assert.ok(teachers.length>=40,'Expected the 40 existing teachers.');
   const users=[...new Map([...teachers,advisor].map(m=>[m.userId,m.user])).values()];
-  const original=await readFile('.env','utf8');
-  const oldBlock=original.includes(begin)?original.slice(original.indexOf(begin),original.indexOf(end)+end.length):'';
+  await mkdir('.runtime',{recursive:true,mode:0o700});
+  const credentialsPath='.runtime/kigoma-teacher-logins.credentials.txt';
+  let oldBlock='';
+  try { oldBlock=await readFile(credentialsPath,'utf8'); } catch {}
   const password=oldBlock.match(/^# Shared password: (.+)$/m)?.[1]?.trim()??`Kigoma!${randomBytes(15).toString('base64url')}`;
   const hashes=new Map();
   for(const user of users) hashes.set(user.id,await argon2.hash(password,{type:argon2.argon2id}));
-  await mkdir('.runtime',{recursive:true});
   const backup=`.runtime/kigoma-teacher-accounts-before-${Date.now()}.json`;
-  await writeFile(backup,JSON.stringify({users:users.map(u=>({id:u.id,passwordHash:u.passwordHash,enabled:u.enabled,mustChangePassword:u.mustChangePassword,sessionVersion:u.sessionVersion})),teacherMemberships:teachers.map(({user,...m})=>m)},null,2),{flag:'wx'});
+  await writeFile(backup,JSON.stringify({users:users.map(u=>({id:u.id,passwordHash:u.passwordHash,enabled:u.enabled,mustChangePassword:u.mustChangePassword,sessionVersion:u.sessionVersion})),teacherMemberships:teachers.map(({user,...m})=>m)},null,2),{mode:0o600,flag:'wx'});
   const classes=await db.classroom.findMany({where:{schoolId:school.id},include:{year:true,subjects:true},orderBy:[{year:{name:'asc'}},{name:'asc'}]});
   const allocations=await db.teachingAssignment.findMany({where:{schoolId:school.id},include:{membership:{include:{user:true}}}});
   const classRows=await db.$queryRaw`SELECT "yearId", data->'classTeachers' AS teachers FROM "AcademicWorkspace" WHERE "schoolId"=${school.id}::uuid`;
@@ -71,10 +72,7 @@ try {
     '# Number | Email | Name | Additional role | Subjects taught',
     ...finalTeachers.map((m,i)=>`# ${i+1} | ${m.user.email} | ${m.user.name} | ${m.userId===advisor.userId?'Academic advisor':'Teacher'} | ${[...new Set(m.assignments.flatMap(a=>a.subject?[a.subject.name]:[]))].sort().join(', ')}`),
     '# Class teachers (exactly one per class per academic year):',
-    ...classTeachers.map(c=>`# ${c.year} | ${c.className} | ${finalTeachers.find(m=>m.id===c.membershipId).user.email}`),end].join('\n');
-  // Only replace our comment block; preserve all live environment settings.
-  const next=oldBlock?original.replace(oldBlock,block):original.replace(/\s*$/,'')+'\n\n'+block+'\n';
-  await writeFile('.env',next);
-  assert.deepEqual(parse(next),parse(original),'Only comments may change in .env.');
-  console.log(JSON.stringify({teacherAccounts:finalTeachers.length,sharedPasswordsVerified:true,subjectGapsFilled:filled,advisorTeachingAssignments:advisorAssignments,classesWithOneClassTeacher:classTeachers.length,credentialsFile:'.env',credentialsStartLine:next.slice(0,next.indexOf(begin)).split('\n').length,backup}));
+    ...classTeachers.map(c=>`# ${c.year} | ${c.className} | ${finalTeachers.find(m=>m.id===c.membershipId).user.email}`),end,''].join('\n');
+  await writeFile(credentialsPath,block,{mode:0o600});
+  console.log(JSON.stringify({teacherAccounts:finalTeachers.length,sharedPasswordsVerified:true,subjectGapsFilled:filled,advisorTeachingAssignments:advisorAssignments,classesWithOneClassTeacher:classTeachers.length,credentialsFile:credentialsPath,backup}));
 } finally {await db.$disconnect();}
