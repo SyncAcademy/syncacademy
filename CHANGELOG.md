@@ -33,9 +33,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Added & Consolidated
 - **Agent Governance**: Created authoritative root `AGENTS.md`, `apps/web/AGENTS.md`, and `apps/api/AGENTS.md` enforcing UI preservation, multi-tenancy rules, security standards, and definition of done.
 - **Unified Canonical Specifications (`docs/`)**:
-  - `docs/system-design-and-architecture.md`: Complete end-to-end design from frontend to backend, UI/responsive design standards, database schema, multi-tenancy, security, query optimizations, and ADRs.
+  - `docs/system-design-and-architecture.md`: Complete end-to-end design from frontend to backend, UI/responsive design standards, database schema, multi-tenancy, security, query optimizations, guardian identity, multi-channel communication architecture, and ADRs.
   - `docs/product-and-workflows.md`: Product vision, MVP scope, user roles, capability matrix, end-to-end portal workflows, and roadmap.
-  - `docs/communication-architecture.md`: Cross-school guardian data model, SMS/WhatsApp/Email provider abstractions, transactional outbox integration, and secure expiring report links.
   - `docs/development-and-deployment.md`: Local development bootstrap, automated test standards, and Cloudflare-first low-cost production deployment architecture.
 - **Workspace Documentation**: Added `packages/README.md` defining shared contracts, types, and utility packages.
 

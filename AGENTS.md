@@ -50,11 +50,9 @@ Before implementing any feature, bugfix, or refactoring, read the relevant canon
 
 1. **Product Overview, MVP Scope & Portal Workflows**:
    - [`docs/product-and-workflows.md`](./docs/product-and-workflows.md)
-2. **End-to-End System Design & Architecture (Frontend, Backend, Database, Security, Multi-Tenancy & ADRs)**:
+2. **End-to-End System Design & Architecture (Frontend, Backend, Database, Security, Multi-Tenancy, Guardian Communications & ADRs)**:
    - [`docs/system-design-and-architecture.md`](./docs/system-design-and-architecture.md)
-3. **Guardian Identity & Multi-Channel Communication Architecture**:
-   - [`docs/communication-architecture.md`](./docs/communication-architecture.md)
-4. **Development Setup, Testing Standards & Cloudflare Deployment**:
+3. **Development Setup, Testing Standards & Cloudflare Deployment**:
    - [`docs/development-and-deployment.md`](./docs/development-and-deployment.md)
 
 ---

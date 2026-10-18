@@ -1,6 +1,6 @@
 # SyncAcademy — End-to-End System Design & Architecture
 
-This document is the authoritative technical design specification for SyncAcademy across the **Frontend (`apps/web`)**, **Backend (`apps/api`)**, **Database (`apps/api/prisma`)**, **Multi-Tenancy**, **Security**, **Performance**, and **Architecture Decision Records (ADRs)**.
+This document is the authoritative technical design specification for SyncAcademy across the **Frontend (`apps/web`)**, **Backend (`apps/api`)**, **Database (`apps/api/prisma`)**, **Multi-Tenancy**, **Security**, **Performance**, **Multi-Channel Communications**, and **Architecture Decision Records (ADRs)**.
 
 ---
 
@@ -167,10 +167,65 @@ erDiagram
 
 ---
 
-## 7. Architecture Decision Records (ADRs)
+## 7. Guardian Identity & Multi-Channel Communication Architecture
+
+### 7.1 Cross-School Guardian Data Model
+In Tanzanian schools, parents frequently have children enrolled across multiple SyncAcademy primary and secondary schools. SyncAcademy separates the local guardian school directory contact (`Guardian`) from global parent identity (`User`), joined to students via `StudentGuardian`:
+
+```mermaid
+erDiagram
+    User ||--o{ Guardian : "claims verified identity (userId)"
+    School ||--o{ Guardian : "maintains school record (schoolId)"
+    Guardian ||--o{ StudentGuardian : "links to"
+    Student ||--o{ StudentGuardian : "belongs to"
+    School ||--o{ Student : "enrolls (schoolId)"
+    Guardian ||--o{ ReportAccessLink : "recipient of"
+    Student ||--o{ ReportAccessLink : "published report card"
+```
+
+- **Additive Schema Extensions**:
+  - `Guardian`: `userId` (links to global `User`), `phoneE164`, `whatsappPhoneE164`, `preferredChannel` (`SMS`, `WHATSAPP`, `EMAIL`), `preferredLanguage` (`sw` / `en`), `phoneVerifiedAt`, `optOutSms`, `optOutWhatsapp`.
+  - Multiple guardians per student (`StudentGuardian.isPrimary`, `canReceiveNotifications`), and multiple students across schools linked to one verified guardian identity.
+
+### 7.2 Pluggable Provider Abstractions (SMS, WhatsApp, Email)
+All communication channels implement a unified interface under `apps/api/src/communication/`:
+- **`SmsProvider`**: Direct integration with Tanzanian SMS aggregators (**Beem Africa** or **NextSMS**) supporting local TZS billing, MNO routes (Vodacom, Airtel, Tigo/Mixx, Halotel), and custom Sender ID (`SYNCACADEMY`). Templates enforce GSM-7 encoding (`<= 160` chars).
+- **`WhatsAppProvider`**: Meta WhatsApp Cloud API utility templates (`report_card_published_v1`, `attendance_absence_alert_v1`, `fee_payment_receipt_v1`) with localized parameter interpolation (`sw` / `en`).
+- **`EmailProvider`**: Nodemailer SMTP (configured via encrypted `PlatformSetting` or env variables).
+
+### 7.3 Transactional Outbox Integration & Failover
+- Domain mutations and message enqueueing execute inside the same ACID transaction (`prisma.$transaction`).
+- Background worker (`apps/api/src/worker.ts`) polls `Outbox` rows every `5000ms`, dispatches via the guardian's preferred channel, and automatically fails over to secondary channels (e.g., `WHATSAPP` -> `SMS` -> `EMAIL`) on permanent channel errors.
+- Max 5 attempts with exponential backoff (`+30s`, `+2m`, `+10m`, `+1h`), with full delivery telemetry and unit costs (TZS) recorded in `CommunicationLog`.
+
+### 7.4 Secure, Expiring Report-Access Links (`ReportAccessLink`)
+Allows parents to view and download term report cards from an SMS, WhatsApp message, or Email without requiring pre-created portal passwords:
+```prisma
+model ReportAccessLink {
+  id                  String    @id @default(cuid())
+  schoolId            String
+  reportCardId        String
+  studentId           String
+  guardianId          String
+  tokenHash           String    @unique // SHA-256 of 256-bit URL token
+  expiresAt           DateTime  // Default: +14 days
+  revokedAt           DateTime?
+  maxAccessCount      Int       @default(25)
+  accessCount         Int       @default(0)
+  requirePhoneLast4   Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+}
+```
+- High-entropy 256-bit URL token (`/r/<token>`), unguessable and stored only as SHA-256 hash.
+- Lightweight identity challenge: guardian enters the last 4 digits of their registered phone number before viewing the report card (rate-limited to 5 attempts per 15 minutes).
+- Instant revocation by school headmasters/registrars and immutable audit logging on every access attempt.
+
+---
+
+## 8. Architecture Decision Records (ADRs)
 
 - **ADR-001 (Frontend Stack)**: Retain **Angular 18 + Ionic 8** (`apps/web`) and strictly preserve the implemented UI portals rather than rewriting into another framework.
 - **ADR-002 (Authentication)**: Use **PostgreSQL-backed opaque sessions (`UserSession`) + CSRF headers** instead of stateless JWTs in `localStorage`, enabling instant session revocation when staff memberships are suspended.
-- **ADR-003 (Async Messaging)**: Use the **PostgreSQL Transactional Outbox (`Outbox` + `worker.ts`)** instead of Redis/Kafka, guaranteeing atomic event enqueueing and low infrastructure cost.
+- **ADR-003 (Async Messaging & Outbox)**: Use the **PostgreSQL Transactional Outbox (`Outbox` + `worker.ts`)** instead of Redis/Kafka, guaranteeing atomic event enqueueing and low infrastructure cost.
 - **ADR-004 (Multi-Tenancy)**: Use a **shared PostgreSQL schema discriminated by `schoolId`** with global `User` identity so staff and cross-school guardians can hold relationships across multiple schools.
 - **ADR-005 (Academic Schema Unification)**: Complete consolidation of legacy academic tables (`Examination`, `Mark`, `ReportCard`) into the active normalized `Academic*` relational tables in Phase 2.
