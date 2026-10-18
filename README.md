@@ -37,7 +37,7 @@ npm run dev:worker
 npm run dev:web
 ```
 
- Or run the full stack via Docker Compose:
+Or run the full stack via Docker Compose:
 ```bash
 npm run docker:up
 ```
@@ -46,19 +46,21 @@ npm run docker:up
 
 ## 3. Canonical Documentation Index (`docs/`)
 
-### Product & Scope
+### Product & Portal Workflows (`docs/product/`)
 - [Product Vision](./docs/product/vision.md)
 - [MVP Scope](./docs/product/mvp-scope.md)
 - [Product & Engineering Roadmap](./docs/product/roadmap.md)
 - [User Roles & Permissions Matrix](./docs/product/user-roles.md)
+- [Role Portal Workflows Guide (Super Admin, Headmaster, Registrar, Academic, Teacher, Bursar)](./docs/product/portal-workflows.md)
 
-### System, Frontend, Backend, Database & Security Architecture
+### Architecture & Security (`docs/architecture/`)
 - [System Architecture](./docs/architecture/system-architecture.md)
 - [Frontend Architecture (`apps/web`)](./docs/architecture/frontend-architecture.md)
 - [Backend Architecture (`apps/api`)](./docs/architecture/backend-architecture.md)
 - [Database Architecture (`apps/api/prisma`)](./docs/architecture/database-architecture.md)
 - [Multi-Tenancy Architecture](./docs/architecture/multi-tenancy.md)
 - [Security Architecture & Credential Remediation](./docs/architecture/security.md)
+- [Performance, Concurrency & Scalability Architecture](./docs/architecture/performance-and-scalability.md)
 - [Architecture Decision Records (ADRs)](./docs/architecture/adr.md)
 
 ### Communication, UX, Development & Deployment
@@ -66,12 +68,3 @@ npm run docker:up
 - [Cloudflare-First & Low-Cost Production Deployment Architecture](./docs/deployment/cloudflare-deployment-architecture.md)
 - [UI Preservation & Responsive Layout Guidelines](./docs/UX/responsive-layout-guidelines.md)
 - [Development Setup & Testing Standards](./docs/development/setup-and-testing.md)
-
-### Operational & Portal Implementation Guides
-- [Super Admin Frontend Guide](./docs/SUPER_ADMIN_FRONTEND.md)
-- [Academic Portal Guide](./docs/ACADEMIC_PORTAL.md) & [Academic Storage Normalization](./docs/ACADEMIC_STORAGE_MIGRATION.md)
-- [Registrar Workflows Guide](./docs/REGISTRAR_WORKFLOWS.md) & [Student Management](./docs/STUDENT_MANAGEMENT_IMPLEMENTED.md)
-- [Headmaster Oversight Portal Guide](./docs/HEADMASTER_OVERSIGHT.md)
-- [Bursar & Finance Workflows](./docs/FINANCE_AND_UI_REVIEW.md) & [Bursar Fee Guide](./docs/BURSAR_FEE_GUIDE.md)
-- [Kigoma Regional Load-Testing Dataset](./docs/KIGOMA_LOAD_DATA.md)
-- [Performance Optimization](./docs/PERFORMANCE_OPTIMIZATION.md) & [Scalability Validation](./docs/SCALABILITY_VALIDATION.md)

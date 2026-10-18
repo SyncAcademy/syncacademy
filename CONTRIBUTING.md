@@ -19,6 +19,6 @@ Thank you for contributing to SyncAcademy. All contributors and automated coding
 npm run prisma:generate --workspace=apps/api
 npm run build --workspace=apps/api
 npm run build --workspace=apps/web
-node --test scripts/kigoma-load-data.test.mjs apps/api/test/email-templates.test.cjs
+node --test apps/api/test/email-templates.test.cjs
 ```
 See [`docs/development/setup-and-testing.md`](./docs/development/setup-and-testing.md) for the complete verification suite.

@@ -45,25 +45,43 @@ npm run dev:worker
 npm run dev:web
 ```
 
-Alternatively, start the entire stack in Docker Compose:
+Alternatively, start the entire stack in Docker Compose (`http://localhost:8080`):
 ```bash
 npm run docker:up
 ```
 
 ---
 
-## 3. Testing Standards & Verification Suites
+## 3. Local SMTP & Transactional Email Configuration
 
-SyncAcademy uses Node's built-in test runner (`node --test`) for backend and script tests, plus deterministic portal workflow verification scripts in `apps/web/scripts/`.
+For local testing of staff invitations, password resets, and contact inquiries, configure SMTP credentials privately in your untracked `.env` file (never in committed files):
 
-### 3.1 Build Verification (Required Before Every Commit)
+```dotenv
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_smtp_username
+SMTP_PASS=your_smtp_password
+MAIL_FROM=noreply@syncacademy.local
+CONTACT_NOTIFICATION_EMAIL=support@syncacademy.local
+```
+
+After updating `.env`, restart the background outbox worker (`npm run dev:worker` or `docker compose up -d --force-recreate worker`).
+
+---
+
+## 4. Testing Standards & Verification Suites
+
+SyncAcademy uses Node's built-in test runner (`node --test`) for backend unit/integration tests, plus deterministic portal workflow verification scripts in `apps/web/scripts/`.
+
+### 4.1 Build Verification (Required Before Every Commit)
 ```bash
 npm run prisma:generate --workspace=apps/api
 npm run build --workspace=apps/api
 npm run build --workspace=apps/web
 ```
 
-### 3.2 Backend Unit & Integration Tests (`apps/api/test/`)
+### 4.2 Backend Unit & Integration Tests (`apps/api/test/`)
 - **Unit Tests (No Database Required)**:
   - `node --test apps/api/test/email-templates.test.cjs` — Verifies branded transactional HTML/text email templates and inline logo CID attachments.
   - `node --test apps/api/test/platform-settings.test.cjs` — Verifies platform settings normalization, AES-256-GCM SMTP password encryption, and fallback behavior.
@@ -75,7 +93,7 @@ npm run build --workspace=apps/web
     npm test --workspace=apps/api
     ```
 
-### 3.3 Frontend Portal Workflow Verification Scripts (`apps/web/scripts/`)
+### 4.3 Frontend Portal Workflow Verification Scripts (`apps/web/scripts/`)
 Run all 8 role-portal workflow checks:
 ```bash
 npm run test:registrar-workflow --workspace=apps/web
@@ -94,9 +112,3 @@ node apps/web/scripts/check-school-sync.mjs
 node apps/web/scripts/check-student-result-summary.mjs
 node apps/web/scripts/check-teaching-responsibilities.mjs
 ```
-
-### 3.4 Regional Load-Testing Data Generator Tests (`scripts/`)
-```bash
-node --test scripts/kigoma-load-data.test.mjs
-```
-See [`docs/KIGOMA_LOAD_DATA.md`](../KIGOMA_LOAD_DATA.md) for instructions on seeding and verifying the multi-school Kigoma regional dataset.

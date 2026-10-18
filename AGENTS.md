@@ -40,7 +40,7 @@ SyncAcademy uses an **npm workspaces** monorepo layout:
 - `packages/shared-utils/` — Reserved workspace package for shared pure utility functions (`@syncacademy/shared-utils`).
 - `docs/` — Canonical product, architecture, security, communication, UX, and deployment documentation.
 - `infrastructure/` — Container routing (`infrastructure/nginx.conf`) and deployment reference configurations.
-- `scripts/` — Local environment bootstrap (`scripts/setup-local.mjs`), Kigoma regional load-testing data generators, and performance benchmarks.
+- `scripts/` — Local environment bootstrap (`scripts/setup-local.mjs`).
 
 ---
 
@@ -52,6 +52,7 @@ Before implementing any feature, bugfix, or refactoring, read the relevant canon
    - [`docs/product/vision.md`](./docs/product/vision.md)
    - [`docs/product/mvp-scope.md`](./docs/product/mvp-scope.md)
    - [`docs/product/user-roles.md`](./docs/product/user-roles.md)
+   - [`docs/product/portal-workflows.md`](./docs/product/portal-workflows.md)
    - [`docs/product/roadmap.md`](./docs/product/roadmap.md)
 2. **Architecture & Security**:
    - [`docs/architecture/system-architecture.md`](./docs/architecture/system-architecture.md)
@@ -60,11 +61,12 @@ Before implementing any feature, bugfix, or refactoring, read the relevant canon
    - [`docs/architecture/database-architecture.md`](./docs/architecture/database-architecture.md)
    - [`docs/architecture/multi-tenancy.md`](./docs/architecture/multi-tenancy.md)
    - [`docs/architecture/security.md`](./docs/architecture/security.md)
+   - [`docs/architecture/performance-and-scalability.md`](./docs/architecture/performance-and-scalability.md)
    - [`docs/architecture/adr.md`](./docs/architecture/adr.md)
 3. **Domain & Infrastructure Guides**:
    - [`docs/communication/communication-architecture.md`](./docs/communication/communication-architecture.md)
    - [`docs/deployment/cloudflare-deployment-architecture.md`](./docs/deployment/cloudflare-deployment-architecture.md)
-   - [`docs/UX/ui-guidelines.md`](./docs/UX/ui-guidelines.md)
+   - [`docs/UX/responsive-layout-guidelines.md`](./docs/UX/responsive-layout-guidelines.md)
    - [`docs/development/setup-and-testing.md`](./docs/development/setup-and-testing.md)
 
 ---
@@ -153,7 +155,6 @@ Before considering any change complete, verify:
      - `npm run test:class-teacher --workspace=apps/web`
      - `npm run test:school-setup --workspace=apps/web`
      - `npm run test:super-admin --workspace=apps/web`
-   - Load-data generator tests: `node --test scripts/kigoma-load-data.test.mjs`
 
 ---
 
