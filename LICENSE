@@ -1,36 +1,42 @@
-PROPRIETARY AND CONFIDENTIAL SOFTWARE LICENSE
+SYNCACADEMY COMMERCIAL SOFTWARE LICENSE (SOURCE-AVAILABLE)
 
 Copyright (c) 2026 SyncAcademy Technologies. All Rights Reserved.
 
-NOTICE: This software, its source code, documentation, interfaces, architecture,
-and design assets are the exclusive proprietary and confidential property of
-SyncAcademy Technologies and its licensors.
+This repository is publicly available for source code inspection, educational review,
+and non-production evaluation. This software is a commercial product and is NOT
+open-source software under an OSI-approved license.
 
-1. PROPRIETARY RIGHTS
-   This software is licensed on a commercial basis, NOT SOLD, and is NOT open-source
-   software. All title, ownership, intellectual property rights, and copyrights in
-   and to this software and any copies thereof remain exclusively with SyncAcademy
-   Technologies.
+1. RESERVATION OF RIGHTS
+   SyncAcademy Technologies reserves all rights not expressly granted herein. All
+   title, ownership, intellectual property rights, and copyrights in and to this
+   software, its source code, designs, documentation, and architecture remain
+   exclusively with SyncAcademy Technologies.
 
-2. RESTRICTIONS ON USE
-   Unless explicitly authorized under a separate written commercial agreement
-   executed by an authorized representative of SyncAcademy Technologies, you may NOT:
-   a. Copy, reproduce, duplicate, distribute, disclose, or publish this software
-      or any part of its source code in any form or by any means.
-   b. Modify, adapt, translate, reverse engineer, decompile, disassemble, or
-      create derivative works based on this software or any portion thereof.
-   c. Sell, rent, lease, sublicense, assign, transfer, host, outsource, or
-      otherwise commercially exploit this software for the benefit of any third party.
-   d. Remove, alter, or obscure any copyright notice, trademark, proprietary legend,
-      or confidentiality notice on or within this repository or software.
+2. PERMITTED USE
+   You are permitted to:
+   a. View, clone, read, and inspect the source code publicly for review, educational
+      purposes, and security evaluation.
+   b. Run the software locally in a non-production personal development environment
+      solely for evaluating its technical capabilities.
 
-3. CONFIDENTIALITY
-   All source code, schemas, documentation, and technical materials contained in this
-   repository constitute trade secrets and confidential commercial information. Any
-   unauthorized access, use, or disclosure is strictly prohibited and may result in
-   severe civil and criminal penalties under applicable laws.
+3. PROHIBITED USES
+   Without an explicit written commercial agreement executed by SyncAcademy Technologies,
+   you may NOT:
+   a. Deploy, host, or operate this software in a production or live school environment.
+   b. Provide, resell, sublicense, or host this software as a commercial SaaS, cloud
+      service, or managed service to any school, institution, or third party.
+   c. Create, distribute, or publish derivative commercial works, distributions, or
+      competing products based on this source code.
+   d. Remove, alter, or obscure any copyright notices, trademarks, or proprietary
+      legends on or within this repository.
 
-4. DISCLAIMER OF WARRANTY
+4. COMMERCIAL LICENSING & INQUIRIES
+   To obtain a commercial license for deploying, hosting, or operating SyncAcademy for
+   schools or educational institutions, please contact:
+   - Email: licensing@syncacademy.co.tz (or support@syncacademy.co.tz)
+   - Website: https://syncacademy.co.tz
+
+5. DISCLAIMER OF WARRANTY
    THIS SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTY OF ANY KIND,
    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE

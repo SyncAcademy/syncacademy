@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Restricted Credential Generation**: Updated `scripts/configure-kigoma-teacher-logins.mjs` (prior to script removal) to write credentials exclusively to `.runtime/` with restrictive `0o600` permissions.
 - **Git History Remediation Runbook**: Documented step-by-step `git filter-repo` procedure in `docs/system-design-and-architecture.md` for cleaning historical commits upon owner approval.
 - **Commercial Security Policy**: Added root `SECURITY.md` defining private vulnerability reporting SLA, tenant isolation guarantees, and responsible disclosure terms.
-- **Commercial Proprietary License**: Replaced 0-byte `LICENSE` with commercial, proprietary closed-source terms (all rights reserved).
+- **Commercial Source-Available License**: Replaced 0-byte `LICENSE` with commercial source-available terms (publicly viewable on GitHub for evaluation and review, but proprietary with all rights reserved, not open source).
 
 ### Removed & Cleaned Up
 - **Scaffolds & UI Scripts**: Removed 104 unrouted, 0-byte, and ad-hoc mutation scripts (`update.js`, `apps/web/*.py`, unused 0-byte NestJS module stubs, 0-byte package sub-files, and misplaced CI workflows).
