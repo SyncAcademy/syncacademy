@@ -1,19 +1,77 @@
-# SyncAcademy
+# SyncAcademy MVP
 
-Angular frontend, NestJS API, and PostgreSQL. Authentication and school onboarding use real database records; the original dashboard layouts are retained, with unfinished workflows marked unavailable until their APIs are implemented. See [UI integration status](docs/ORIGINAL_UI_BACKEND_INTEGRATION.md) and [student management](docs/STUDENT_MANAGEMENT_IMPLEMENTED.md).
+SyncAcademy is a multi-tenant education management SaaS platform built initially for Tanzanian primary and secondary schools. It unites school administration, registrar admissions, teacher assignments, examination marks entry, NECTA-aligned grading, academic approvals, report cards, attendance, bursar fee workflows, and guardian communications in one connected web platform.
 
-## Run locally
+---
 
-With Docker Desktop running, generate configuration once, then build and start:
+## 1. Technology Stack
 
-```sh
+- **Frontend (`apps/web`)**: Angular 18 + Ionic 8 + TypeScript + SCSS (`syncacademy-web`)
+- **Backend (`apps/api`)**: NestJS 10 + Express + TypeScript (`@syncacademy/api`)
+- **Database & ORM (`apps/api/prisma`)**: PostgreSQL 16 + Prisma 5 (`schema.prisma`, transactional `Outbox`)
+- **Shared Workspace Packages (`packages/*`)**: `@syncacademy/api-contracts`, `@syncacademy/shared-types`, `@syncacademy/shared-utils`
+- **Target Production Topology**: Cloudflare Pages (SPA) + Cloudflare R2 (Object Storage) + Cloudflare DNS/WAF + Containerized NestJS API/Worker + Managed PostgreSQL 16
+
+> **Governance Notice**: Before making any changes to this repository, read [`AGENTS.md`](./AGENTS.md), [`apps/web/AGENTS.md`](./apps/web/AGENTS.md), and [`apps/api/AGENTS.md`](./apps/api/AGENTS.md). The existing UI in `apps/web` is strictly protected.
+
+---
+
+## 2. Quick Start (Local Development)
+
+```bash
+# 1. Install workspace dependencies
+npm ci
+
+# 2. Generate local .env file with random cryptographic secrets
 node scripts/setup-local.mjs
-docker compose build
-docker compose up -d
+
+# 3. Start PostgreSQL 16 and apply Prisma migrations + seed data
+docker compose up -d db
+npm run prisma:generate --workspace=apps/api
+npm run prisma:migrate:deploy --workspace=apps/api
+npm run prisma:seed --workspace=apps/api
+
+# 4. Run API, Outbox Worker, and Angular Web App
+npm run dev:api
+npm run dev:worker
+npm run dev:web
 ```
 
-Do not regenerate an existing `.env`. Open http://localhost:8080/auth/login. Email delivery uses the SMTP settings in `.env`.
+ Or run the full stack via Docker Compose:
+```bash
+npm run docker:up
+```
 
-See [authentication setup and admin bootstrap](docs/AUTHENTICATION_IMPLEMENTED.md) for creating the first administrator, Gmail configuration, tests, and remaining work. The [backend handoff](docs/BACKEND_AGENT_HANDOFF.md) describes the wider implementation plan.
+---
 
-Keep `.env` and `.runtime` private. Ordinary container restarts preserve the database; `docker compose down -v` deletes its volume.
+## 3. Canonical Documentation Index (`docs/`)
+
+### Product & Scope
+- [Product Vision](./docs/product/vision.md)
+- [MVP Scope](./docs/product/mvp-scope.md)
+- [Product & Engineering Roadmap](./docs/product/roadmap.md)
+- [User Roles & Permissions Matrix](./docs/product/user-roles.md)
+
+### System, Frontend, Backend, Database & Security Architecture
+- [System Architecture](./docs/architecture/system-architecture.md)
+- [Frontend Architecture (`apps/web`)](./docs/architecture/frontend-architecture.md)
+- [Backend Architecture (`apps/api`)](./docs/architecture/backend-architecture.md)
+- [Database Architecture (`apps/api/prisma`)](./docs/architecture/database-architecture.md)
+- [Multi-Tenancy Architecture](./docs/architecture/multi-tenancy.md)
+- [Security Architecture & Credential Remediation](./docs/architecture/security.md)
+- [Architecture Decision Records (ADRs)](./docs/architecture/adr.md)
+
+### Communication, UX, Development & Deployment
+- [Guardian Identity & Multi-Channel Communication Architecture (SMS, WhatsApp, Email, Expiring Links)](./docs/communication/communication-architecture.md)
+- [Cloudflare-First & Low-Cost Production Deployment Architecture](./docs/deployment/cloudflare-deployment-architecture.md)
+- [UI Preservation & Responsive Layout Guidelines](./docs/UX/responsive-layout-guidelines.md)
+- [Development Setup & Testing Standards](./docs/development/setup-and-testing.md)
+
+### Operational & Portal Implementation Guides
+- [Super Admin Frontend Guide](./docs/SUPER_ADMIN_FRONTEND.md)
+- [Academic Portal Guide](./docs/ACADEMIC_PORTAL.md) & [Academic Storage Normalization](./docs/ACADEMIC_STORAGE_MIGRATION.md)
+- [Registrar Workflows Guide](./docs/REGISTRAR_WORKFLOWS.md) & [Student Management](./docs/STUDENT_MANAGEMENT_IMPLEMENTED.md)
+- [Headmaster Oversight Portal Guide](./docs/HEADMASTER_OVERSIGHT.md)
+- [Bursar & Finance Workflows](./docs/FINANCE_AND_UI_REVIEW.md) & [Bursar Fee Guide](./docs/BURSAR_FEE_GUIDE.md)
+- [Kigoma Regional Load-Testing Dataset](./docs/KIGOMA_LOAD_DATA.md)
+- [Performance Optimization](./docs/PERFORMANCE_OPTIMIZATION.md) & [Scalability Validation](./docs/SCALABILITY_VALIDATION.md)
