@@ -29,7 +29,7 @@
     "@angular/router": "20.3.32",
     "@ionic/angular": "^8.0.0",
     "exceljs": "4.4.0",
-    "ionicons": "^7.2.1",
+    "ionicons": "^8.1.0",
     "rxjs": "~7.8.0",
     "socket.io-client": "^4.8.4",
     "tslib": "^2.6.0",
