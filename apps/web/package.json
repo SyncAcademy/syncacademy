@@ -19,7 +19,7 @@
     "test:super-admin": "node scripts/check-super-admin.mjs"
   },
   "dependencies": {
-    "@angular/animations": "20.3.32",
+    "@angular/animations": "22.2.3",
     "@angular/common": "20.3.32",
     "@angular/compiler": "20.3.32",
     "@angular/core": "20.3.32",
