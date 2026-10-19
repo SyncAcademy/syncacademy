@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # Maintain dependencies for npm root workspace
+  # Root workspace
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -8,16 +8,9 @@ updates:
       day: "monday"
       time: "05:00"
       timezone: "Africa/Dar_es_Salaam"
-    open-pull-requests-limit: 10
-    groups:
-      dev-dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+    open-pull-requests-limit: 0
 
-  # Maintain dependencies for apps/api
+  # API service
   - package-ecosystem: "npm"
     directory: "/apps/api"
     schedule:
@@ -25,16 +18,9 @@ updates:
       day: "monday"
       time: "05:00"
       timezone: "Africa/Dar_es_Salaam"
-    open-pull-requests-limit: 10
-    groups:
-      dev-dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+    open-pull-requests-limit: 0
 
-  # Maintain dependencies for apps/web
+  # Web frontend
   - package-ecosystem: "npm"
     directory: "/apps/web"
     schedule:
@@ -42,16 +28,9 @@ updates:
       day: "monday"
       time: "05:00"
       timezone: "Africa/Dar_es_Salaam"
-    open-pull-requests-limit: 10
-    groups:
-      dev-dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+    open-pull-requests-limit: 0
 
-  # Maintain GitHub Actions workflows
+  # GitHub Actions workflows
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -59,4 +38,4 @@ updates:
       day: "monday"
       time: "05:00"
       timezone: "Africa/Dar_es_Salaam"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
