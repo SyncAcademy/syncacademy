@@ -38,7 +38,7 @@
     "@types/connect-pg-simple": "7.0.3",
     "@types/express": "5.0.3",
     "@types/express-session": "1.18.2",
-    "@types/node": "22.19.0",
+    "@types/node": "26.6.5",
     "@types/nodemailer": "7.0.4",
     "@types/pg": "8.15.6",
     "@types/qrcode": "1.5.6",
