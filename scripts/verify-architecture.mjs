@@ -15,7 +15,12 @@ try {
     .split('\n')
     .filter(Boolean);
 
+  const keyTokens = ['BEGIN ' + 'PRIVATE KEY', 'BEGIN ' + 'RSA PRIVATE KEY', 'BEGIN ' + 'OPENSSH PRIVATE KEY'];
+
   for (const file of trackedFiles) {
+    // Skip self-check
+    if (file === 'scripts/verify-architecture.mjs') continue;
+
     const baseName = file.split('/').pop() || '';
     if (baseName === '.env' || (baseName.startsWith('.env.') && baseName !== '.env.example')) {
       violations.push(`Forbidden tracked environment file: ${file}`);
@@ -30,8 +35,11 @@ try {
       const fullPath = join(ROOT_DIR, file);
       if (existsSync(fullPath)) {
         const content = readFileSync(fullPath, 'utf-8');
-        if (content.includes('BEGIN PRIVATE KEY') || content.includes('BEGIN RSA PRIVATE KEY') || content.includes('BEGIN OPENSSH PRIVATE KEY')) {
-          violations.push(`Potential private key found in tracked file: ${file}`);
+        for (const token of keyTokens) {
+          if (content.includes(token)) {
+            violations.push(`Potential private key found in tracked file: ${file}`);
+            break;
+          }
         }
       }
     }
