@@ -69,6 +69,7 @@ Unless explicitly instructed and approved by the repository owner for a specific
 5. Replace existing components or alter navigation hierarchies.
 6. Remove or alter working form controls, tables, or interactive workflows.
 7. Introduce a competing CSS framework (such as Tailwind or Bootstrap) or another frontend framework.
+8. Do not use Emojis in anywhere in the code and minimize the use of em-dashes.
 
 When wiring new backend capabilities into the frontend, preserve the exact visual structure, class names, and design tokens established in `apps/web/src/styles.scss` and the existing portal components.
 

@@ -9,7 +9,8 @@
     "bootstrap": "node dist/bootstrap.js",
     "prisma:generate": "prisma generate",
     "migrate": "prisma migrate deploy",
-    "test:integration": "node --test test/auth.test.cjs"
+    "test:integration": "node --test test/auth.test.cjs",
+    "test": "npm run test:integration"
   },
   "dependencies": {
     "@nestjs/common": "11.2.6",

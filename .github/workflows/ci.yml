@@ -1,0 +1,99 @@
+name: SyncAcademy CI
+
+on:
+  push:
+    branches:
+      - main
+      - testing
+  pull_request:
+    branches:
+      - main
+      - testing
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build, Lint, Test & Verify
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: syncacademy_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      PORT: 3101
+      APP_ORIGIN: http://localhost:4200
+      API_URL: http://localhost:3101
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/syncacademy_test
+      REALTIME_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/syncacademy_test
+      SESSION_SECRET: syncacademy-ci-testing-session-secret-32-chars-long
+      DATA_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      CONTACT_NOTIFICATION_EMAIL: ""
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npm run prisma:generate --workspace=apps/api
+
+      - name: Build API backend
+        run: npm run build --workspace=apps/api
+
+      - name: Build Web application
+        run: npm run build --workspace=apps/web
+
+      - name: Run Backend in-memory unit tests
+        run: npm run test
+
+      - name: Apply Prisma database migrations
+        run: npx prisma migrate deploy --schema=apps/api/prisma/schema.prisma
+
+      - name: Run Backend database integration tests
+        run: node --test apps/api/test/auth.test.cjs
+
+      - name: Run Frontend portal workflow verification scripts
+        run: |
+          npm run test:registrar-workflow --workspace=apps/web
+          npm run test:academic-workflow --workspace=apps/web
+          npm run test:academic-years --workspace=apps/web
+          npm run test:bursar-workflow --workspace=apps/web
+          npm run test:head-oversight --workspace=apps/web
+          npm run test:class-teacher --workspace=apps/web
+          npm run test:school-setup --workspace=apps/web
+          npm run test:super-admin --workspace=apps/web
+
+      - name: Run Frontend state & concurrency verification scripts
+        run: |
+          node apps/web/scripts/check-concurrent-drafts.mjs
+          node apps/web/scripts/check-school-sync.mjs
+          node apps/web/scripts/check-student-result-summary.mjs
+          node apps/web/scripts/check-teaching-responsibilities.mjs
