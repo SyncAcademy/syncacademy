@@ -27,7 +27,7 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: syncacademy_test
+          POSTGRES_DB: syncacademy_auth_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
@@ -43,11 +43,15 @@ jobs:
       PORT: 3101
       APP_ORIGIN: http://localhost:4200
       API_URL: http://localhost:3101
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/syncacademy_test
-      REALTIME_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/syncacademy_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/syncacademy_auth_test
+      REALTIME_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/syncacademy_auth_test
       SESSION_SECRET: syncacademy-ci-testing-session-secret-32-chars-long
       DATA_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      SMTP_HOST: localhost
+      MAIL_FROM: noreply@syncacademy.test
       CONTACT_NOTIFICATION_EMAIL: ""
+      EMAIL_PROVIDER: mock
+      COMMUNICATION_MOCK_DISPATCH: "true"
 
     steps:
       - name: Checkout repository
@@ -61,6 +65,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Typecheck frontend
+        run: npm run lint --workspace=apps/web
 
       - name: Generate Prisma Client
         run: npm run prisma:generate --workspace=apps/api

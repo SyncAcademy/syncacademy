@@ -11,7 +11,7 @@
     "test:registrar-workflow": "node scripts/check-registrar-workflow.mjs",
     "test:academic-workflow": "node scripts/check-academic-workflow.mjs",
     "test:academic-years": "node scripts/check-academic-years.mjs",
-    "lint": "ng lint",
+    "lint": "tsc --noEmit -p tsconfig.app.json",
     "test:bursar-workflow": "node scripts/check-bursar-workflow.mjs",
     "test:head-oversight": "node scripts/check-head-oversight.mjs",
     "test:class-teacher": "node scripts/check-class-teacher.mjs",
