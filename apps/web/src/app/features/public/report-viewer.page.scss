@@ -1,0 +1,517 @@
+@use '../../../styles/variables' as *;
+
+.report-viewer-viewport {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background-color: $body-bg;
+  font-family: $font-family;
+  color: $text-primary;
+  touch-action: manipulation;
+}
+
+.viewer-header {
+  background-color: #FFFFFF;
+  border-bottom: 1px solid #E5E7EB;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+
+  .header-content {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      .brand-divider {
+        color: #D1D5DB;
+        font-weight: 300;
+      }
+
+      .portal-badge {
+        font-size: 13px;
+        font-weight: 600;
+        color: $primary-orange;
+        background-color: $primary-orange-light;
+        padding: 4px 10px;
+        border-radius: 9999px;
+      }
+    }
+  }
+}
+
+.viewer-main {
+  flex: 1;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 16px max(32px, env(safe-area-inset-bottom));
+}
+
+/* Loading State */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+
+  .spinner {
+    width: 44px;
+    height: 44px;
+    border: 3px solid rgba(232, 126, 36, 0.2);
+    border-top-color: $primary-orange;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .loading-text {
+    margin-top: 16px;
+    color: $text-secondary;
+    font-size: 15px;
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Alert Card */
+.alert-card {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border-radius: $radius-md;
+  margin-bottom: 24px;
+
+  &.alert-error {
+    background-color: #FEF2F2;
+    border: 1px solid #FCA5A5;
+    color: #991B1B;
+
+    .alert-icon {
+      font-weight: bold;
+      background: #EF4444;
+      color: #fff;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    h4 {
+      margin: 0 0 4px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+  }
+}
+
+/* Challenge Verification Card */
+.challenge-wrapper {
+  max-width: 460px;
+  margin: 40px auto;
+
+  .challenge-card {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: $radius-lg;
+    padding: 28px 24px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+
+    .card-header {
+      text-align: center;
+      margin-bottom: 24px;
+
+      .security-shield {
+        font-size: 36px;
+        margin-bottom: 12px;
+      }
+
+      h3 {
+        font-size: 20px;
+        font-weight: 700;
+        color: $text-primary;
+        margin: 0 0 8px;
+      }
+
+      .subtitle {
+        font-size: 14px;
+        color: $text-secondary;
+        line-height: 1.5;
+        margin: 0;
+
+        strong {
+          color: $text-primary;
+        }
+      }
+    }
+
+    .destination-preview {
+      background-color: #F3F4F6;
+      border-radius: $radius-sm;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+
+      .label {
+        color: $text-secondary;
+      }
+
+      .phone-masked {
+        font-weight: 600;
+        color: $text-primary;
+        letter-spacing: 0.5px;
+      }
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+
+      label {
+        display: block;
+        font-size: 14px;
+        font-weight: 600;
+        color: $text-primary;
+        margin-bottom: 8px;
+      }
+
+      .code-input {
+        width: 100%;
+        padding: 12px 16px;
+        font-size: 18px;
+        letter-spacing: 4px;
+        text-align: center;
+        border: 2px solid $input-border;
+        border-radius: $radius-md;
+        outline: none;
+        box-sizing: border-box;
+        transition: border-color 0.15s ease;
+
+        &:focus {
+          border-color: $primary-orange;
+        }
+      }
+
+      .hint {
+        display: block;
+        font-size: 12px;
+        color: $text-muted;
+        margin-top: 6px;
+        text-align: center;
+      }
+    }
+
+    .btn-block {
+      width: 100%;
+      padding: 12px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .otp-alternative {
+      margin-top: 18px;
+      text-align: center;
+
+      .btn-link {
+        background: none;
+        border: none;
+        color: $primary-orange;
+        font-size: 13px;
+        text-decoration: underline;
+        cursor: pointer;
+        padding: 4px;
+
+        &:hover {
+          color: $primary-orange-hover;
+        }
+      }
+    }
+  }
+}
+
+/* Report Card Sheet */
+.report-wrapper {
+  .report-card-sheet {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: $radius-lg;
+    padding: 36px 32px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+
+    .sheet-header {
+      text-align: center;
+      margin-bottom: 20px;
+
+      .school-name {
+        font-size: 24px;
+        font-weight: 800;
+        color: #1E293B;
+        text-transform: uppercase;
+        margin: 0 0 6px;
+        letter-spacing: 0.5px;
+      }
+
+      .report-subtitle {
+        font-size: 14px;
+        font-weight: 600;
+        color: $primary-orange;
+        letter-spacing: 1.5px;
+        margin: 0 0 4px;
+      }
+
+      .term-period {
+        font-size: 15px;
+        color: $text-secondary;
+        margin: 0;
+      }
+
+      .school-contact {
+        margin-top: 10px;
+        font-size: 12px;
+        color: $text-muted;
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+      }
+    }
+
+    .sheet-divider {
+      border: 0;
+      border-top: 2px solid #F3F4F6;
+      margin: 20px 0 24px;
+    }
+
+    .student-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      background-color: #F9FAFB;
+      border-radius: $radius-md;
+      padding: 16px 20px;
+      margin-bottom: 28px;
+
+      .meta-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+
+        .meta-label {
+          font-size: 12px;
+          text-transform: uppercase;
+          color: $text-muted;
+          font-weight: 600;
+        }
+
+        .meta-value {
+          font-size: 15px;
+          font-weight: 600;
+          color: $text-primary;
+
+          &.highlight {
+            color: #0F172A;
+            font-size: 16px;
+          }
+        }
+      }
+    }
+
+    .results-table-section {
+      margin-bottom: 24px;
+      overflow-x: auto;
+
+      .results-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+
+        th {
+          background-color: #F8FAFC;
+          color: #475569;
+          font-size: 13px;
+          font-weight: 700;
+          text-transform: uppercase;
+          padding: 12px 14px;
+          border-bottom: 2px solid #E2E8F0;
+        }
+
+        td {
+          padding: 12px 14px;
+          font-size: 14px;
+          border-bottom: 1px solid #EDF2F7;
+          color: $text-primary;
+        }
+
+        .col-sn { width: 40px; }
+        .col-mark { width: 110px; }
+        .col-grade { width: 90px; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .font-medium { font-weight: 500; }
+
+        .grade-badge {
+          display: inline-block;
+          min-width: 28px;
+          padding: 2px 8px;
+          border-radius: $radius-sm;
+          font-weight: 700;
+          font-size: 13px;
+
+          &.grade-a { background: #ECFDF5; color: #047857; }
+          &.grade-b { background: #EFF6FF; color: #1D4ED8; }
+          &.grade-c { background: #FFFBEB; color: #B45309; }
+          &.grade-d { background: #FFF7ED; color: #C2410C; }
+          &.grade-f { background: #FEF2F2; color: #B91C1C; }
+        }
+
+        .empty-results {
+          text-align: center;
+          padding: 32px;
+          color: $text-muted;
+        }
+      }
+    }
+
+    .no-marks-section {
+      background-color: #FFFBEB;
+      border: 1px solid #FDE68A;
+      border-radius: $radius-sm;
+      padding: 10px 14px;
+      margin-bottom: 24px;
+
+      .no-marks-text {
+        margin: 0;
+        font-size: 13px;
+        color: #92400E;
+      }
+    }
+
+    .remarks-section {
+      margin-bottom: 28px;
+
+      .section-title {
+        font-size: 14px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #475569;
+        margin: 0 0 10px;
+      }
+
+      .summary-box {
+        background-color: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        border-radius: $radius-md;
+        padding: 16px;
+
+        p {
+          margin: 0;
+          font-size: 14px;
+          color: $text-primary;
+          line-height: 1.5;
+        }
+      }
+    }
+
+    .sheet-footer {
+      border-top: 1px solid #E5E7EB;
+      padding-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: $text-muted;
+
+      .security-seal {
+        color: #059669;
+        font-weight: 500;
+      }
+    }
+  }
+}
+
+/* Button utility classes aligned with design tokens */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border-radius: $radius-md;
+  border: 1px solid transparent;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+
+  &.btn-primary {
+    background-color: $primary-orange;
+    color: #FFFFFF;
+
+    &:hover:not(:disabled) {
+      background-color: $primary-orange-hover;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  &.btn-secondary {
+    background-color: #F3F4F6;
+    color: $text-primary;
+    border-color: #D1D5DB;
+
+    &:hover {
+      background-color: #E5E7EB;
+    }
+  }
+
+  &.btn-sm {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .viewer-header,
+  .print-btn,
+  .challenge-wrapper {
+    display: none !important;
+  }
+
+  .viewer-viewport,
+  .viewer-main {
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .report-card-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+}

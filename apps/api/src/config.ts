@@ -24,6 +24,9 @@ const schema = z.object({
   NEXTSMS_SENDER_ID: z.string().default('SYNCACADEMY'),
   NEXTSMS_WHATSAPP_ACCOUNT: z.string().optional(),
   NEXTSMS_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_WEBHOOK_SECRET: z.string().optional(),
+  EMAIL_PROVIDER: z.enum(['smtp', 'resend', 'mock']).default('smtp'),
   COMMUNICATION_MOCK_DISPATCH: z.enum(['true', 'false']).default('false'),
 });
 export const config = schema.parse(process.env);

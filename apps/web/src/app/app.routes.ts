@@ -5,6 +5,7 @@ export const routes:Routes=[
  {path:'',pathMatch:'full',loadComponent:()=>import('./features/landing/landing.page').then(m=>m.LandingPage)},
  {path:'privacy',loadComponent:()=>import('./features/legal/legal.page').then(m=>m.LegalPage),data:{document:'privacy'}},
  {path:'terms',loadComponent:()=>import('./features/legal/legal.page').then(m=>m.LegalPage),data:{document:'terms'}},
+ {path:'r/:token',loadComponent:()=>import('./features/public/report-viewer.page').then(m=>m.ReportViewerPage)},
  {path:'auth/login',loadComponent:()=>import('./features/auth/pages/login/login.page').then(m=>m.LoginPage)},
  {path:'auth/sign-in/:role',loadComponent:()=>import('./features/auth/pages/login/login.page').then(m=>m.LoginPage)},
  ...['recover','reset','invitation','security'].map(mode=>({path:'auth/'+mode,loadComponent:auth,data:{mode}})),

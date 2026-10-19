@@ -1,0 +1,205 @@
+<div class="report-viewer-viewport">
+  <!-- Top Navigation Header -->
+  <header class="viewer-header">
+    <div class="header-content">
+      <div class="brand">
+        <app-logo size="sm"></app-logo>
+        <span class="brand-divider">/</span>
+        <span class="portal-badge">Ripoti Rasmi ya Mzazi</span>
+      </div>
+      <div class="header-actions" *ngIf="reportData()">
+        <button class="btn btn-secondary btn-sm print-btn" (click)="printReport()" type="button">
+          <span>Chapisha (Print)</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="viewer-main">
+    <!-- Loading State -->
+    <div class="loading-state" *ngIf="loading()">
+      <div class="spinner"></div>
+      <p class="loading-text">Inathibitisha usalama wa kiunganishi...</p>
+    </div>
+
+    <!-- Error Alert -->
+    <div class="alert-card alert-error" *ngIf="error() && !loading()">
+      <div class="alert-icon">!</div>
+      <div class="alert-body">
+        <h4>Ufikiaji Hauruhusiwi</h4>
+        <p>{{ error() }}</p>
+      </div>
+    </div>
+
+    <!-- Security Challenge Card (Guardian Identity Verification) -->
+    <div class="challenge-wrapper" *ngIf="challengeRequired() && !loading() && !reportData()">
+      <div class="card challenge-card">
+        <div class="card-header">
+          <div class="security-shield">
+            <span class="shield-icon">&#128274;</span>
+          </div>
+          <h3>Uthibitisho wa Usalama wa Mzazi</h3>
+          <p class="subtitle">
+            Ili kulinda taarifa za kitaaluma za mwanafunzi <strong>{{ challengeStudentName() }}</strong> 
+            wa shule ya <strong>{{ challengeSchoolName() }}</strong>, thibitisha namba yako ya simu.
+          </p>
+        </div>
+
+        <form class="challenge-form" (ngSubmit)="submitChallenge()">
+          <div class="destination-preview" *ngIf="maskedDestination()">
+            <span class="label">Namba ya Simu Iliyosajiliwa:</span>
+            <span class="phone-masked">{{ maskedDestination() }}</span>
+          </div>
+
+          <div class="form-group" *ngIf="verificationType() === 'phone_last4'">
+            <label for="last4Input">Weka tarakimu 4 za mwisho za simu yako:</label>
+            <input
+              id="last4Input"
+              type="tel"
+              maxlength="4"
+              class="form-control code-input"
+              placeholder="Mfano: 1234"
+              [(ngModel)]="challengeInput"
+              name="challengeInput"
+              autocomplete="one-time-code"
+              required
+            />
+            <span class="hint">Tarakimu nne zilizoandikwa mwishoni mwa namba yako hapo juu.</span>
+          </div>
+
+          <div class="form-group" *ngIf="verificationType() === 'otp'">
+            <label for="otpInput">Weka namba ya siri (OTP) ya tarakimu 6:</label>
+            <input
+              id="otpInput"
+              type="tel"
+              maxlength="6"
+              class="form-control code-input"
+              placeholder="123456"
+              [(ngModel)]="challengeInput"
+              name="challengeInput"
+              autocomplete="one-time-code"
+              required
+            />
+            <span class="hint">Tumekutumia namba hii kwa ujumbe wa SMS.</span>
+          </div>
+
+          <div class="form-actions">
+            <button 
+              type="submit" 
+              class="btn btn-primary btn-block"
+              [disabled]="submitting()"
+            >
+              <span *ngIf="!submitting()">Thibitisha na Fungua Ripoti</span>
+              <span *ngIf="submitting()">Inathibitisha...</span>
+            </button>
+          </div>
+
+          <div class="otp-alternative" *ngIf="verificationType() === 'phone_last4'">
+            <button 
+              type="button" 
+              class="btn-link"
+              (click)="requestOtpCode()"
+            >
+              Huna hakika? Tuma namba ya siri (OTP) kwenye simu yangu
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Verified Academic Report Card -->
+    <div class="report-wrapper" *ngIf="reportData() && reportData()!.status === 'VERIFIED'">
+      <article class="report-card-sheet">
+        <!-- School Header Banner -->
+        <header class="sheet-header">
+          <div class="school-identity">
+            <h1 class="school-name">{{ reportData()!.school?.name }}</h1>
+            <p class="report-subtitle">TAARIFA RASMI YA MAENDELEO YA MWANAFUNZI</p>
+            <p class="term-period">{{ reportData()!.academicYear }} &mdash; {{ reportData()!.reportCard?.period }}</p>
+          </div>
+          <div class="school-contact" *ngIf="reportData()!.school?.phone || reportData()!.school?.email">
+            <span *ngIf="reportData()!.school?.phone">Simu: {{ reportData()!.school?.phone }}</span>
+            <span *ngIf="reportData()!.school?.email">Barua Pepe: {{ reportData()!.school?.email }}</span>
+          </div>
+        </header>
+
+        <hr class="sheet-divider" />
+
+        <!-- Student & Guardian Metadata Grid -->
+        <section class="student-meta-grid">
+          <div class="meta-item">
+            <span class="meta-label">Jina la Mwanafunzi</span>
+            <span class="meta-value highlight">{{ reportData()!.student?.name }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Namba ya Usajili</span>
+            <span class="meta-value">{{ reportData()!.student?.admissionNumber }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Darasa</span>
+            <span class="meta-value">{{ reportData()!.className }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Mzazi / Mlezi</span>
+            <span class="meta-value">{{ reportData()!.guardian?.name }}</span>
+          </div>
+        </section>
+
+        <!-- Subject Marks & Results Table -->
+        <section class="results-table-section">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th class="col-sn">#</th>
+                <th class="col-subject">Somo (Subject)</th>
+                <th class="col-mark text-right">Alama (Score)</th>
+                <th class="col-grade text-center">Daraja (Grade)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let res of reportData()!.reportCard?.results; let i = index">
+                <td class="col-sn">{{ i + 1 }}</td>
+                <td class="col-subject font-medium">{{ res.subject }}</td>
+                <td class="col-mark text-right">{{ res.mark !== undefined ? res.mark : '-' }}</td>
+                <td class="col-grade text-center">
+                  <span class="grade-badge" [ngClass]="getGradeClass(res.grade)">
+                    {{ res.grade || '-' }}
+                  </span>
+                </td>
+              </tr>
+              <tr *ngIf="!reportData()!.reportCard?.results?.length">
+                <td colspan="4" class="empty-results">Hakuna matokeo yaliyorekodiwa kwa muhula huu.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- Unassessed Subjects Notice -->
+        <section class="no-marks-section" *ngIf="reportData()!.reportCard?.noMarks?.length">
+          <p class="no-marks-text">
+            <strong>Masomo yasiyo na alama kwa tathmini hii:</strong>
+            {{ reportData()!.reportCard?.noMarks?.join(', ') }}
+          </p>
+        </section>
+
+        <!-- Summary & Remarks -->
+        <section class="remarks-section" *ngIf="reportData()!.reportCard?.summary">
+          <h4 class="section-title">Muhtasari na Maoni ya Shule</h4>
+          <div class="summary-box">
+            <p>{{ reportData()!.reportCard?.summary }}</p>
+          </div>
+        </section>
+
+        <!-- Sheet Footer: Verification Badge & Expiration -->
+        <footer class="sheet-footer">
+          <div class="security-seal">
+            <span class="seal-text">&#10003; Ripoti hii imethibitishwa kidijitali na mfumo wa SyncAcademy.</span>
+          </div>
+          <div class="expiry-notice" *ngIf="reportData()!.expiresAt">
+            <span>Kiunganishi hiki kitaisha: {{ reportData()!.expiresAt | date:'mediumDate' }}</span>
+          </div>
+        </footer>
+      </article>
+    </div>
+  </main>
+</div>

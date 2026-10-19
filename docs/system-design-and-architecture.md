@@ -230,40 +230,28 @@ All communication channels implement a unified interface under `apps/api/src/com
   - Requires pre-registered WhatsApp account and approved templates in NextSMS dashboard (`Channels -> WhatsApp Channel -> WhatsApp Gateway`).
   - Supports template parameter interpolation (`attributes`), document/PDF attachments (`document`), and recipient mapping.
   - Fallback indication: Code 111 (`REJECTED_MISSING_OUTLET`) triggers automatic fallback to SMS.
-- **`EmailProvider`**: Nodemailer SMTP (`apps/api/src/communication/providers/smtp-email.provider.ts`) reading encrypted credentials from `PlatformSetting` or environment variables.
+- **`EmailProvider`**: 
+  - **Resend** (`apps/api/src/communication/providers/resend-email.provider.ts`): Primary transactional email provider supporting modern API key authentication, verified sending domains, and Svix webhook signatures.
+  - **Nodemailer SMTP** (`apps/api/src/communication/providers/smtp-email.provider.ts`): Fallback email provider reading credentials from `PlatformSetting` or environment variables.
 - **`MockCommunicationProvider`**: In-memory test provider (`apps/api/src/communication/providers/mock-communication.provider.ts`) for deterministic unit and workflow tests without network traffic.
 
 ### 7.3 Delivery Reports, Webhooks & Transactional Outbox Integration
-- **NextSMS Webhook Integration (`apps/api/src/communication/webhooks/nextsms-webhook.ts`)**:
+- **NextSMS & Resend Webhook Integration (`apps/api/src/webhook.controller.ts`)**:
   - Registered in NextSMS Dashboard (`Customer Info -> Customization -> Webhooks`) with shared verify token.
-  - Receives live delivery updates: `DELIVERED` (id 73), `EXPIRED` (id 74), `UNDELIVERABLE` (id 76), `REJECTED` (id 79), and WhatsApp customer responses (`READ`, inbound text).
-  - Webhook processing updates `CommunicationLog` status asynchronously.
-  - Fallback HTTP Query API (`GET /api/v2/reports?messageId=...`) used only for manual reconciliation (NextSMS documents HTTP Query as one-time retrieval to be discontinued in favor of webhooks).
+  - Delivery reports: `POST /api/v1/webhooks/nextsms/delivery` updates `CommunicationLog` status (`DELIVERED`, `READ`, `UNDELIVERABLE`, `REJECTED`, etc.).
+  - Inbound WhatsApp replies: `POST /api/v1/webhooks/nextsms/inbound` parses customer messages and automatically executes opt-out regulations on keywords (`STOP`, `SIMAMA`, `ONDOA`, `UNSUBSCRIBE`).
+  - Resend email webhooks: `POST /api/v1/webhooks/resend` handles `email.delivered`, `email.bounced`, `email.complained`.
+  - Webhooks are exempt from browser Origin and CSRF token restrictions, validating provider tokens and signatures instead.
 - **Transactional Outbox Integration (`worker.ts`)**:
   - Domain state changes (e.g. report card publishing, fee payment receipting) and outbox rows are committed in a single ACID transaction (`prisma.$transaction`).
-  - Worker polls outbox every 5s, dispatches via the guardian's preferred channel (`WHATSAPP` -> `SMS` -> `EMAIL`), records delivery telemetry and unit costs in `CommunicationLog`, and executes exponential backoff on retryable failures (system error 64, network 53). Non-retryable errors (insufficient credits 57, missing template outlet 111) trigger instant failover to secondary channels.
+  - Worker polls outbox every second, dispatches via the target channel (`SMS`, `WHATSAPP`, `EMAIL`), updates `CommunicationLog` telemetry, and applies exponential backoff on retryable errors. If WhatsApp delivery encounters non-retryable issues, it automatically falls back to SMS. Messages exceeding 8 attempts are transitioned to dead-letter state (`failedAt`).
 
-### 7.4 Secure, Expiring Report-Access Links (`ReportAccessLink`)
+### 7.4 Secure, Expiring Report-Access Links (`ReportAccessLink`) & Public Mobile Viewer
 Allows parents to view and download term report cards from an SMS, WhatsApp message, or Email without requiring pre-created portal passwords:
-```prisma
-model ReportAccessLink {
-  id                  String    @id @default(cuid())
-  schoolId            String
-  reportCardId        String
-  studentId           String
-  guardianId          String
-  tokenHash           String    @unique // SHA-256 of 256-bit URL token
-  expiresAt           DateTime  // Default: +14 days
-  revokedAt           DateTime?
-  maxAccessCount      Int       @default(25)
-  accessCount         Int       @default(0)
-  requirePhoneLast4   Boolean   @default(true)
-  createdAt           DateTime  @default(now())
-}
-```
-- High-entropy 256-bit URL token (`/r/<token>`), unguessable and stored only as SHA-256 hash.
-- Lightweight identity challenge: guardian enters the last 4 digits of their registered phone number before viewing the report card (rate-limited to 5 attempts per 15 minutes).
-- Instant revocation by school headmasters/registrars and immutable audit logging on every access attempt.
+- High-entropy 256-bit URL token (`/r/<token>`), unguessable and stored only as SHA-256 hash in `ReportAccessLink.tokenHash`.
+- Lightweight identity challenge: guardian enters the last 4 digits of their registered phone number (or 6-digit SMS OTP code for heightened security) before viewing the report card (rate-limited to 10 attempts per 10 minutes).
+- Public mobile web route `/r/:token` (`apps/web/src/app/features/public/report-viewer.page.ts`) adhering to mobile-native polish (safe-area insets, responsive results table, NECTA-aligned grades, print styling).
+- School staff can publish report links with notifications in bulk (`POST /api/v1/schools/:schoolId/reports/publish-with-links`) and instantly revoke active links with reason tracking (`POST /api/v1/schools/:schoolId/reports/links/:linkId/revoke`).
 
 ---
 

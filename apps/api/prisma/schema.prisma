@@ -14,6 +14,22 @@ enum Role {
   STUDENT
   PARENT
 }
+enum CommunicationChannel {
+  SMS
+  WHATSAPP
+  EMAIL
+}
+enum DeliveryStatus {
+  PENDING
+  ENROUTE
+  ACCEPTED
+  DELIVERED
+  READ
+  FAILED
+  REJECTED
+  UNDELIVERABLE
+  EXPIRED
+}
 model User {
   id String @id @default(uuid()) @db.Uuid
   email String @unique
@@ -31,6 +47,7 @@ model User {
   resets PasswordReset[]
   students Student[]
   registryEvents RegistryEvent[]
+  guardians Guardian[]
 }
 model School {
   academicWorkspaces AcademicWorkspace[]
@@ -62,6 +79,11 @@ model School {
   payments Payment[]
   adjustments Adjustment[]
   convertedLeads PlatformLead[]
+  guardians Guardian[]
+  studentGuardians StudentGuardian[]
+  reportAccessLinks ReportAccessLink[]
+  communicationLogs CommunicationLog[]
+  contactVerifications ContactVerification[]
 }
 model PlatformLead {
   id String @id @default(uuid()) @db.Uuid
@@ -190,6 +212,8 @@ model Student {
   charges StudentCharge[]
   payments Payment[]
   adjustments Adjustment[]
+  guardians StudentGuardian[]
+  reportLinks ReportAccessLink[]
   @@unique([id, schoolId])
   @@unique([schoolId, admissionNumber])
   @@unique([schoolId, userId])
@@ -356,7 +380,12 @@ model Outbox {
   cancelledAt DateTime?
   failedAt DateTime?
   createdAt DateTime @default(now())
+  channel CommunicationChannel?
+  schoolId String? @db.Uuid
+  idempotencyKey String?
   @@index([sentAt, failedAt, availableAt])
+  @@index([schoolId, createdAt])
+  @@index([idempotencyKey])
 }
 model RateBucket {
   key String @id
@@ -473,3 +502,119 @@ model AcademicWorkspace {
   school School @relation(fields: [schoolId], references: [id])
   @@index([schoolId])
 }
+
+model Guardian {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  userId String? @db.Uuid
+  name String
+  phone String
+  whatsappPhone String?
+  email String?
+  preferredChannel CommunicationChannel @default(SMS)
+  preferredLanguage String @default("sw")
+  phoneVerifiedAt DateTime?
+  emailVerifiedAt DateTime?
+  whatsappVerifiedAt DateTime?
+  optOutSms Boolean @default(false)
+  optOutWhatsapp Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  school School @relation(fields: [schoolId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
+  students StudentGuardian[]
+  reportLinks ReportAccessLink[]
+  communicationLogs CommunicationLog[]
+  verifications ContactVerification[]
+  @@unique([id, schoolId])
+  @@unique([schoolId, phone])
+  @@index([schoolId, userId])
+}
+
+model StudentGuardian {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  studentId String @db.Uuid
+  guardianId String @db.Uuid
+  relationship String @default("Guardian")
+  isPrimary Boolean @default(false)
+  canReceiveReports Boolean @default(true)
+  canReceiveFinanceAlert Boolean @default(true)
+  canReceiveAttendanceAlert Boolean @default(true)
+  createdAt DateTime @default(now())
+  school School @relation(fields: [schoolId], references: [id])
+  student Student @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  guardian Guardian @relation(fields: [guardianId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  @@unique([studentId, guardianId])
+  @@unique([id, schoolId])
+  @@index([schoolId, studentId])
+  @@index([schoolId, guardianId])
+}
+
+model ContactVerification {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  guardianId String @db.Uuid
+  channel CommunicationChannel
+  destination String
+  codeHash String
+  expiresAt DateTime
+  attempts Int @default(0)
+  resendAfter DateTime
+  verifiedAt DateTime?
+  createdAt DateTime @default(now())
+  school School @relation(fields: [schoolId], references: [id])
+  guardian Guardian @relation(fields: [guardianId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  @@index([schoolId, guardianId, channel])
+  @@index([destination, expiresAt])
+}
+
+model ReportAccessLink {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  studentId String @db.Uuid
+  guardianId String @db.Uuid
+  reportCardId String
+  tokenHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  revokedByUserId String? @db.Uuid
+  revokeReason String?
+  maxAccessCount Int @default(25)
+  accessCount Int @default(0)
+  lastAccessedAt DateTime?
+  verificationType String @default("phone_last4")
+  createdAt DateTime @default(now())
+  school School @relation(fields: [schoolId], references: [id])
+  student Student @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  guardian Guardian @relation(fields: [guardianId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  @@index([schoolId, studentId])
+  @@index([schoolId, guardianId])
+  @@index([expiresAt])
+}
+
+model CommunicationLog {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  guardianId String? @db.Uuid
+  studentId String? @db.Uuid
+  channel CommunicationChannel
+  providerName String
+  providerMessageId String?
+  recipient String
+  templateKey String?
+  status DeliveryStatus @default(PENDING)
+  unitCostTzs Int @default(0)
+  segments Int @default(1)
+  sentAt DateTime @default(now())
+  deliveredAt DateTime?
+  errorCode String?
+  errorMessage String?
+  metadata Json?
+  school School @relation(fields: [schoolId], references: [id])
+  guardian Guardian? @relation(fields: [guardianId, schoolId], references: [id, schoolId])
+  @@index([schoolId, sentAt])
+  @@index([providerMessageId])
+  @@index([schoolId, guardianId])
+}
+
