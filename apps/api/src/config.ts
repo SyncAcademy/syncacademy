@@ -15,7 +15,7 @@ const schema = z.object({
   SMTP_USER: z.string().optional(), SMTP_PASSWORD: z.string().optional(),
   SMTP_SECURE: z.enum(['true','false']).default('false'),
   MAIL_FROM: z.string().email(),
-  CONTACT_NOTIFICATION_EMAIL: z.string().email().optional(),
+  CONTACT_NOTIFICATION_EMAIL: z.string().email().optional().or(z.literal('')),
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(2).default(0),
   NEXTSMS_API_URL: z.string().url().default('https://messaging-service.co.tz'),
   NEXTSMS_TOKEN: z.string().optional(),
