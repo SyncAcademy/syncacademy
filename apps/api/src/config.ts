@@ -17,6 +17,14 @@ const schema = z.object({
   MAIL_FROM: z.string().email(),
   CONTACT_NOTIFICATION_EMAIL: z.string().email().optional(),
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(2).default(0),
+  NEXTSMS_API_URL: z.string().url().default('https://messaging-service.co.tz'),
+  NEXTSMS_TOKEN: z.string().optional(),
+  NEXTSMS_USERNAME: z.string().optional(),
+  NEXTSMS_PASSWORD: z.string().optional(),
+  NEXTSMS_SENDER_ID: z.string().default('SYNCACADEMY'),
+  NEXTSMS_WHATSAPP_ACCOUNT: z.string().optional(),
+  NEXTSMS_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+  COMMUNICATION_MOCK_DISPATCH: z.enum(['true', 'false']).default('false'),
 });
 export const config = schema.parse(process.env);
 if (config.NODE_ENV === 'production' && !config.APP_ORIGIN.startsWith('https://')) throw new Error('Production requires an HTTPS APP_ORIGIN');

@@ -80,12 +80,40 @@ flowchart LR
 
 *(Note: Six unrouted legacy prototype components under `src/app/features/{academic,bursar/fee-guide,parent,student,teacher,teachers}` are preserved intact pending owner decision.)*
 
-### 2.3 Strict UI Preservation & Responsive Design Standards
+### 2.3 Strict UI Preservation & Responsive Layout Standards
 The existing UI in `apps/web` is strictly protected—do not redesign screens, alter color palettes/typography, or replace components without explicit owner approval. All portal views adhere to these responsive standards:
 - **Header & Column Containment**: Keep dashboard headers constrained beside the sidebar (`min-width: 0`, `max-width: 100%`, flex/grid wrapping) so titles and action buttons never overflow horizontally.
 - **Resizable Desktop Sidebars**: Support user-resizable desktop sidebars between `270px` and `min(420px, 35vw)` via `--sidebar-size` and an accessible edge handle.
 - **Compact Mobile Viewports**: Use the Ionic overlay menu capped to the viewport on mobile widths without forcing horizontal page scroll.
 - **Scrollable Data Tables & Accessible Dialogs**: Wrap wide tables (marks sheets, student ledgers) in horizontal scroll containers (`min-width: 0`, `max-width: 100%`). Top-layer `<dialog>` modals use blurred backdrops, keyboard focus containment, and `Escape`/outside-click dismissal (blocked while a save is in flight).
+
+### 2.4 Design Governance, Workflow & Canonical Designing-Skills Integration
+For new user-facing workflows, components, or layout refinements, SyncAcademy enforces rigorous design engineering standards:
+
+1. **Canonical Design-Skills Source**:
+   - Primary design engineering repository: [`https://github.com/realmadede/Designing-Skills.git`](https://github.com/realmadede/Designing-Skills.git).
+   - Pinned reviewed revision: `2d228630ba1446365f614a108cb8252f1feda202`.
+   - External scripts or commands must never be executed automatically.
+2. **Skill Selection & Compatibility Rubric**:
+   - Select skills according to task relevance and Angular 18 + SCSS compatibility:
+     - `skills/mobile-native/SKILL.md`: Mobile web polish (dynamic viewport units `100dvh`, removing 300ms tap delay via `touch-action: manipulation`, safe area insets `env(safe-area-inset-bottom)`, preventing iOS font zoom on inputs `< 16px`).
+     - `skills/break-ui/SKILL.md`: Adversarial UI stress-testing with realistic worst-case data (Tanzanian multi-part names like "Mwanahamisi Abdallah Ndibalema", unbreakable email addresses, missing avatars, extreme TZS currency figures, zero-item empty states, 320px container widths, 200% browser zoom).
+     - `skills/animate/SKILL.md` & `skills/animation-performance/SKILL.md`: 60fps composited animations (`transform` and `opacity` only, correct easing curves, zero layout thrashing).
+     - `skills/emil-design-eng/SKILL.md` & `skills/apple-design/SKILL.md`: Subtle borders, semi-transparent shadows, and hierarchy.
+   - **Excluded Frameworks**: React, React Native, Expo, Swift, Tailwind, or competing UI libraries (e.g., `animate-expo`, `write-swift`, `ask-sonner` are strictly excluded).
+3. **Design System Preservation**:
+   - The established design tokens, colors, gradients, typography, and class conventions in `apps/web/src/styles.scss` remain authoritative. External skills inform technique, polish, and edge-case handling—they do not replace SyncAcademy's brand or visual language.
+4. **Design Proposal & Change Approval Requirements**:
+   - Any new screen or component addition requires a design proposal specifying: component hierarchy, responsive breakpoint plan (320px to 1440px), accessibility compliance, and an adversarial worst-case data plan.
+   - Strict product owner approval is required before touching existing active portal layouts or stylesheets.
+5. **Responsive Testing Standards**:
+   - Must be verified at 320px (compact mobile), 768px (tablet), 1024px (desktop), and 1440px (wide desktop). Zero horizontal page scrolling on mobile.
+6. **Accessibility Requirements**:
+   - WCAG 2.1 AA compliance: minimum 4.5:1 text contrast ratio, visible keyboard focus indicators, explicit `aria-label` attributes on icon-only buttons, and `<dialog>` keyboard containment.
+7. **UI Acceptance Criteria**:
+   - Zero TypeScript compile errors (`ng build`).
+   - Passes all 8 automated portal workflow verification scripts.
+   - Passes adversarial worst-case data checks without clipping or broken layouts.
 
 ---
 
@@ -189,14 +217,31 @@ erDiagram
 
 ### 7.2 Pluggable Provider Abstractions (SMS, WhatsApp, Email)
 All communication channels implement a unified interface under `apps/api/src/communication/`:
-- **`SmsProvider`**: Direct integration with Tanzanian SMS aggregators (**Beem Africa** or **NextSMS**) supporting local TZS billing, MNO routes (Vodacom, Airtel, Tigo/Mixx, Halotel), and custom Sender ID (`SYNCACADEMY`). Templates enforce GSM-7 encoding (`<= 160` chars).
-- **`WhatsAppProvider`**: Meta WhatsApp Cloud API utility templates (`report_card_published_v1`, `attendance_absence_alert_v1`, `fee_payment_receipt_v1`) with localized parameter interpolation (`sw` / `en`).
-- **`EmailProvider`**: Nodemailer SMTP (configured via encrypted `PlatformSetting` or env variables).
+- **`SmsProvider`**: Direct integration with Tanzanian SMS aggregators (**NextSMS** as primary, or Beem Africa) supporting local TZS billing, direct MNO routes (Vodacom, Airtel, Tigo/Mixx, Halotel), and custom Sender ID (`SYNCACADEMY`).
+  - Implemented in `apps/api/src/communication/providers/nextsms-sms.provider.ts`.
+  - Base URL: `https://messaging-service.co.tz`
+  - Authentication: Bearer token (`Authorization: Bearer <token>`) or RFC2045-MIME Basic auth.
+  - Endpoints: Single SMS `POST /api/sms/v2/text/single`, Multi SMS `POST /api/sms/v2/text/multi`, Test Single SMS `POST /api/sms/v2/test/text/single` (free testing mode).
+  - Character encoding: GSM-7 (160 single / 153 concatenated) and UCS-2 (70 single / 67 concatenated).
+  - Phone normalization: E.164 digits-only format (`255XXXXXXXXX`).
+  - Anti-flooding filters: NextSMS enforces a default limit of 20 varied messages and 6 identical messages per hour to a single recipient.
+- **`WhatsAppProvider`**: NextSMS WhatsApp Gateway (`POST /api/whatsapp/v2/text/single`, Test mode `/api/whatsapp/v2/test/text/single`).
+  - Implemented in `apps/api/src/communication/providers/nextsms-whatsapp.provider.ts`.
+  - Requires pre-registered WhatsApp account and approved templates in NextSMS dashboard (`Channels -> WhatsApp Channel -> WhatsApp Gateway`).
+  - Supports template parameter interpolation (`attributes`), document/PDF attachments (`document`), and recipient mapping.
+  - Fallback indication: Code 111 (`REJECTED_MISSING_OUTLET`) triggers automatic fallback to SMS.
+- **`EmailProvider`**: Nodemailer SMTP (`apps/api/src/communication/providers/smtp-email.provider.ts`) reading encrypted credentials from `PlatformSetting` or environment variables.
+- **`MockCommunicationProvider`**: In-memory test provider (`apps/api/src/communication/providers/mock-communication.provider.ts`) for deterministic unit and workflow tests without network traffic.
 
-### 7.3 Transactional Outbox Integration & Failover
-- Domain mutations and message enqueueing execute inside the same ACID transaction (`prisma.$transaction`).
-- Background worker (`apps/api/src/worker.ts`) polls `Outbox` rows every `5000ms`, dispatches via the guardian's preferred channel, and automatically fails over to secondary channels (e.g., `WHATSAPP` -> `SMS` -> `EMAIL`) on permanent channel errors.
-- Max 5 attempts with exponential backoff (`+30s`, `+2m`, `+10m`, `+1h`), with full delivery telemetry and unit costs (TZS) recorded in `CommunicationLog`.
+### 7.3 Delivery Reports, Webhooks & Transactional Outbox Integration
+- **NextSMS Webhook Integration (`apps/api/src/communication/webhooks/nextsms-webhook.ts`)**:
+  - Registered in NextSMS Dashboard (`Customer Info -> Customization -> Webhooks`) with shared verify token.
+  - Receives live delivery updates: `DELIVERED` (id 73), `EXPIRED` (id 74), `UNDELIVERABLE` (id 76), `REJECTED` (id 79), and WhatsApp customer responses (`READ`, inbound text).
+  - Webhook processing updates `CommunicationLog` status asynchronously.
+  - Fallback HTTP Query API (`GET /api/v2/reports?messageId=...`) used only for manual reconciliation (NextSMS documents HTTP Query as one-time retrieval to be discontinued in favor of webhooks).
+- **Transactional Outbox Integration (`worker.ts`)**:
+  - Domain state changes (e.g. report card publishing, fee payment receipting) and outbox rows are committed in a single ACID transaction (`prisma.$transaction`).
+  - Worker polls outbox every 5s, dispatches via the guardian's preferred channel (`WHATSAPP` -> `SMS` -> `EMAIL`), records delivery telemetry and unit costs in `CommunicationLog`, and executes exponential backoff on retryable failures (system error 64, network 53). Non-retryable errors (insufficient credits 57, missing template outlet 111) trigger instant failover to secondary channels.
 
 ### 7.4 Secure, Expiring Report-Access Links (`ReportAccessLink`)
 Allows parents to view and download term report cards from an SMS, WhatsApp message, or Email without requiring pre-created portal passwords:

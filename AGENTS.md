@@ -72,6 +72,34 @@ Unless explicitly instructed and approved by the repository owner for a specific
 
 When wiring new backend capabilities into the frontend, preserve the exact visual structure, class names, and design tokens established in `apps/web/src/styles.scss` and the existing portal components.
 
+### 5.1 Design Governance & Canonical Designing-Skills Integration
+
+When creating new user-facing workflows, designing new components, or updating responsive layouts, agents and contributors must follow strict design engineering governance:
+
+1. **Canonical Design-Skills Source**:
+   - Primary reference repository: [`https://github.com/realmadede/Designing-Skills.git`](https://github.com/realmadede/Designing-Skills.git).
+   - Pinned reviewed commit revision: `2d228630ba1446365f614a108cb8252f1feda202`.
+   - Never execute unreviewed external scripts or commands from external sources automatically.
+2. **Mandatory Skills Consultation**:
+   - Contributors and agents **must consult the relevant design skill** from the canonical repository when:
+     - Creating new screens or portals.
+     - Designing new UI components.
+     - Introducing transitions or animations.
+     - Improving layout responsiveness across breakpoints.
+     - Designing or refining mobile web experiences.
+     - Performing UI quality reviews.
+     - Implementing new user-facing workflows.
+3. **Selective Application & Framework Boundary**:
+   - Select skills strictly based on task relevance and Angular 18 + SCSS compatibility.
+   - **Relevant & Recommended Skills**:
+     - `mobile-native`: Mobile web polish (safe area insets `env(safe-area-inset-*)`, viewport units `100dvh`, `touch-action: manipulation`, preventing input zoom `< 16px`).
+     - `break-ui`: Adversarial UI stress-testing with realistic worst-case data (Tanzanian multi-part names, long email addresses, missing avatars, extreme TZS currency balances, zero-item empty states, 320px viewport, 200% browser zoom).
+     - `animate`, `review-animations`, `animation-performance`: 60fps composited animations (`transform` and `opacity` only, correct easing curves, zero layout thrashing).
+     - `emil-design-eng`, `apple-design`: Hierarchy, micro-interactions, subtle borders, and accessible contrasts.
+   - **Strictly Excluded Frameworks**: Do not apply skills that introduce React, React Native, Expo, Swift, Tailwind, or competing component libraries (e.g., `animate-expo`, `write-swift`, `ask-sonner` are strictly excluded).
+4. **Existing Design System Authority**:
+   - The existing SyncAcademy UI tokens, colors, gradients, typography, and class conventions in `apps/web/src/styles.scss` remain authoritative. External skills inform technique, polish, and edge-case handling—they do not replace SyncAcademy's brand or visual language.
+
 ---
 
 ## 6. Security Requirements

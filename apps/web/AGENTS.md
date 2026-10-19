@@ -36,6 +36,23 @@ This document provides workspace-specific governance rules for `apps/web` (`sync
 3. **Unrouted Legacy Feature Files (`Requires Owner Verification Before Removal`)**:
    - The following 6 components are currently not wired into `app.routes.ts` (`academic/academic.page.ts`, `bursar/fee-guide.page.ts`, `parent/parent.page.ts`, `student/student.page.ts`, `teacher/teacher.page.ts`, `teachers/teachers.component.ts`). Do not delete or route them without explicit owner direction.
 
+### 2.1 Design Governance & Canonical Designing-Skills Consultation
+
+Before creating any new screen, modal, card, animation, or mobile layout in `apps/web`:
+
+1. **Canonical Reference**:
+   - Primary reference: [`https://github.com/realmadede/Designing-Skills.git`](https://github.com/realmadede/Designing-Skills.git) pinned at commit `2d228630ba1446365f614a108cb8252f1feda202`.
+   - Never execute external scripts automatically.
+2. **Mandatory Skills Consultation Matrix**:
+   - **Mobile Polish**: Consult `skills/mobile-native/SKILL.md` (use `100dvh`, apply `touch-action: manipulation` to interactive controls to kill the 300ms tap delay, handle safe area insets `env(safe-area-inset-bottom)`, ensure font sizes on inputs are `>= 16px` to prevent iOS zoom).
+   - **Adversarial Stress Testing**: Consult `skills/break-ui/SKILL.md` (test components against Tanzanian multi-part names like "Mwanahamisi Abdallah Ndibalema", long unspaced emails, extreme TZS figures e.g. "TZS 12,450,000", zero items empty states, 320px screen width, 200% browser zoom).
+   - **Transitions & Animations**: Consult `skills/animate/SKILL.md` and `skills/animation-performance/SKILL.md` (only animate `transform` and `opacity`, use standard easing curves, never animate `height`/`width`/`top`/`left` causing layout shifts).
+   - **Visual Micro-Interactions**: Consult `skills/emil-design-eng/SKILL.md` and `skills/apple-design/SKILL.md` (subtle borders, semi-transparent shadows, contrast ratios).
+3. **Strict Technology Boundary**:
+   - `apps/web` is strictly **Angular 18 Standalone + Ionic 8 + Custom SCSS**.
+   - Do **NOT** install or introduce React, React Native, Expo, Swift, Tailwind, or competing UI libraries (e.g., `animate-expo`, `write-swift`, `ask-sonner` are strictly excluded).
+   - All styling must extend the existing design tokens in `src/styles.scss`.
+
 ---
 
 ## 3. State Management & API Wiring Standards
