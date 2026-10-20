@@ -84,6 +84,17 @@ model School {
   reportAccessLinks ReportAccessLink[]
   communicationLogs CommunicationLog[]
   contactVerifications ContactVerification[]
+  rosterConfirmations RosterConfirmation[]
+  subscriptions SchoolSubscription[]
+  subscriptionInvoices SubscriptionInvoice[]
+  subscriptionPayments SubscriptionPayment[]
+  creditWallet SchoolCreditWallet?
+  creditPurchaseInvoices CreditPurchaseInvoice[]
+  creditLedgers CreditLedger[]
+  bankStatements BankStatement[]
+  bankStatementRows BankStatementRow[]
+  reconciliationMatches ReconciliationMatch[]
+  securityEvents SecurityEvent[]
 }
 model PlatformLead {
   id String @id @default(uuid()) @db.Uuid
@@ -121,6 +132,7 @@ model Membership {
   user User @relation(fields: [userId], references: [id])
   school School @relation(fields: [schoolId], references: [id])
   assignments TeachingAssignment[]
+  rosterConfirmations RosterConfirmation[]
   @@unique([userId, schoolId, role])
   @@unique([id, schoolId])
   @@index([schoolId, role, active])
@@ -168,6 +180,7 @@ model AcademicYear {
   admissions Admission[]
   registryEvents RegistryEvent[]
   feeStructures FeeStructure[]
+  rosterConfirmations RosterConfirmation[]
   @@unique([id, schoolId])
   @@unique([schoolId, name])
 }
@@ -185,6 +198,7 @@ model Classroom {
   movementsFrom RegistryEvent[] @relation("MovementFrom")
   movementsTo RegistryEvent[] @relation("MovementTo")
   feeStructures FeeStructure[]
+  rosterConfirmations RosterConfirmation[]
   @@unique([id, schoolId])
   @@unique([schoolId, yearId, name])
 }
@@ -214,6 +228,7 @@ model Student {
   adjustments Adjustment[]
   guardians StudentGuardian[]
   reportLinks ReportAccessLink[]
+  rosterConfirmations RosterConfirmation[]
   @@unique([id, schoolId])
   @@unique([schoolId, admissionNumber])
   @@unique([schoolId, userId])
@@ -227,6 +242,7 @@ model Enrollment {
   status String @default("active")
   version Int @default(1)
   subjects EnrollmentSubject[]
+  rosterConfirmations RosterConfirmation[]
   school School @relation(fields: [schoolId], references: [id])
   student Student @relation(fields: [studentId, schoolId], references: [id, schoolId])
   classroom Classroom @relation(fields: [classroomId, schoolId], references: [id, schoolId])
@@ -471,6 +487,8 @@ model Payment {
   voidBy      String?    @db.Uuid
   school      School     @relation(fields: [schoolId], references: [id])
   student     Student    @relation(fields: [studentId, schoolId], references: [id, schoolId])
+  reconciliationMatches ReconciliationMatch[]
+  @@unique([id, schoolId])
   @@unique([schoolId, receipt])
   @@index([schoolId, yearId, studentId, term])
   @@index([schoolId, reference])
@@ -541,6 +559,7 @@ model StudentGuardian {
   canReceiveReports Boolean @default(true)
   canReceiveFinanceAlert Boolean @default(true)
   canReceiveAttendanceAlert Boolean @default(true)
+  active Boolean @default(true)
   createdAt DateTime @default(now())
   school School @relation(fields: [schoolId], references: [id])
   student Student @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Cascade)
@@ -549,6 +568,7 @@ model StudentGuardian {
   @@unique([id, schoolId])
   @@index([schoolId, studentId])
   @@index([schoolId, guardianId])
+  @@index([schoolId, active])
 }
 
 model ContactVerification {
@@ -576,6 +596,9 @@ model ReportAccessLink {
   guardianId String @db.Uuid
   reportCardId String
   tokenHash String @unique
+  sessionTokenHash String?
+  otpChallengeCount Int @default(0)
+  lastOtpSentAt DateTime?
   expiresAt DateTime
   revokedAt DateTime?
   revokedByUserId String? @db.Uuid
@@ -583,7 +606,7 @@ model ReportAccessLink {
   maxAccessCount Int @default(25)
   accessCount Int @default(0)
   lastAccessedAt DateTime?
-  verificationType String @default("phone_last4")
+  verificationType String @default("otp_challenge")
   createdAt DateTime @default(now())
   school School @relation(fields: [schoolId], references: [id])
   student Student @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Cascade)
@@ -591,6 +614,7 @@ model ReportAccessLink {
   @@index([schoolId, studentId])
   @@index([schoolId, guardianId])
   @@index([expiresAt])
+  @@index([sessionTokenHash])
 }
 
 model CommunicationLog {
@@ -617,4 +641,268 @@ model CommunicationLog {
   @@index([providerMessageId])
   @@index([schoolId, guardianId])
 }
+
+model RosterConfirmation {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  enrollmentId String @db.Uuid
+  studentId String @db.Uuid
+  classroomId String @db.Uuid
+  yearId String @db.Uuid
+  teacherMembershipId String @db.Uuid
+  status String @default("pending")
+  notes String @default("")
+  flagReason String?
+  flaggedAt DateTime?
+  confirmedAt DateTime?
+  resolvedAt DateTime?
+  resolvedBy String? @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  school School @relation(fields: [schoolId], references: [id])
+  enrollment Enrollment @relation(fields: [enrollmentId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  student Student @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  classroom Classroom @relation(fields: [classroomId, schoolId], references: [id, schoolId])
+  year AcademicYear @relation(fields: [yearId, schoolId], references: [id, schoolId])
+  teacher Membership @relation(fields: [teacherMembershipId, schoolId], references: [id, schoolId])
+  @@unique([enrollmentId, teacherMembershipId])
+  @@unique([id, schoolId])
+  @@index([schoolId, classroomId, status])
+  @@index([schoolId, studentId])
+}
+
+model SubscriptionPlan {
+  id String @id @default(uuid()) @db.Uuid
+  code String @unique
+  name String
+  billingCycle String @default("annual")
+  priceAmount Int
+  currency String @default("TZS")
+  maxStudents Int @default(500)
+  features Json @default("{}")
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  subscriptions SchoolSubscription[]
+}
+
+model SchoolSubscription {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  planId String @db.Uuid
+  status String @default("trial")
+  startedAt DateTime @default(now())
+  expiresAt DateTime
+  gracePeriodEndsAt DateTime?
+  autoRenew Boolean @default(true)
+  metadata Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  school School @relation(fields: [schoolId], references: [id])
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+  invoices SubscriptionInvoice[]
+  @@unique([id, schoolId])
+  @@index([schoolId, status])
+}
+
+model SubscriptionInvoice {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  subscriptionId String @db.Uuid
+  invoiceNumber String @unique
+  amount Int
+  currency String @default("TZS")
+  status String @default("issued")
+  billingPeriodStart DateTime
+  billingPeriodEnd DateTime
+  dueDate DateTime
+  paidAt DateTime?
+  paymentReference String?
+  createdAt DateTime @default(now())
+  school School @relation(fields: [schoolId], references: [id])
+  subscription SchoolSubscription @relation(fields: [subscriptionId, schoolId], references: [id, schoolId])
+  payments SubscriptionPayment[]
+  @@unique([id, schoolId])
+  @@unique([schoolId, billingPeriodStart, billingPeriodEnd])
+  @@index([schoolId, status])
+}
+
+model SubscriptionPayment {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  invoiceId String @db.Uuid
+  amount Int
+  currency String @default("TZS")
+  provider String @default("mock")
+  providerReference String @default("")
+  status String @default("pending")
+  idempotencyKey String? @unique
+  paidAt DateTime?
+  metadata Json?
+  createdAt DateTime @default(now())
+  school School @relation(fields: [schoolId], references: [id])
+  invoice SubscriptionInvoice @relation(fields: [invoiceId, schoolId], references: [id, schoolId])
+  @@unique([id, schoolId])
+  @@index([schoolId, invoiceId])
+}
+
+model SchoolCreditWallet {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @unique @db.Uuid
+  smsBalance Int @default(0)
+  whatsappBalance Int @default(0)
+  currency String @default("TZS")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  school School @relation(fields: [schoolId], references: [id])
+  ledgers CreditLedger[]
+  @@unique([id, schoolId])
+}
+
+model CreditPackage {
+  id String @id @default(uuid()) @db.Uuid
+  code String @unique
+  name String
+  smsUnits Int @default(0)
+  whatsappUnits Int @default(0)
+  priceAmount Int
+  currency String @default("TZS")
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  purchases CreditPurchaseInvoice[]
+}
+
+model CreditPurchaseInvoice {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  packageId String @db.Uuid
+  invoiceNumber String @unique
+  smsUnits Int
+  whatsappUnits Int
+  amount Int
+  currency String @default("TZS")
+  status String @default("pending")
+  paymentProvider String @default("mock")
+  paymentReference String?
+  idempotencyKey String? @unique
+  paidAt DateTime?
+  createdAt DateTime @default(now())
+  school School @relation(fields: [schoolId], references: [id])
+  package CreditPackage @relation(fields: [packageId], references: [id])
+  @@unique([id, schoolId])
+  @@index([schoolId, status])
+}
+
+model CreditLedger {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  walletId String @db.Uuid
+  channel CommunicationChannel
+  type String
+  units Int
+  balanceBefore Int
+  balanceAfter Int
+  referenceId String?
+  referenceType String?
+  description String @default("")
+  actorId String? @db.Uuid
+  idempotencyKey String? @unique
+  createdAt DateTime @default(now())
+  school School @relation(fields: [schoolId], references: [id])
+  wallet SchoolCreditWallet @relation(fields: [walletId, schoolId], references: [id, schoolId])
+  @@unique([id, schoolId])
+  @@index([schoolId, channel, createdAt])
+  @@index([referenceId, referenceType])
+}
+
+model BankStatement {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  bankName String
+  accountNumber String @default("")
+  statementDate DateTime @db.Date
+  startDate DateTime? @db.Date
+  endDate DateTime? @db.Date
+  totalCredits Int @default(0)
+  totalDebits Int @default(0)
+  rowCount Int @default(0)
+  fileName String
+  fileHash String
+  uploadedById String @db.Uuid
+  status String @default("uploaded")
+  createdAt DateTime @default(now())
+  school School @relation(fields: [schoolId], references: [id])
+  rows BankStatementRow[]
+  @@unique([id, schoolId])
+  @@unique([schoolId, fileHash])
+  @@index([schoolId, statementDate])
+}
+
+model BankStatementRow {
+  id String @id @default(uuid()) @db.Uuid
+  statementId String @db.Uuid
+  schoolId String @db.Uuid
+  rowNumber Int
+  transactionDate DateTime @db.Date
+  reference String @default("")
+  description String @default("")
+  amount Int
+  currency String @default("TZS")
+  payerName String @default("")
+  matchStatus String @default("unmatched")
+  matchedPaymentId String? @db.Uuid
+  reconciledAt DateTime?
+  reconciledById String? @db.Uuid
+  notes String @default("")
+  statement BankStatement @relation(fields: [statementId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  school School @relation(fields: [schoolId], references: [id])
+  matches ReconciliationMatch[]
+  @@unique([id, schoolId])
+  @@unique([statementId, rowNumber])
+  @@index([schoolId, matchStatus])
+  @@index([schoolId, reference])
+}
+
+model ReconciliationMatch {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  statementRowId String @db.Uuid
+  paymentId String @db.Uuid
+  matchType String
+  confidenceScore Int @default(100)
+  status String @default("suggested")
+  reconciledById String? @db.Uuid
+  reconciledAt DateTime?
+  notes String @default("")
+  createdAt DateTime @default(now())
+  school School @relation(fields: [schoolId], references: [id])
+  statementRow BankStatementRow @relation(fields: [statementRowId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  payment Payment @relation(fields: [paymentId, schoolId], references: [id, schoolId])
+  @@unique([id, schoolId])
+  @@unique([statementRowId, paymentId])
+  @@index([schoolId, status])
+}
+
+model SecurityEvent {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String? @db.Uuid
+  category String
+  severity String @default("LOW")
+  eventType String
+  actorId String? @db.Uuid
+  ipAddress String @default("")
+  userAgent String @default("")
+  details Json @default("{}")
+  investigationStatus String @default("unreviewed")
+  resolutionNotes String @default("")
+  resolvedById String? @db.Uuid
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+  school School? @relation(fields: [schoolId], references: [id])
+  @@index([schoolId, createdAt])
+  @@index([category, severity])
+  @@index([investigationStatus])
+}
+
 

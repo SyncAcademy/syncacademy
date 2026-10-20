@@ -16,6 +16,7 @@ import {
   ResendEmailProvider,
   MockCommunicationProvider,
 } from './communication';
+import { calculateSmsSegments } from './communication/communication.service';
 
 const db = new PrismaClient();
 
@@ -124,6 +125,74 @@ async function main() {
           const payload = JSON.parse(rawPayload);
           const channel: CommunicationChannel = job.channel || payload.channel || 'EMAIL';
 
+          // Credit Wallet Reservation for SMS and WhatsApp
+          let reservedUnits = 0;
+          if (job.schoolId && (channel === 'SMS' || channel === 'WHATSAPP')) {
+            reservedUnits = channel === 'SMS' 
+              ? calculateSmsSegments(payload.body || payload.text || '') 
+              : 1;
+
+            try {
+              await db.$transaction(async tx => {
+                let wallet = await tx.schoolCreditWallet.findUnique({
+                  where: { schoolId: job.schoolId! },
+                });
+                if (!wallet) {
+                  wallet = await tx.schoolCreditWallet.create({
+                    data: { schoolId: job.schoolId!, smsBalance: 100, whatsappBalance: 25, currency: 'TZS' },
+                  });
+                }
+
+                const currentBalance = channel === 'SMS' ? wallet.smsBalance : wallet.whatsappBalance;
+                if (currentBalance < reservedUnits) {
+                  throw new Error(`INSUFFICIENT_CREDITS: Balance is ${currentBalance}, required ${reservedUnits}`);
+                }
+
+                const newBalance = currentBalance - reservedUnits;
+                if (channel === 'SMS') {
+                  await tx.schoolCreditWallet.update({
+                    where: { id: wallet.id },
+                    data: { smsBalance: newBalance },
+                  });
+                } else {
+                  await tx.schoolCreditWallet.update({
+                    where: { id: wallet.id },
+                    data: { whatsappBalance: newBalance },
+                  });
+                }
+
+                await tx.creditLedger.create({
+                  data: {
+                    schoolId: job.schoolId!,
+                    walletId: wallet.id,
+                    channel,
+                    type: 'RESERVATION',
+                    units: -reservedUnits,
+                    balanceBefore: currentBalance,
+                    balanceAfter: newBalance,
+                    referenceId: job.id,
+                    referenceType: 'OUTBOX',
+                    description: `Reserved ${reservedUnits} ${channel} credits for outbox dispatch`,
+                  },
+                });
+              });
+            } catch (walletErr: any) {
+              if (walletErr.message?.includes('INSUFFICIENT_CREDITS')) {
+                // Postpone message dispatch until wallet is topped up
+                await db.outbox.updateMany({
+                  where: { id: job.id, leaseId: lease },
+                  data: {
+                    leaseUntil: null,
+                    availableAt: new Date(Date.now() + 15 * 60 * 1000), // Check again in 15 mins
+                  },
+                });
+                console.warn(`Job ${job.id} postponed: insufficient ${channel} credits for school ${job.schoolId}`);
+                continue;
+              }
+              throw walletErr;
+            }
+          }
+
           let result: OutboundMessageResult;
 
           if (channel === 'SMS') {
@@ -178,6 +247,27 @@ async function main() {
               data: { sentAt: new Date(), payload: '', leaseUntil: null },
             });
 
+            if (reservedUnits > 0 && job.schoolId) {
+              const wallet = await db.schoolCreditWallet.findUnique({ where: { schoolId: job.schoolId } });
+              if (wallet) {
+                const bal = channel === 'SMS' ? wallet.smsBalance : wallet.whatsappBalance;
+                await db.creditLedger.create({
+                  data: {
+                    schoolId: job.schoolId,
+                    walletId: wallet.id,
+                    channel,
+                    type: 'CONSUMPTION',
+                    units: -reservedUnits,
+                    balanceBefore: bal,
+                    balanceAfter: bal,
+                    referenceId: job.id,
+                    referenceType: 'OUTBOX',
+                    description: `Consumed ${reservedUnits} credits upon delivery`,
+                  },
+                });
+              }
+            }
+
             if (payload.communicationLogId) {
               await db.communicationLog.updateMany({
                 where: { id: payload.communicationLogId },
@@ -192,6 +282,37 @@ async function main() {
           } else {
             // Provider returned non-delivered status (FAILED / REJECTED / UNDELIVERABLE)
             const isDeadLetter = job.attempts >= 8 || result.isRetryable === false;
+
+            if (isDeadLetter && reservedUnits > 0 && job.schoolId) {
+              // Release reservation back to wallet
+              await db.$transaction(async tx => {
+                const wallet = await tx.schoolCreditWallet.findUnique({ where: { schoolId: job.schoolId! } });
+                if (wallet) {
+                  const before = channel === 'SMS' ? wallet.smsBalance : wallet.whatsappBalance;
+                  const after = before + reservedUnits;
+                  if (channel === 'SMS') {
+                    await tx.schoolCreditWallet.update({ where: { id: wallet.id }, data: { smsBalance: after } });
+                  } else {
+                    await tx.schoolCreditWallet.update({ where: { id: wallet.id }, data: { whatsappBalance: after } });
+                  }
+                  await tx.creditLedger.create({
+                    data: {
+                      schoolId: job.schoolId!,
+                      walletId: wallet.id,
+                      channel,
+                      type: 'RELEASE',
+                      units: reservedUnits,
+                      balanceBefore: before,
+                      balanceAfter: after,
+                      referenceId: job.id,
+                      referenceType: 'OUTBOX',
+                      description: `Released ${reservedUnits} credits: permanent dispatch failure`,
+                    },
+                  });
+                }
+              });
+            }
+
             await db.outbox.updateMany({
               where: { id: job.id, leaseId: lease },
               data: {

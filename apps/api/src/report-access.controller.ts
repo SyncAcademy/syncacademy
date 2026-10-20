@@ -33,11 +33,12 @@ const publishWithLinksSchema = z.object({
   classId: uuid,
   channel: z.enum(['SMS', 'WHATSAPP', 'EMAIL']).default('SMS'),
   expiresDays: z.coerce.number().int().min(1).max(90).default(30),
-  verificationType: z.enum(['phone_last4', 'otp']).default('phone_last4'),
+  verificationType: z.enum(['otp']).default('otp'),
 });
 
 const verifyPublicChallengeSchema = z.object({
   token: tokenValidator,
+  code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit verification code.').optional(),
   challengeResponse: z.string().trim().max(20).optional(),
   requestOtp: z.boolean().optional(),
 });
@@ -291,6 +292,7 @@ export class ReportAccessController {
         revokedAt: new Date(),
         revokedByUserId: user.id,
         revokeReason: b.reason,
+        sessionTokenHash: null,
       },
     });
 
@@ -320,7 +322,7 @@ export class ReportAccessController {
 
     // Rate limit public access to prevent brute force
     await this.svc.rate('report-link:' + tokenHash, 10, 600);
-    await this.svc.rate('report-ip:' + req.ip, 30, 600);
+    await this.svc.rate('report-ip:' + (req.ip || 'unknown'), 30, 600);
 
     const link = await this.svc.db.reportAccessLink.findUnique({
       where: { tokenHash },
@@ -348,9 +350,11 @@ export class ReportAccessController {
     }
 
     const last4 = link.guardian.phone.slice(-4);
+    const code = b.code || b.challengeResponse;
 
-    // If guardian requests an OTP challenge
-    if (b.requestOtp) {
+    // If guardian requests an OTP challenge or hasn't provided code yet
+    if (b.requestOtp || !code) {
+      // Disallow phone-last-4 as standalone authorization; require verified OTP challenge
       await this.comms.requestVerification(link.schoolId, link.guardianId, 'SMS', 'public-report-viewer');
       return {
         status: 'CHALLENGE_REQUIRED',
@@ -361,43 +365,27 @@ export class ReportAccessController {
       };
     }
 
-    // Check challenge response
-    if (!b.challengeResponse) {
-      return {
-        status: 'CHALLENGE_REQUIRED',
-        verificationType: link.verificationType,
-        maskedDestination: `+255 *** *** ${last4}`,
-        studentName: link.student.name,
-        schoolName: link.school.name,
-      };
-    }
+    // Verify 6-digit OTP
+    await this.comms.confirmVerification(link.schoolId, link.guardianId, 'SMS', code, 'public-report-viewer');
 
-    // Verify challenge
-    if (link.verificationType === 'phone_last4') {
-      const sanitizedResponse = b.challengeResponse.replace(/[^\d]/g, '');
-      if (sanitizedResponse !== last4) {
-        throw new BadRequestException('Incorrect phone number confirmation. Enter the last 4 digits of your registered phone number.');
-      }
-    } else {
-      // OTP verification
-      await this.comms.confirmVerification(link.schoolId, link.guardianId, 'SMS', b.challengeResponse, 'public-report-viewer');
-    }
+    // Generate short-lived secure session token for subsequent viewing and PDF downloads
+    const sessionToken = randomToken();
+    const sessionTokenHash = digest(sessionToken);
 
-    // Increment access count & update lastAccessedAt
+    // Increment access count & update lastAccessedAt and sessionTokenHash
     await this.svc.db.reportAccessLink.update({
       where: { id: link.id },
       data: {
         accessCount: { increment: 1 },
         lastAccessedAt: new Date(),
+        sessionTokenHash,
       },
     });
 
     // Fetch the actual report card from AcademicWorkspace
     // reportCardId is `${assessmentId}:${classId}:${studentId}`
     const parts = link.reportCardId.split(':');
-    const assessmentId = parts[0];
     const classId = parts[1];
-    const studentId = parts[2];
 
     const classroom = await this.svc.db.classroom.findFirst({
       where: { id: classId, schoolId: link.schoolId },
@@ -428,6 +416,7 @@ export class ReportAccessController {
 
     return {
       status: 'VERIFIED',
+      sessionToken,
       school: {
         name: link.school.name,
         phone: link.school.phone,
@@ -451,6 +440,90 @@ export class ReportAccessController {
         publishedAt: reportCardData.createdAt,
       },
       expiresAt: link.expiresAt.toISOString(),
+    };
+  }
+
+  /**
+   * Public Guardian Route: Download verified report PDF using session token
+   */
+  @Get('public/reports/:token/pdf')
+  async downloadReportPdf(
+    @Req() req: Request,
+    @Param('token') token: string,
+    @Query('sessionToken') sessionTokenQuery?: string,
+  ) {
+    parse(tokenValidator, token);
+    const sessionToken = sessionTokenQuery || (req.headers['x-report-session-token'] as string);
+    if (!sessionToken) {
+      throw new ForbiddenException('Active verified report session required for PDF download.');
+    }
+
+    const tokenHash = digest(token);
+    const sessionTokenHash = digest(sessionToken);
+
+    const link = await this.svc.db.reportAccessLink.findUnique({
+      where: { tokenHash },
+      include: {
+        school: { select: { id: true, name: true, phone: true, email: true, active: true } },
+        student: { select: { id: true, name: true, admissionNumber: true, gender: true } },
+        guardian: { select: { id: true, name: true, phone: true } },
+      },
+    });
+
+    if (!link || !link.school.active) {
+      throw new NotFoundException('Report link not found or inactive.');
+    }
+
+    if (link.revokedAt) {
+      throw new ForbiddenException('Report access link has been revoked.');
+    }
+
+    if (link.expiresAt < new Date()) {
+      throw new ForbiddenException('Report access link has expired.');
+    }
+
+    if (link.sessionTokenHash !== sessionTokenHash) {
+      throw new ForbiddenException('Invalid or expired report viewing session. Please complete OTP verification.');
+    }
+
+    const parts = link.reportCardId.split(':');
+    const classId = parts[1];
+
+    const classroom = await this.svc.db.classroom.findFirst({
+      where: { id: classId, schoolId: link.schoolId },
+      include: { year: true },
+    });
+
+    let reportCardData: any = null;
+    if (classroom) {
+      const workspace = await this.svc.db.academicWorkspace.findFirst({
+        where: { schoolId: link.schoolId, yearId: classroom.yearId },
+      });
+      const reports: any[] = (workspace?.data as any)?.reports || [];
+      reportCardData = reports.find(r => r.id === link.reportCardId);
+    }
+
+    if (!reportCardData) {
+      throw new NotFoundException('Report card not found.');
+    }
+
+    await this.svc.db.auditEvent.create({
+      data: {
+        schoolId: link.schoolId,
+        actorId: link.guardianId,
+        action: 'REPORT_PDF_DOWNLOADED_BY_GUARDIAN',
+        target: link.reportCardId,
+      },
+    });
+
+    return {
+      status: 'VERIFIED',
+      school: link.school,
+      student: link.student,
+      academicYear: classroom?.year.name,
+      className: classroom?.name,
+      reportCard: reportCardData,
+      downloadedAt: new Date().toISOString(),
     };
   }
 }

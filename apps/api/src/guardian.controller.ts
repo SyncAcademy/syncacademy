@@ -62,6 +62,7 @@ const updateLinkSchema = z.object({
   canReceiveReports: z.boolean().optional(),
   canReceiveFinanceAlert: z.boolean().optional(),
   canReceiveAttendanceAlert: z.boolean().optional(),
+  active: z.boolean().optional(),
 });
 
 const paging = {
@@ -285,27 +286,48 @@ export class GuardianController {
       if (duplicate) throw new ConflictException(`Phone number ${b.phone} is already registered to another guardian.`);
     }
 
-    const updated = await this.svc.db.guardian.update({
-      where: { id_schoolId: { id: guardianId, schoolId } },
-      data: {
-        ...(b.name ? { name: b.name } : {}),
-        ...(b.phone ? { phone: b.phone, phoneVerifiedAt: b.phone === existing.phone ? existing.phoneVerifiedAt : null } : {}),
-        ...(b.whatsappPhone !== undefined ? { whatsappPhone: b.whatsappPhone || null, whatsappVerifiedAt: b.whatsappPhone === existing.whatsappPhone ? existing.whatsappVerifiedAt : null } : {}),
-        ...(b.email !== undefined ? { email: b.email || null, emailVerifiedAt: b.email === existing.email ? existing.emailVerifiedAt : null } : {}),
-        ...(b.preferredChannel ? { preferredChannel: b.preferredChannel as CommunicationChannel } : {}),
-        ...(b.preferredLanguage ? { preferredLanguage: b.preferredLanguage } : {}),
-        ...(b.optOutSms !== undefined ? { optOutSms: b.optOutSms } : {}),
-        ...(b.optOutWhatsapp !== undefined ? { optOutWhatsapp: b.optOutWhatsapp } : {}),
-      },
-    });
+    const updated = await this.svc.atomic(async tx => {
+      // Invalidate outstanding verification challenges if contacts change
+      if (b.phone && b.phone !== existing.phone) {
+        await tx.contactVerification.deleteMany({
+          where: { schoolId, guardianId, channel: 'SMS' },
+        });
+      }
+      if (b.whatsappPhone !== undefined && b.whatsappPhone !== existing.whatsappPhone) {
+        await tx.contactVerification.deleteMany({
+          where: { schoolId, guardianId, channel: 'WHATSAPP' },
+        });
+      }
+      if (b.email !== undefined && b.email !== existing.email) {
+        await tx.contactVerification.deleteMany({
+          where: { schoolId, guardianId, channel: 'EMAIL' },
+        });
+      }
 
-    await this.svc.db.auditEvent.create({
-      data: {
-        schoolId,
-        actorId: user.id,
-        action: 'GUARDIAN_UPDATED',
-        target: guardianId,
-      },
+      const res = await tx.guardian.update({
+        where: { id_schoolId: { id: guardianId, schoolId } },
+        data: {
+          ...(b.name ? { name: b.name } : {}),
+          ...(b.phone ? { phone: b.phone, phoneVerifiedAt: b.phone === existing.phone ? existing.phoneVerifiedAt : null } : {}),
+          ...(b.whatsappPhone !== undefined ? { whatsappPhone: b.whatsappPhone || null, whatsappVerifiedAt: b.whatsappPhone === existing.whatsappPhone ? existing.whatsappVerifiedAt : null } : {}),
+          ...(b.email !== undefined ? { email: b.email || null, emailVerifiedAt: b.email === existing.email ? existing.emailVerifiedAt : null } : {}),
+          ...(b.preferredChannel ? { preferredChannel: b.preferredChannel as CommunicationChannel } : {}),
+          ...(b.preferredLanguage ? { preferredLanguage: b.preferredLanguage } : {}),
+          ...(b.optOutSms !== undefined ? { optOutSms: b.optOutSms } : {}),
+          ...(b.optOutWhatsapp !== undefined ? { optOutWhatsapp: b.optOutWhatsapp } : {}),
+        },
+      });
+
+      await tx.auditEvent.create({
+        data: {
+          schoolId,
+          actorId: user.id,
+          action: 'GUARDIAN_UPDATED',
+          target: guardianId,
+        },
+      });
+
+      return res;
     });
 
     return updated;
@@ -331,6 +353,9 @@ export class GuardianController {
     if (!student) throw new NotFoundException('Student not found in this school.');
 
     return this.svc.atomic(async tx => {
+      // Transactional lock on the Student row to serialize concurrent link creation
+      await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId}::uuid AND "schoolId" = ${schoolId}::uuid FOR UPDATE`;
+
       let guardianId = b.guardianId;
 
       if (!guardianId && b.guardianData) {
@@ -359,13 +384,30 @@ export class GuardianController {
 
       if (!guardianId) throw new BadRequestException('Guardian identification failed.');
 
-      // Check if already linked
+      // Verify guardian belongs to the same school
+      const guardianRecord = await tx.guardian.findFirst({
+        where: { id: guardianId, schoolId },
+      });
+      if (!guardianRecord) {
+        throw new NotFoundException('Guardian not found in this school.');
+      }
+
+      // Check if already actively linked
       const existingLink = await tx.studentGuardian.findUnique({
         where: { studentId_guardianId: { studentId, guardianId } },
       });
 
-      if (existingLink) {
-        throw new ConflictException('This guardian is already linked to the student.');
+      if (existingLink && existingLink.active) {
+        throw new ConflictException('This guardian is already actively linked to the student.');
+      }
+
+      // Enforce strict maximum of two active authorized parent recipients per student
+      const activeCount = await tx.studentGuardian.count({
+        where: { studentId, schoolId, active: true },
+      });
+
+      if (activeCount >= 2) {
+        throw new ConflictException('A student may have a maximum of two active authorized parent recipients.');
       }
 
       // If isPrimary is true, unset other primary guardians for this student
@@ -376,19 +418,37 @@ export class GuardianController {
         });
       }
 
-      const link = await tx.studentGuardian.create({
-        data: {
-          schoolId,
-          studentId,
-          guardianId,
-          relationship: b.relationship,
-          isPrimary: b.isPrimary,
-          canReceiveReports: b.canReceiveReports,
-          canReceiveFinanceAlert: b.canReceiveFinanceAlert,
-          canReceiveAttendanceAlert: b.canReceiveAttendanceAlert,
-        },
-        include: { guardian: true },
-      });
+      let link;
+      if (existingLink) {
+        // Reactivate historical relationship
+        link = await tx.studentGuardian.update({
+          where: { id_schoolId: { id: existingLink.id, schoolId } },
+          data: {
+            active: true,
+            relationship: b.relationship,
+            isPrimary: b.isPrimary,
+            canReceiveReports: b.canReceiveReports,
+            canReceiveFinanceAlert: b.canReceiveFinanceAlert,
+            canReceiveAttendanceAlert: b.canReceiveAttendanceAlert,
+          },
+          include: { guardian: true },
+        });
+      } else {
+        link = await tx.studentGuardian.create({
+          data: {
+            schoolId,
+            studentId,
+            guardianId,
+            relationship: b.relationship,
+            isPrimary: b.isPrimary,
+            canReceiveReports: b.canReceiveReports,
+            canReceiveFinanceAlert: b.canReceiveFinanceAlert,
+            canReceiveAttendanceAlert: b.canReceiveAttendanceAlert,
+            active: true,
+          },
+          include: { guardian: true },
+        });
+      }
 
       // Keep legacy student fields synced with primary or first guardian for backwards-compatibility
       if (b.isPrimary || !student.guardianName) {
@@ -437,6 +497,20 @@ export class GuardianController {
     if (!link) throw new NotFoundException('Guardian is not linked to this student.');
 
     return this.svc.atomic(async tx => {
+      // If activating or setting primary, serialize on student
+      if (b.active === true || b.isPrimary === true) {
+        await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId}::uuid AND "schoolId" = ${schoolId}::uuid FOR UPDATE`;
+      }
+
+      if (b.active === true && !link.active) {
+        const activeCount = await tx.studentGuardian.count({
+          where: { studentId, schoolId, active: true },
+        });
+        if (activeCount >= 2) {
+          throw new ConflictException('A student may have a maximum of two active authorized parent recipients.');
+        }
+      }
+
       if (b.isPrimary) {
         await tx.studentGuardian.updateMany({
           where: { studentId, schoolId, NOT: { guardianId } },
@@ -452,11 +526,12 @@ export class GuardianController {
           ...(b.canReceiveReports !== undefined ? { canReceiveReports: b.canReceiveReports } : {}),
           ...(b.canReceiveFinanceAlert !== undefined ? { canReceiveFinanceAlert: b.canReceiveFinanceAlert } : {}),
           ...(b.canReceiveAttendanceAlert !== undefined ? { canReceiveAttendanceAlert: b.canReceiveAttendanceAlert } : {}),
+          ...(b.active !== undefined ? { active: b.active } : {}),
         },
         include: { guardian: true },
       });
 
-      if (b.isPrimary) {
+      if (b.isPrimary && updated.active) {
         await tx.student.update({
           where: { id_schoolId: { id: studentId, schoolId } },
           data: {
@@ -480,7 +555,7 @@ export class GuardianController {
   }
 
   /**
-   * Unlink a guardian from a student
+   * Unlink a guardian from a student (soft deactivation to preserve historical relationships)
    */
   @Delete('students/:studentId/guardians/:guardianId')
   async unlinkGuardianFromStudent(
@@ -500,8 +575,10 @@ export class GuardianController {
     if (!link) throw new NotFoundException('Guardian is not linked to this student.');
 
     await this.svc.atomic(async tx => {
-      await tx.studentGuardian.delete({
+      // Soft-deactivate to preserve historical communication logs, report links, and audit history
+      await tx.studentGuardian.update({
         where: { id_schoolId: { id: link.id, schoolId } },
+        data: { active: false, isPrimary: false },
       });
 
       await tx.auditEvent.create({
@@ -514,7 +591,7 @@ export class GuardianController {
       });
     });
 
-    return { message: 'Guardian unlinked successfully.' };
+    return { message: 'Guardian unlinked successfully (relationship archived).' };
   }
 
   /**

@@ -9,7 +9,7 @@ import { SuperAdminStore, PlatformSubscription } from '../../super-admin.store';
 @Component({
   selector: 'app-sa-subscriptions',
   standalone: true,
-  imports: [CommonModule, FormsModule, SaEditorComponent],
+  imports: [CommonModule, FormsModule],
   templateUrl: './sa-subscriptions.page.html',
   styleUrls: ['./sa-subscriptions.page.scss', '../../sa-workflows.scss'],
 })

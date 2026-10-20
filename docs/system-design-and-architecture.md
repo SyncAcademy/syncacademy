@@ -262,3 +262,92 @@ Allows parents to view and download term report cards from an SMS, WhatsApp mess
 - **ADR-003 (Async Messaging & Outbox)**: Use the **PostgreSQL Transactional Outbox (`Outbox` + `worker.ts`)** instead of Redis/Kafka, guaranteeing atomic event enqueueing and low infrastructure cost.
 - **ADR-004 (Multi-Tenancy)**: Use a **shared PostgreSQL schema discriminated by `schoolId`** with global `User` identity so staff and cross-school guardians can hold relationships across multiple schools.
 - **ADR-005 (Academic Schema Unification)**: Complete consolidation of legacy academic tables (`Examination`, `Mark`, `ReportCard`) into the active normalized `Academic*` relational tables in Phase 2.
+- **ADR-006 (Authoritative Payment Gateway & Mock Provider)**: Decouple school subscription and credit purchase payments behind a pluggable `PaymentProvider` abstraction with deterministic test mock provider and HMAC-signed webhook validation, preventing unverified client updates.
+- **ADR-007 (Messaging Credit Wallet with Atomic Reservation)**: Enforce a dedicated two-phase messaging credit lifecycle (`RESERVATION` -> `CONSUMPTION` / `RELEASE`) with row-level locks on `SchoolCreditWallet` to strictly prevent credit overdraft across high-volume notification bursts.
+- **ADR-008 (Bank Statement Reconciliation & Heuristic Matching)**: Process Bursar bank and mobile money CSV statements via SHA-256 duplicate detection and a multi-tier matching engine (exact reference: 100%, date + amount + student identifier: 85-95%) with Bursar confirmation and dispute controls.
+
+---
+
+## 9. Phase 3 — Controlled Platform Expansion
+
+Phase 3 introduces enterprise operational modules expanding administrative oversight, billing, messaging solvency, and financial reconciliation while enforcing strict multi-tenant isolation and security corrections.
+
+### 9.1 Mandatory Architecture Corrections
+
+1. **Transactional Parent Limit (Maximum Two Active Authorized Guardians)**:
+   - Enforced in `apps/api/src/guardian.controller.ts` using `SELECT ... FOR UPDATE` row locks on the `Student` record within a PostgreSQL transaction.
+   - Historical relationships and communication logs are permanently preserved: unlinking a parent sets `active: false` rather than deleting rows.
+   - Cross-school isolation is strictly verified: both student and guardian records must belong to the caller's authorized `schoolId`.
+   - Parents have no login credentials, passwords, or dashboards in SyncAcademy.
+2. **Independent Contact Verification Invalidation**:
+   - Phone and email verification states are isolated.
+   - When a guardian's phone number changes, all outstanding phone OTP challenges are invalidated (`isUsed: true`) and `phoneVerifiedAt` is cleared.
+   - When an email address changes, email verification challenges are invalidated while preserving unrelated phone verification.
+3. **OTP-Secured Report Access Sessions & Authorized PDF Downloads**:
+   - Standalone `phone_last4` challenge is deprecated in favor of verified 6-digit OTP codes.
+   - Successful challenge verification returns a cryptographically secure 32-byte session token (`sessionTokenHash` stored in database).
+   - Downloading official report card PDFs (`GET /api/v1/public/reports/:token/pdf`) requires an active, verified session token.
+   - Revoking a report link immediately clears active viewer session hashes and denies further downloads.
+
+### 9.2 Teacher Roster Confirmation & Registrar Resolution Workflow
+
+Extends student class enrollment with a formal verification and attendance sanity check:
+- **Assigned Teacher Scoping**: Teachers can only retrieve and confirm rosters for classrooms explicitly assigned to them in `TeachingAssignment` or homeroom class teacher roles.
+- **Student Status Transitions**:
+  - `PENDING` -> `CONFIRMED`: Teacher confirms student is active in class.
+  - `PENDING` -> `FLAGGED_ISSUE`: Teacher flags student with documented reason (e.g., student absent since term opening or suspected transfer).
+  - `FLAGGED_ISSUE` -> `RESOLVED`: Registrar reviews issue, updates student record or class allocation, and marks resolved.
+  - `RESOLVED` -> `CONFIRMED`: Teacher re-confirms student following resolution.
+- **Headmaster Oversight**: Real-time progress indicators showing confirmation completion rates across all classrooms.
+
+### 9.3 School Subscriptions, Billing State Machine & Payment Webhooks
+
+- **Tiered Plans (`SubscriptionPlan`)**:
+  - `BASIC_ANNUAL`: Core student management, academic reports, and 250 messaging credits (up to 300 students).
+  - `STANDARD_ANNUAL`: Adds bursar ledger, bank reconciliation, and 750 messaging credits (up to 800 students).
+  - `PREMIUM_ANNUAL`: Enterprise scale, priority support, and 2,000 messaging credits (up to 3,000 students).
+- **Subscription State Machine**:
+  - `trial` (30 days complimentary access) -> `active` (upon confirmed invoice payment).
+  - `active` -> `renewal_due` (within 14 days of expiration).
+  - `renewal_due` -> `grace_period` (14 days past expiration; full access maintained with warning).
+  - `grace_period` -> `restricted_access` (non-destructive restriction: marks entry and reporting restricted, but historical records remain accessible).
+  - `suspended`: Administrative freeze initiated by Super Admin.
+- **Invoicing & Payments**:
+  - Sequential invoice numbers (`INV-SUB-YYYY-SEQ`).
+  - Pluggable `PaymentProvider` abstraction with `MockPaymentProvider` for deterministic test simulation.
+  - Authoritative HMAC-SHA256 webhook processing (`apps/api/src/webhook.controller.ts`) ensuring state changes occur only on verified gateway callbacks.
+
+### 9.4 Messaging Credit Wallet & Atomic Ledger Architecture
+
+- **Dedicated Channel Balances (`SchoolCreditWallet`)**:
+  - Separate balances for `SMS` and `WhatsApp` units.
+  - Pre-packaged top-up bundles (`CreditPackage`) with automated sequential billing (`INV-CRD-YYYY-SEQ`).
+- **Two-Phase Credit Reservation Lifecycle (`CreditLedger`)**:
+  - **Phase 1 (Reservation)**: Prior to dispatching batch outbox messages, the worker or service executes `SELECT ... FOR UPDATE` and atomically decrements available credits, recording a `RESERVATION` entry. If credits are insufficient, the job is rejected with an overdraft prevention error.
+  - **Phase 2 (Consumption / Release)**:
+    - On provider delivery success: Ledger entry is transitioned to `CONSUMED`.
+    - On permanent provider failure or invalid recipient: Reserved credits are refunded to the school wallet balance and recorded as `RELEASE`.
+
+### 9.5 Bank Statement Reconciliation & Candidate Matching Engine
+
+- **Safe Statement Ingestion**:
+  - Accepts standard CSV statements from Tanzanian banks (CRDB, NMB, NBC) and mobile money aggregators (M-Pesa, Airtel Money, Tigo Pesa).
+  - SHA-256 file content hashing prevents accidental duplicate uploads.
+- **Three-Tier Candidate Matching Engine**:
+  1. *Tier 1 (Exact Reference Match)*: Statement reference matches school payment reference or receipt number (100% confidence score).
+  2. *Tier 2 (Heuristic Amount & Student Match)*: Transaction amount matches recorded fee payment, date within ±3 days, and student admission number or student surname identified in description (85-95% confidence score).
+  3. *Tier 3 (Unmatched)*: Flagged for Bursar review or manual linkage.
+- **Audit & Dispute Workflow**:
+  - Bursar can confirm candidate matches or flag erroneous bank entries as `DISPUTED` with documented resolution notes.
+
+### 9.6 Security Events Telemetry & Secret Redaction
+
+- **Centralized Event Stream (`SecurityEvent`)**:
+  - Categorized telemetry: `AUTHENTICATION`, `AUTHORIZATION`, `MFA`, `OTP`, `REPORT_ACCESS`, `WEBHOOK`, `FINANCIAL`, `WALLET`, `INTEGRITY`.
+  - Severity classification: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`.
+- **Zero-Secret Leakage Guarantee**:
+  - Automatic recursive redaction replaces sensitive keys (`password`, `token`, `secret`, `otp`, `code`, `pin`, `authorization`, `cookie`) with `[REDACTED]` before database insertion.
+- **Access Scoping**:
+  - Headmaster and School Admin can inspect security events strictly belonging to their `schoolId`.
+  - Super Admin has platform-wide query capabilities for threat detection and compliance auditing.
+

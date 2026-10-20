@@ -97,6 +97,15 @@ SyncAcademy separates **Global User Identity** (`User`) from **Tenant Authorizat
 
 - **Phase 0 (Completed)**: Comprehensive repository architecture, implementation, and security audit.
 - **Phase 1 (Completed)**: Security credential remediation, repository cleanup of 0-byte scaffolds and one-off scripts, `AGENTS.md` governance, and unified professional documentation.
-- **Phase 2 (Next)**: Backend multi-tenant RBAC hardening across all controllers (`assertSchoolAccess`), teacher assignment-scoped authorization, academic table consolidation, and cross-tenant IDOR integration tests.
-- **Phase 3**: Multi-channel Guardian Communication Engine (`SmsProvider`, `WhatsAppProvider`, `EmailProvider` via PostgreSQL `Outbox`) and cryptographically signed expiring report-access links (`ReportAccessLink`).
-- **Phase 4**: Cloudflare Pages + R2 + Managed PostgreSQL production pilot deployment for Tanzanian schools and unified cross-school Parent Portal.
+- **Phase 2 (Completed)**: Guardian Identity, Multi-Channel Communication (`SmsProvider`, `WhatsAppProvider`, `EmailProvider` via PostgreSQL `Outbox`) and secure expiring report-access links.
+- **Phase 3 (Completed)**: Architecture Discovery & Controlled Platform Expansion:
+  - Teacher roster confirmation & registrar resolution workflow.
+  - School subscriptions, tiered plans, billing cycles, and state machine (`trial` -> `active` -> `renewal_due` -> `grace_period` -> `restricted_access` -> `suspended`).
+  - Authoritative payment gateway abstraction & webhooks (`MockPaymentProvider`).
+  - Messaging credit wallet & ledger (separate SMS/WhatsApp balances, atomic credit reservation and release).
+  - Bank statement reconciliation (safe CSV parsing, SHA-256 duplicate statement detection, and candidate matching engine).
+  - Transactional parent relationship limit (max 2 active guardians per student with row locks and soft deactivation).
+  - Independent phone/email verification invalidation on contact changes.
+  - OTP-secured report viewing sessions and authorized PDF downloads.
+  - Security events telemetry with automatic secret redaction.
+- **Phase 4**: Cloudflare Pages + R2 + Managed PostgreSQL production pilot deployment for Tanzanian schools and cross-school guardian access.
