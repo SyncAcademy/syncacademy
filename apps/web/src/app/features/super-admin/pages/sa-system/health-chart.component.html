@@ -6,16 +6,16 @@
   @for(tick of ticks();track tick.y){<line x1="58" [attr.y1]="tick.y" x2="628" [attr.y2]="tick.y" stroke="currentColor" opacity=".16"/><text x="50" [attr.y]="tick.y+4" text-anchor="end">{{tickLabel(tick.value)}}</text>}
   <text x="58" y="12">{{unit()}}</text>
   @for(plot of plots();track plot.key){<path [attr.d]="plot.path" fill="none" [attr.stroke]="plot.color" stroke-width="2" stroke-linejoin="round"/>
-   @for(marker of plot.markers;track marker.index){<circle class="measurement" [attr.cx]="marker.x" [attr.cy]="marker.y" r="2.5" [attr.fill]="plot.color"/>}
+   @for(marker of plot.markers;track marker.index){<circle class="measurement" [class.measurement--startup]="plot.key==='cpu' && points[marker.index].cpuWarmup" [attr.cx]="marker.x" [attr.cy]="marker.y" r="2.5" [attr.fill]="plot.color"/>}
   }
   @if(points[selected()]){<line [attr.x1]="x(selected())" y1="20" [attr.x2]="x(selected())" y2="156" stroke="#94a3b8" stroke-dasharray="3 4"/>}
   <text x="58" y="190">{{points[0].at|date:'MMM d, HH:mm'}}</text><text x="628" y="190" text-anchor="end">{{points[points.length-1].at|date:'MMM d, HH:mm'}}</text>
  </svg>
- <div class="coverage-legend">@if(idleCount()){<span><i class="idle-key"></i>{{idleCount()}} idle intervals: no application requests</span>}@if(missingCount()){<span><i class="missing-key"></i>{{missingCount()}} intervals without observations</span>}</div>
+ <div class="coverage-legend">@if(hasBounds()){<span>P95 bounds are labeled "At most"; newer low-volume samples are exact.</span>}@if(hasStartup()){<span>Outlined CPU points are short startup samples; regular readings cover approximately 30 seconds.</span>}@if(idleCount()){<span><i class="idle-key"></i>{{idleCount()}} idle intervals: no application requests</span>}@if(missingCount()){<span><i class="missing-key"></i>{{missingCount()}} intervals without observations</span>}</div>
  @if(!hasValues()){<p class="empty">{{idleCount()&&!missingCount()?'No application requests in this range. Monitoring is running; response times and error percentages require requests.':'No measurements for this metric in the selected range. Missing observations remain visible as gaps.'}}</p>}
  <div class="tooltip" aria-live="polite">@if(points[selected()];as point){<time>{{point.at|date:'medium'}}</time>
   @if(selectionState()==='missing'){<span>No monitoring observation was collected in this interval.</span>}
   @else if(selectionState()==='idle'){<span>Idle interval: <b>0 application requests</b>. Response time and error percentage are not calculated.</span>}
-  @else{@for(s of series;track s.key){@if(!hidden().includes(s.key)){<span><i [style.background]="s.color"></i>{{s.label}}: <b>@if(point[s.key]===null || point[s.key]===undefined){Measurement unavailable}@else{{{point[s.key]|number:'1.0-2'}} {{s.unit}}}</b></span>}}}
+  @else{@for(s of series;track s.key){@if(!hidden().includes(s.key)){<span><i [style.background]="s.color"></i>{{s.label}}: <b>@if(point[s.key]===null || point[s.key]===undefined){@if(s.key==='cpu'&&point.cpuWarmup){Collecting CPU baseline}@else{Measurement unavailable}}@else{@if(s.key==='p95'&&point.p95Exact!==true){At most }{{point[s.key]|number:'1.0-2'}} {{s.unit}}@if(s.key==='cpu'&&point.cpuWarmup){ (startup sample)}}</b></span>}}}
  }</div>
 }@else{<div class="empty">No monitoring observations collected for this range yet.</div>}

@@ -62,6 +62,8 @@ export class HealthChartComponent {
         return result;
     });
     readonly hasValues = computed(() => this.values().some(row => !this.missing(row) && this.definitions().some(s => this.finite(row[s.key]))));
+    readonly hasBounds = computed(() => this.definitions().some(s => s.key === 'p95') && this.values().some(row => this.finite(row.p95) && row.p95Exact !== true));
+    readonly hasStartup = computed(() => this.definitions().some(s => s.key === 'cpu') && this.values().some(row => row.cpuWarmup));
     readonly idleCount = computed(() => this.apiChart() ? this.values().filter(row => !this.missing(row) && row.requests === 0).length : 0);
     readonly missingCount = computed(() => this.values().filter(row => this.missing(row)).length);
     readonly observations = computed(() => this.values().filter(row => !this.missing(row)).length);

@@ -136,7 +136,7 @@ export class SaSystemPage {
         this.busy.set('');
     } }
     export(kind: 'endpoints' | 'alerts') {
-        const rows = kind === 'endpoints' ? this.filtered().map(r => ({ endpoint: r.route, requests: r.count, average_ms: r.avgMs, p95_ms: r.p95Ms, error_percent: r.errorRate })) : this.visibleAlerts().map(a => ({ service: a.service, severity: a.severity, title: a.title, detected: a.detectedAt, acknowledged: a.acknowledgedAt, resolved: a.resolvedAt }));
+        const rows = kind === 'endpoints' ? this.filtered().map(r => ({ endpoint: r.route, requests: r.count, average_ms: r.avgMs, p95_ms: r.p95Ms, percentile_method: r.percentileMethod, error_percent: r.errorRate })) : this.visibleAlerts().map(a => ({ service: a.service, severity: a.severity, title: a.title, detected: a.detectedAt, acknowledged: a.acknowledgedAt, resolved: a.resolvedAt }));
         if (!rows.length)
             return;
         const keys = Object.keys(rows[0]);
@@ -151,6 +151,8 @@ export class SaSystemPage {
     }
     queueFor(rows: any[] | null | undefined, channel: string) { if (!rows)
         return { pending: null, failed: null, sent: null }; return rows.find(row => row.channel === channel) ?? { pending: 0, failed: 0, sent: 0 }; }
+    percentileText(value: unknown, method: unknown) { return typeof value === 'number' ? (method === 'exact' ? '' : 'At most ') + this.format(value, ' ms') : 'Unavailable'; }
+    apiPercentile(key: string) { const api = this.current()?.api; return api?.count === 0 ? 'No requests' : this.percentileText(api?.[key], api?.percentileMethod); }
     apiMetric(value: unknown, suffix = '') { return this.current()?.api?.count === 0 ? 'No requests' : this.format(value, suffix); }
     format(value: unknown, suffix = '') { return typeof value === 'number' && Number.isFinite(value) ? new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(value) + suffix : 'Unavailable'; }
     bytes(value: unknown) { return typeof value === 'number' ? this.format(value / 1048576, ' MB') : 'Unavailable'; }

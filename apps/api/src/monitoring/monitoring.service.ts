@@ -1,3 +1,4 @@
+import { CpuSampler } from './cpu-sampler';
 import { Injectable, OnModuleInit, OnModuleDestroy, NotFoundException } from '@nestjs/common';
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -6,7 +7,7 @@ import { getHeapStatistics } from 'node:v8';
 import { Pool } from 'pg';
 import { Database } from '../database/database.service';
 import { config } from '../config';
-import { Metrics, Aggregate, empty, add, summarize } from './metrics';
+import { Metrics, Aggregate, empty, add, summarize, durableAggregate } from './metrics';
 import { defaults, Settings, severity, overall, ranges } from './settings';
 @Injectable()
 export class MonitoringService implements OnModuleInit, OnModuleDestroy {
@@ -21,8 +22,7 @@ export class MonitoringService implements OnModuleInit, OnModuleDestroy {
     private previousSocketFailures = 0;
     private previousSocketConnections = 0;
     private previousProcessingFailures = 0;
-    private cpu = process.cpuUsage();
-    private started = performance.now();
+    private readonly cpu = new CpuSampler();
     private windowStarted = Date.now();
     private streaks = new Map<string, {
         bad: number;
@@ -55,9 +55,7 @@ export class MonitoringService implements OnModuleInit, OnModuleDestroy {
         for (const a of requests.values())
             add(aggregate, a);
         try {
-            const elapsed = performance.now() - this.started, diff = process.cpuUsage(this.cpu);
-            this.cpu = process.cpuUsage();
-            this.started = performance.now();
+            const cpu = this.cpu.sample();
             const memory = process.memoryUsage(), heapLimit = getHeapStatistics().heap_size_limit;
             let diskPercent: number | null = null;
             try {
@@ -65,7 +63,7 @@ export class MonitoringService implements OnModuleInit, OnModuleDestroy {
                 diskPercent = fs.blocks ? 100 * (fs.blocks - fs.bavail) / fs.blocks : null;
             }
             catch { }
-            const runtime = { uptimeSeconds: process.uptime(), cpuPercent: elapsed > 0 ? (diff.user + diff.system) / (elapsed * 10) : null, rssBytes: memory.rss, heapUsedBytes: memory.heapUsed, heapLimitBytes: heapLimit, memoryPercent: 100 * memory.heapUsed / heapLimit, diskPercent, version: process.env.npm_package_version || '0.1.0', environment: config.NODE_ENV, hostCpu: null, containerMemory: null };
+            const runtime = { uptimeSeconds: process.uptime(), cpuPercent: cpu.percent, cpuSampleSeconds: cpu.seconds, cpuState: cpu.percent === null ? 'warming-up' : 'measured', rssBytes: memory.rss, heapUsedBytes: memory.heapUsed, heapLimitBytes: heapLimit, memoryPercent: 100 * memory.heapUsed / heapLimit, diskPercent, version: process.env.npm_package_version || '0.1.0', environment: config.NODE_ENV, hostCpu: null, containerMemory: null };
             const database: any = { connected: false, latencyMs: null, connections: null, maxConnections: null, active: null, slowQueries: null, longTransactions: null, bytes: null, rollbacks: null, statsScope: 'Visible sessions only; aggregate connection count covers this database', applicationPool: null, failedOperations: this.db.operationFailures, intervalFailures: this.db.operationFailures - this.previousDatabaseFailures };
             this.previousDatabaseFailures = this.db.operationFailures;
             const start = performance.now();
@@ -119,7 +117,7 @@ export class MonitoringService implements OnModuleInit, OnModuleDestroy {
                 for (const [route, data] of requests) {
                     const previous = await this.pool.query('SELECT data FROM "MonitorEndpoint" WHERE instance=$1 AND hour=$2 AND route=$3', [this.instance, bucket, route]);
                     const merged = add(previous.rows[0]?.data ?? empty(), data);
-                    await this.pool.query('INSERT INTO "MonitorEndpoint" (instance,hour,route,data) VALUES ($1,$2,$3,$4) ON CONFLICT(instance,hour,route) DO UPDATE SET data=EXCLUDED.data', [this.instance, bucket, route, JSON.stringify(merged)]);
+                    await this.pool.query('INSERT INTO "MonitorEndpoint" (instance,hour,route,data) VALUES ($1,$2,$3,$4) ON CONFLICT(instance,hour,route) DO UPDATE SET data=EXCLUDED.data', [this.instance, bucket, route, JSON.stringify(durableAggregate(merged))]);
                 }
                 this.current.persistenceAvailable = true;
                 if (++this.cycles % 120 === 1) {
@@ -202,7 +200,7 @@ export class MonitoringService implements OnModuleInit, OnModuleDestroy {
     history(range: string) { return this.cached('history:' + range, () => this.readHistory(range)); }
     private async readHistory(range: string) {
         const seconds = ranges[range], from = new Date(Date.now() - seconds * 1000), bucket = Math.max(30, Math.ceil(seconds / 180 / 30) * 30);
-        const result = await this.pool.query(`SELECT to_timestamp(floor(extract(epoch FROM at)/$3)*$3) AS at,count(*)::int AS observations,array_agg(DISTINCT data->>'status') AS statuses,avg((data->'runtime'->>'cpuPercent')::float8) AS cpu,avg((data->'runtime'->>'memoryPercent')::float8) AS memory,avg((data->'runtime'->>'diskPercent')::float8) AS disk,avg((data->'database'->>'latencyMs')::float8) AS database,avg((data->'database'->>'connections')::float8) AS connections,avg(100*(data->'database'->>'connections')::float8/NULLIF((data->'database'->>'maxConnections')::float8,0)) AS "connectionPercent",sum((data->'database'->>'intervalFailures')::float8) AS "databaseFailures",avg((data->'websocket'->>'active')::float8) AS sockets,sum((data->'websocket'->>'intervalFailures')::float8) AS "socketFailures",sum((data->'api'->>'count')::float8) AS requests,sum((data->'api'->>'totalMs')::float8)/NULLIF(sum((data->'api'->>'count')::float8),0) AS latency,max((data->'api'->>'p95Ms')::float8) AS "p95",100*sum((data->'api'->>'serverErrors')::float8)/NULLIF(sum((data->'api'->>'count')::float8),0) AS errors,count(*) FILTER(WHERE data->>'status'='Operational')::int AS healthy FROM "MonitorSample" WHERE instance=$1 AND at>=$2 GROUP BY 1 ORDER BY 1`, [this.instance, from, bucket]);
+        const result = await this.pool.query(`SELECT to_timestamp(floor(extract(epoch FROM at)/$3)*$3) AS at,count(*)::int AS observations,array_agg(DISTINCT data->>'status') AS statuses,avg((data->'runtime'->>'cpuPercent')::float8) AS cpu,bool_or(data#>>'{runtime,cpuState}'='warming-up' OR ((data#>>'{runtime,uptimeSeconds}')::float8<10 AND (data#>>'{api,windowSeconds}')::float8<5)) AS "cpuWarmup",avg((data->'runtime'->>'memoryPercent')::float8) AS memory,avg((data->'runtime'->>'diskPercent')::float8) AS disk,avg((data->'database'->>'latencyMs')::float8) AS database,avg((data->'database'->>'connections')::float8) AS connections,avg(100*(data->'database'->>'connections')::float8/NULLIF((data->'database'->>'maxConnections')::float8,0)) AS "connectionPercent",sum((data->'database'->>'intervalFailures')::float8) AS "databaseFailures",avg((data->'websocket'->>'active')::float8) AS sockets,sum((data->'websocket'->>'intervalFailures')::float8) AS "socketFailures",sum((data->'api'->>'count')::float8) AS requests,sum((data->'api'->>'totalMs')::float8)/NULLIF(sum((data->'api'->>'count')::float8),0) AS latency,max(LEAST((data->'api'->>'p95Ms')::float8,(data->'api'->>'totalMs')::float8)) FILTER (WHERE (data->'api'->>'count')::int>0) AS "p95",bool_and(COALESCE(data#>>'{api,percentileMethod}'='exact',false)) FILTER (WHERE (data->'api'->>'count')::int>0) AS "p95Exact",100*sum((data->'api'->>'serverErrors')::float8)/NULLIF(sum((data->'api'->>'count')::float8),0) AS errors,count(*) FILTER(WHERE data->>'status'='Operational')::int AS healthy FROM "MonitorSample" WHERE instance=$1 AND at>=$2 GROUP BY 1 ORDER BY 1`, [this.instance, from, bucket]);
         const observations = result.rows.reduce((n, r) => n + r.observations, 0), healthy = result.rows.reduce((n, r) => n + r.healthy, 0);
         // Include explicit empty time buckets; never replace unobserved measurements with zero.
         const observed = new Map(result.rows.map(row => [new Date(row.at).getTime(), row]));
@@ -217,12 +215,12 @@ export class MonitoringService implements OnModuleInit, OnModuleDestroy {
                 requests: null, latency: null, p95: null, errors: null,
             });
         }
-        return { points, range, from, instance: this.instance, coveragePercent: Math.min(100, 100 * observations * 30 / seconds), observedAvailabilityPercent: observations ? 100 * healthy / observations : null, observations, externalAvailability: null, bucketSeconds: bucket, note: 'Availability describes collected observations only. Gaps and complete API outages require an independent uptime monitor. P95 chart shows the maximum interval histogram estimate.' };
+        return { points, range, from, instance: this.instance, coveragePercent: Math.min(100, 100 * observations * 30 / seconds), observedAvailabilityPercent: observations ? 100 * healthy / observations : null, observations, externalAvailability: null, bucketSeconds: bucket, note: 'Availability describes collected observations only. Gaps and complete API outages require an independent uptime monitor. P95 shows the maximum interval percentile; legacy or high-volume bounds are labeled separately.' };
     }
     endpoints(range: string) { return this.cached('endpoints:' + range, () => this.readEndpoints(range)); }
     private async readEndpoints(range: string) {
         const from = new Date(Math.floor((Date.now() - ranges[range] * 1000) / 300000) * 300000);
-        const result = await this.pool.query(`SELECT route,sum((data->>'count')::float8) AS count,sum((data->>'totalMs')::float8) AS "totalMs",sum((data->>'clientErrors')::float8) AS "clientErrors",sum((data->>'serverErrors')::float8) AS "serverErrors",ARRAY[${Array.from({ length: 13 }, (_, i) => `sum((data->'histogram'->>${i})::float8)`).join(',')}] AS histogram FROM "MonitorEndpoint" WHERE instance=$1 AND hour>=$2 GROUP BY route ORDER BY count DESC LIMIT 256`, [this.instance, from]);
+        const result = await this.pool.query(`SELECT route,sum((data->>'count')::float8) AS count,sum((data->>'totalMs')::float8) AS "totalMs",sum((data->>'clientErrors')::float8) AS "clientErrors",sum((data->>'serverErrors')::float8) AS "serverErrors",CASE WHEN count(*) FILTER(WHERE data->>'maxMs' IS NULL)=0 THEN max((data->>'maxMs')::float8) ELSE NULL END AS "maxMs",ARRAY[${Array.from({ length: 13 }, (_, i) => `sum((data->'histogram'->>${i})::float8)`).join(',')}] AS histogram FROM "MonitorEndpoint" WHERE instance=$1 AND hour>=$2 GROUP BY route ORDER BY count DESC LIMIT 256`, [this.instance, from]);
         return { from, bucketSeconds: 300, rows: result.rows.map(r => ({ route: r.route, ...summarize(r) })), note: 'Five-minute buckets; percentiles are histogram upper-bound estimates (last bucket includes durations over 120 seconds).' };
     }
     async alerts(range: string) { const r = await this.pool.query('SELECT * FROM "MonitorAlert" WHERE "resolvedAt" IS NULL OR "detectedAt">=$1 ORDER BY "resolvedAt" NULLS FIRST,"detectedAt" DESC LIMIT 200', [new Date(Date.now() - ranges[range] * 1000)]); return { rows: r.rows, limit: 200 }; }
