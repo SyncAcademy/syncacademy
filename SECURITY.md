@@ -40,7 +40,7 @@ If you discover a potential security vulnerability, privilege escalation, cross-
 
 ## 3. Core Security Invariants & Policies
 
-All software contributors and automated coding agents operating in this repository must adhere to the security rules defined in [`AGENTS.md`](./AGENTS.md):
+All software contributors and automated coding agents operating in this repository must adhere to the core security invariants:
 
 1. **Zero Committed Secrets**:
    - Never commit passwords, API keys, SMTP credentials, session tokens, or private encryption keys to tracked repository files (`.env`, `.runtime/`, and local test credentials must remain strictly untracked).

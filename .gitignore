@@ -52,3 +52,8 @@ Thumbs.db
 
 # Local scratch directories
 scratch/
+
+# Agent governance instructions (maintained locally for agents, untracked in remote)
+AGENTS.md
+apps/**/AGENTS.md
+

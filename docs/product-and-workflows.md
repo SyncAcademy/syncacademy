@@ -96,7 +96,7 @@ SyncAcademy separates **Global User Identity** (`User`) from **Tenant Authorizat
 ## 5. Product & Engineering Roadmap
 
 - **Phase 0 (Completed)**: Comprehensive repository architecture, implementation, and security audit.
-- **Phase 1 (Completed)**: Security credential remediation, repository cleanup of 0-byte scaffolds and one-off scripts, `AGENTS.md` governance, and unified professional documentation.
+- **Phase 1 (Completed)**: Security credential remediation, repository cleanup of 0-byte scaffolds and one-off scripts, developer governance, and unified professional documentation.
 - **Phase 2 (Completed)**: Guardian Identity, Multi-Channel Communication (`SmsProvider`, `WhatsAppProvider`, `EmailProvider` via PostgreSQL `Outbox`) and secure expiring report-access links.
 - **Phase 3 (Completed)**: Architecture Discovery & Controlled Platform Expansion:
   - Teacher roster confirmation & registrar resolution workflow.

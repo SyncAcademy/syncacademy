@@ -87,7 +87,7 @@ scanImports(
 );
 
 // 3. UI Preservation Governance (No competing CSS frameworks)
-console.log('  - Checking UI preservation governance (AGENTS.md Section 5)...');
+console.log('  - Checking UI preservation governance (Design System Integrity)...');
 const webPackageJsonPath = join(ROOT_DIR, 'apps/web/package.json');
 if (existsSync(webPackageJsonPath)) {
   const webPkg = JSON.parse(readFileSync(webPackageJsonPath, 'utf-8'));
@@ -99,7 +99,7 @@ if (existsSync(webPackageJsonPath)) {
   const forbiddenCssFrameworks = ['tailwindcss', 'bootstrap', 'bulma', 'foundation-sites', '@chakra-ui/react'];
   for (const framework of forbiddenCssFrameworks) {
     if (allDeps[framework]) {
-      violations.push(`Competing CSS framework '${framework}' detected in apps/web/package.json. Violates AGENTS.md Section 5.`);
+      violations.push(`Competing CSS framework '${framework}' detected in apps/web/package.json. Violates UI preservation policy.`);
     }
   }
 }

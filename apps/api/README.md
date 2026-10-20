@@ -3,7 +3,6 @@
 The SyncAcademy backend (`@syncacademy/api`) is a **NestJS 10 + Prisma 5 + PostgreSQL 16** REST API and transactional outbox worker.
 
 ## Key References
-- Workspace Agent Rules: [`apps/api/AGENTS.md`](./AGENTS.md)
 - System Design & Backend Architecture: [`docs/system-design-and-architecture.md`](../../docs/system-design-and-architecture.md)
 
 

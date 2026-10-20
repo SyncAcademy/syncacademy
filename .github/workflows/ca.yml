@@ -42,7 +42,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify Continuous Architecture & Governance (AGENTS.md)
+      - name: Verify Continuous Architecture & Governance
         run: npm run verify:architecture
 
       - name: Run dependency security audit

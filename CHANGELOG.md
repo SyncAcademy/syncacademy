@@ -31,7 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Fragmented Documentation Folders**: Eliminated micro-directories (`docs/UX/`, `docs/product/`, `docs/architecture/`, `docs/deployment/`, `docs/development/`, `docs/communication/`) and deleted 35+ loose/conflicting/0-byte Markdown files (including contradictory `school.MD`).
 
 ### Added & Consolidated
-- **Agent Governance**: Created authoritative root `AGENTS.md`, `apps/web/AGENTS.md`, and `apps/api/AGENTS.md` enforcing UI preservation, multi-tenancy rules, security standards, and definition of done.
+- **Developer & Architecture Governance**: Established authoritative governance rules enforcing UI preservation, multi-tenancy boundaries, security standards, and definition of done.
 - **Unified Canonical Specifications (`docs/`)**:
   - `docs/system-design-and-architecture.md`: Complete end-to-end design from frontend to backend, UI/responsive design standards, database schema, multi-tenancy, security, query optimizations, guardian identity, multi-channel communication architecture, and ADRs.
   - `docs/product-and-workflows.md`: Product vision, MVP scope, user roles, capability matrix, end-to-end portal workflows, and roadmap.

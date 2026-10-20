@@ -83,7 +83,7 @@ Automated CI, Continuous Architecture (CA), and GitHub Bot workflows are defined
 | Workflow / Automation | File | Purpose & Verification Scope |
 |---|---|---|
 | **Continuous Integration (CI)** | `.github/workflows/ci.yml` | Triggered on push/PR to `main` and `testing`. Runs in parallel with PostgreSQL 16 service container: Prisma generation, full backend build (`apps/api`), frontend build (`apps/web`), in-memory unit tests, database migration deploy, full auth/database integration tests, and all frontend portal verification scripts. |
-| **Continuous Architecture & Code Analysis (CA)** | `.github/workflows/ca.yml` | Triggered on push/PR and weekly cron. Runs `scripts/verify-architecture.mjs` (enforcing zero committed secrets, monorepo import boundaries, AGENTS.md UI preservation, and multi-tenant constraints) alongside CodeQL static security analysis for JavaScript/TypeScript. |
+| **Continuous Architecture & Code Analysis (CA)** | `.github/workflows/ca.yml` | Triggered on push/PR and weekly cron. Runs `scripts/verify-architecture.mjs` (enforcing zero committed secrets, monorepo import boundaries, UI preservation policies, and multi-tenant constraints) alongside CodeQL static security analysis for JavaScript/TypeScript. |
 | **Bot Automation** | `.github/workflows/bot-automation.yml` | Automates PR triage and `dependabot[bot]` interactions. Automatically fetches metadata, verifies semantic version bumps, and approves/merges non-breaking patch and minor updates. |
 | **Dependabot Bot** | `.github/dependabot.yml` | Weekly dependency update bot scanning root workspace, `apps/api`, `apps/web`, and GitHub Actions. |
 

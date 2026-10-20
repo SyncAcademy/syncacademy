@@ -12,7 +12,7 @@ SyncAcademy is a multi-tenant education management SaaS platform built initially
 - **Shared Workspace Packages (`packages/*`)**: `@syncacademy/api-contracts`, `@syncacademy/shared-types`, `@syncacademy/shared-utils`
 - **Target Production Topology**: Cloudflare Pages (SPA) + Cloudflare R2 (Object Storage) + Cloudflare DNS/WAF + Containerized NestJS API/Worker + Managed PostgreSQL 16
 
-> **Governance Notice**: Before making any changes to this repository, read [`AGENTS.md`](./AGENTS.md), [`apps/web/AGENTS.md`](./apps/web/AGENTS.md), and [`apps/api/AGENTS.md`](./apps/api/AGENTS.md). The existing UI in `apps/web` is strictly protected.
+> **Architecture & UI Protection Notice**: The existing UI layout, typography, and styling in `apps/web` are strictly protected. Contributors must preserve all established design tokens and multi-tenant isolation boundaries.
 
 ---
 

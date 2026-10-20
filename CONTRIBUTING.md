@@ -1,6 +1,6 @@
 # Contributing to SyncAcademy
 
-Thank you for contributing to SyncAcademy. All contributors and automated coding agents must follow the governance rules in [`AGENTS.md`](./AGENTS.md).
+Thank you for contributing to SyncAcademy. All contributors and automated coding agents must follow the repository governance and security guidelines.
 
 ## 1. Branch & Commit Hygiene
 - Create a dedicated feature or fix branch from `main`.
