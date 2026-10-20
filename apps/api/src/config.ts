@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 const schema = z.object({
   DATABASE_URL: z.string().url(),
+  MONITOR_INSTANCE_ID: z.string().regex(/^[a-zA-Z0-9._-]{1,80}$/).optional(),
   REQUEST_METRICS: z.enum(['true', 'false']).default('false'),
   REALTIME_TRANSPORT: z.enum(['local', 'postgres']).default('local'),
   REALTIME_DATABASE_URL: z.string().url().optional(),

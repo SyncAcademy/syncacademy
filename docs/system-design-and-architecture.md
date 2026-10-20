@@ -192,6 +192,8 @@ erDiagram
 - **Query & Storage Scalability**:
   - Finance balance summaries use school-scoped grouped CTEs rather than correlated per-student subqueries.
   - Academic portal storage uses normalized relational tables (`AcademicExamItem`, `AcademicScoreRecord`, `AcademicApprovalItem`, `AcademicAttendanceSession`, `AcademicReportCardRecord`) indexed by `schoolId`.
+  - Super Admin school workspaces request summary views for school, year, and class cards without loading student records or the full teaching-assignment relation set. Student rosters are fetched through the school-scoped registry endpoint only after a class is selected, with server-side search and pagination constrained by academic year and active class enrollment.
+  - The Super Admin Teacher Assignments view uses `GET /api/v1/schools/:id/teacher-assignments` with a required school-owned `yearId`, optional name/class/subject/role filters, and page sizes of 12, 20, 24, or 48. The API paginates unique teacher memberships before returning each selected teacher's year-scoped subject/class assignments and active class-teacher responsibilities; school access is authorized at the API boundary.
 
 ---
 
@@ -351,3 +353,10 @@ Extends student class enrollment with a formal verification and attendance sanit
   - Headmaster and School Admin can inspect security events strictly belonging to their `schoolId`.
   - Super Admin has platform-wide query capabilities for threat detection and compliance auditing.
 
+## 10. Current Implementation: Administrative System Health
+
+The active runtime uses the controllers in `src/app.module.ts`, PostgreSQL-backed `express-session` authentication, `/api/v1` routes and the Socket.IO gateway in `src/realtime.gateway.ts`. Earlier diagrams and opaque-session/SSE descriptions above describe a different architecture revision and must not be used to introduce a second authentication system into this runtime.
+
+The protected monitoring module at `/api/v1/system-health` reuses `PlatformService.administrator` and its selected-role/MFA checks. It collects bounded route-template histograms, process resource measurements, time-limited PostgreSQL probes, gateway counters and communication-worker heartbeats. An additive migration creates aggregate observation, endpoint, incident, settings and heartbeat tables; no tenant data is copied into telemetry. All ordinary school roles are denied access at the backend boundary.
+
+See [System Health monitoring](system-health.md) for current endpoints, aggregation and retention rules, metric scopes, incident recovery, multi-instance configuration and infrastructure measurements that remain unavailable without independent instrumentation.

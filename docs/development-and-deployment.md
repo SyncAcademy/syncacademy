@@ -175,3 +175,11 @@ Configure these variables in the production secret manager (never commit to Git)
 2. **Migration Step**: Run `npx prisma migrate deploy --schema apps/api/prisma/schema.prisma` before rolling out new API/worker containers.
 3. **Health Check**: Verify `GET /api/health` returns `200 OK` before shifting traffic.
 4. **Rollback**: Revert container image tag and Cloudflare Pages deployment to the previous green commit SHA.
+
+## 6. Current Implementation: System Health Verification and LAN Releases
+
+The implemented administrator monitoring page is `/super-admin/system`; protected APIs are under `/api/v1/system-health`. See [System Health monitoring](system-health.md) for deployment configuration and the distinction between process health, observed availability and independently measured uptime.
+
+Run `npm run test:monitoring --workspace=apps/api` against the dedicated disposable `syncacademy_monitor_test` database. The test never resets a school database. Run `npm run test:monitoring --workspace=apps/web` for Chrome checks at desktop, tablet, mobile and 320px widths. The current frontend lint command performs TypeScript checking.
+
+For the existing shared-network Docker deployment, run `scripts/deploy-lan.ps1` from PowerShell. It builds API and frontend together, applies additive migrations through the existing migrate service and waits for API, worker and web startup. Give every API replica a unique stable `MONITOR_INSTANCE_ID` before scaling beyond the Compose single-instance setup.

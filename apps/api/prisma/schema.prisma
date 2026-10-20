@@ -904,5 +904,41 @@ model SecurityEvent {
   @@index([category, severity])
   @@index([investigationStatus])
 }
-
-
+// Aggregated operational metadata only; never request payloads or school records.
+model MonitorSample {
+  instance String
+  at DateTime @db.Timestamptz
+  data Json
+  @@id([instance, at])
+  @@index([at])
+}
+model MonitorEndpoint {
+  instance String
+  hour DateTime @db.Timestamptz
+  route String
+  data Json
+  @@id([instance, hour, route])
+  @@index([hour])
+}
+model MonitorSetting {
+  id Int @id @default(1)
+  data Json
+}
+model MonitorAlert {
+  id String @id @db.Uuid
+  instance String
+  service String
+  severity String
+  title String
+  description String
+  detectedAt DateTime @default(now()) @db.Timestamptz
+  resolvedAt DateTime? @db.Timestamptz
+  acknowledgedAt DateTime? @db.Timestamptz
+  actorId String? @db.Uuid
+  @@index([detectedAt])
+}
+model MonitorWorker {
+  instance String @id
+  at DateTime @db.Timestamptz
+  data Json
+}

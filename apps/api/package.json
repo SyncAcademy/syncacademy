@@ -10,7 +10,8 @@
     "prisma:generate": "prisma generate",
     "migrate": "prisma migrate deploy",
     "test:integration": "node --test test/auth.test.cjs",
-    "test": "npm run test:integration"
+    "test": "npm run test:integration",
+    "test:monitoring": "node --test test/monitoring.test.cjs"
   },
   "dependencies": {
     "@nestjs/common": "11.2.6",

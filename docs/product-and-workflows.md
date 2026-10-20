@@ -68,6 +68,7 @@ SyncAcademy separates **Global User Identity** (`User`) from **Tenant Authorizat
 ### 4.1 Super Admin Portal (`/super-admin`)
 - **School Onboarding & Leads Conversion**: Register a school or convert a won lead into an active `School` tenant and queue a single-use Headmaster invitation in one transaction.
 - **Tenant Governance**: Search, filter, suspend, or reactivate schools with mandatory audit reasons; configure platform-wide SMTP settings and monitor `Outbox` email/notification delivery health.
+- **School Registry Oversight**: Select a school from the Schools Directory, browse year-filtered class cards with active enrollment counts, then load a searched and paginated student roster only for the selected class. The Teacher Assignments view groups a teacher's subject and class-teacher responsibilities into one school- and academic-year-scoped card, with server-side search, filtering, and unique-teacher pagination. Class creation and teacher assignment remain available in the same school workspace.
 
 ### 4.2 Headmaster & School Setup Portals (`/headmaster`, `/school-setup`)
 - **Academic Year & School Configuration**: Create/edit academic years and terms, configure grading bands and pass marks, and close completed academic years once all assessments and submissions are approved.
@@ -109,3 +110,7 @@ SyncAcademy separates **Global User Identity** (`User`) from **Tenant Authorizat
   - OTP-secured report viewing sessions and authorized PDF downloads.
   - Security events telemetry with automatic secret redaction.
 - **Phase 4**: Cloudflare Pages + R2 + Managed PostgreSQL production pilot deployment for Tanzanian schools and cross-school guardian access.
+
+### Current Platform Operations: System Health
+
+Authorized Super Admins can open System Health to inspect measured service conditions, request timings, database probes, process resources, gateway activity, and communication-worker queues. The page supports historical ranges, endpoint filtering/sorting, CSV export, saved alert thresholds and audited acknowledgements. Recovery checks resolve incidents automatically. School roles cannot access infrastructure diagnostics. Missing host/exporter measurements and external uptime coverage are explicitly marked unavailable; see [System Health monitoring](system-health.md).

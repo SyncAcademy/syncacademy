@@ -1,3 +1,4 @@
+import { hostname } from 'node:os';
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -65,6 +66,20 @@ const emailProvider: EmailProvider = isMock || config.EMAIL_PROVIDER === 'mock'
 let stopping = false;
 process.on('SIGTERM', () => { stopping = true; });
 process.on('SIGINT', () => { stopping = true; });
+const workerInstance=(config.MONITOR_INSTANCE_ID || hostname()).slice(0,80);
+const workerMetrics={name:'Communication dispatch',successes:0,failures:0,lastExecution:null as string|null,durationMs:null as number|null,cleanupAt:null as string|null};
+let heartbeatBusy=false;
+async function heartbeat() {
+  if (heartbeatBusy) return;
+  heartbeatBusy = true;
+  try {
+    await db.$executeRaw`INSERT INTO "MonitorWorker" (instance, at, data) VALUES (${workerInstance}, now(), ${JSON.stringify(workerMetrics)}::jsonb) ON CONFLICT(instance) DO UPDATE SET at = EXCLUDED.at, data = EXCLUDED.data`;
+  } catch {
+    console.error(JSON.stringify({ event: 'worker_heartbeat_failed' }));
+  } finally {
+    heartbeatBusy = false;
+  }
+}
 
 async function main() {
   if (config.EMAIL_PROVIDER === 'smtp' && config.SMTP_USER && !config.SMTP_PASSWORD && !isMock) {
@@ -72,10 +87,11 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-
   await db.$connect();
   let cycles = 0;
-
+  await heartbeat();
+  const heartbeatTimer = setInterval(() => void heartbeat(), 15_000);
+  heartbeatTimer.unref();
   while (!stopping) {
     const lease = randomUUID();
     try {
@@ -99,6 +115,7 @@ async function main() {
       `;
 
       if (jobs.length) {
+        const executionStarted=performance.now();
         const job = await db.outbox.findUniqueOrThrow({ where: { id: jobs[0].id } });
         try {
           let valid = true;
@@ -246,6 +263,7 @@ async function main() {
               where: { id: job.id, leaseId: lease },
               data: { sentAt: new Date(), payload: '', leaseUntil: null },
             });
+            workerMetrics.successes++;
 
             if (reservedUnits > 0 && job.schoolId) {
               const wallet = await db.schoolCreditWallet.findUnique({ where: { schoolId: job.schoolId } });
@@ -281,6 +299,7 @@ async function main() {
             }
           } else {
             // Provider returned non-delivered status (FAILED / REJECTED / UNDELIVERABLE)
+            workerMetrics.failures++;
             const isDeadLetter = job.attempts >= 8 || result.isRetryable === false;
 
             if (isDeadLetter && reservedUnits > 0 && job.schoolId) {
@@ -335,6 +354,7 @@ async function main() {
             }
           }
         } catch (error) {
+          workerMetrics.failures++;
           const isDeadLetter = job.attempts >= 8;
           await db.outbox.updateMany({
             where: { id: job.id, leaseId: lease },
@@ -353,6 +373,9 @@ async function main() {
             code: err.code || err.responseCode,
             message: err.message,
           }));
+        } finally {
+          workerMetrics.lastExecution = new Date().toISOString();
+          workerMetrics.durationMs = performance.now() - executionStarted;
         }
       } else {
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -360,6 +383,7 @@ async function main() {
 
       if (++cycles % 300 === 0) {
         await db.rateBucket.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+        workerMetrics.cleanupAt = new Date().toISOString();
       }
     } catch {
       console.error('Outbox database unavailable; retrying');
@@ -367,6 +391,7 @@ async function main() {
     }
   }
 
+  clearInterval(heartbeatTimer);
   await db.$disconnect();
 }
 

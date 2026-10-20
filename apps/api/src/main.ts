@@ -1,3 +1,4 @@
+import { Metrics } from './monitoring/metrics';
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import { NestFactory } from '@nestjs/core';
@@ -29,11 +30,13 @@ async function main() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   const server = app.getHttpAdapter().getInstance(); server.disable('x-powered-by');
   server.set('trust proxy', config.TRUST_PROXY_HOPS);
+  const monitoring=app.get(Metrics);
   app.use(helmet());
   app.use((req: Request, res: Response, next: NextFunction) => {
     const started = performance.now();
     res.once('finish', () => {
       const durationMs = Math.round(performance.now() - started);
+      monitoring.record(req.method,req.route?.path,res.statusCode,durationMs);
       if (config.REQUEST_METRICS === 'true' || durationMs >= 1000) console.log(JSON.stringify({ event: 'http_request', method: req.method, route: req.route?.path ?? 'unmatched', status: res.statusCode, durationMs, requestId: res.getHeader('X-Request-ID') }));
     });
     res.setHeader('X-Request-ID', randomUUID()); res.setHeader('Cache-Control', 'no-store');
@@ -50,6 +53,7 @@ async function main() {
     const metricsTimer = setInterval(() => { const memory = process.memoryUsage(); console.log(JSON.stringify({ event: 'runtime_metrics', rssBytes: memory.rss, heapUsedBytes: memory.heapUsed, sessionConnections: pool.totalCount, sessionIdleConnections: pool.idleCount, sessionWaiting: pool.waitingCount })); }, 5000);
     metricsTimer.unref();
   }
+  monitoring.sessionPool=()=>({total:pool.totalCount,idle:pool.idleCount,waiting:pool.waitingCount,max:5});
   pool.on('error', () => console.error('Session database connection unavailable'));
   const PgStore = connectPgSimple(session);
   const sessionMiddleware = session({ name: 'sa.sid', secret: config.SESSION_SECRET, store: new PgStore({ pool, tableName: 'session', createTableIfMissing: false, pruneSessionInterval: 900 }), resave: false, saveUninitialized: false, rolling: true, cookie: { httpOnly: true, secure: config.NODE_ENV === 'production', sameSite: 'lax', maxAge: 8 * 3600000, path: '/' } });
