@@ -260,18 +260,21 @@ module.exports=async({t,db,client,fixture})=>{
    assert.equal(ready,false,'anonymous and wrong-origin sockets cannot authorize');
   }
   const suspendedSocket=await connect(other,school.id);t.after(()=>suspendedSocket.disconnect());
+  // Arm the observer before changing authority. Start the delivery deadline after
+  // the triggering write completes so transaction time is not a socket timeout.
+  const suspended=new Promise(resolve=>suspendedSocket.once('disconnect',resolve));
   await db.membership.update({where:{id:otherMembership.id},data:{active:false}});
-  const suspended=new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('Suspended member socket stayed authorized')),3000);suspendedSocket.once('disconnect',()=>{clearTimeout(timeout);resolve();});});
-  await ok(head,'grading',{passMark:38,bands:[{label:'Pass',minimum:38},{label:'Fail',minimum:0}]});await suspended;
+  await ok(head,'grading',{passMark:38,bands:[{label:'Pass',minimum:38},{label:'Fail',minimum:0}]});
+  await Promise.race([suspended,new Promise((_,reject)=>{const timer=setTimeout(()=>reject(new Error('Suspended member socket stayed authorized')),5000);timer.unref();})]);
   headSocket.disconnect();
   const reconnected=new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Authorized socket did not reconnect')),3000);headSocket.once('school:ready',()=>{clearTimeout(timer);resolve();});});
   headSocket.connect();await reconnected;
   const beforeReconnectUpdate=headUpdates;
   await live(academic,'grading',{passMark:40,bands:[{label:'Pass',minimum:40},{label:'Fail',minimum:0}]});
   assert.ok(headUpdates>beforeReconnectUpdate,'a reconnected Headmaster receives later changes');
+  const revoked=new Promise(resolve=>teacherSocket.once('disconnect',resolve));
   assert.equal((await teacher.call('POST','auth/logout',{})).status,201);
-  const revoked=new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Logged-out socket remained connected')),3000);teacherSocket.once('disconnect',()=>{clearTimeout(timer);resolve();});});
   await ok(head,'grading',{passMark:45,bands:[{label:'Pass',minimum:45},{label:'Fail',minimum:0}]});
-  await revoked;
+  await Promise.race([revoked,new Promise((_,reject)=>{const timer=setTimeout(()=>reject(new Error('Logged-out socket remained connected')),5000);timer.unref();})]);
  });
 };
