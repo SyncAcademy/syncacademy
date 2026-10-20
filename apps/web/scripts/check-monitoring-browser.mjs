@@ -43,6 +43,9 @@ try {
     const checks = JSON.parse(result.result.value); assert.ok(!checks.failed, JSON.stringify(checks));
     const shot = await send('Page.captureScreenshot', { format: 'png' }, sessionId);
     writeFileSync(resolve(output, `monitoring-${width}.png`), Buffer.from(shot.data, 'base64'));
+    await send('Runtime.evaluate', { expression: `document.querySelector('.chart-grid')?.scrollIntoView({block:'start',behavior:'instant'})` }, sessionId);
+    const chartShot=await send('Page.captureScreenshot',{format:'png'},sessionId);
+    writeFileSync(resolve(output, `charts-${width}.png`),Buffer.from(chartShot.data,'base64'));
     console.log(`Monitoring dashboard ${width}x${height}: ${checks.passed.length} checks passed.`);
     await send('Target.closeTarget', { targetId });
   }

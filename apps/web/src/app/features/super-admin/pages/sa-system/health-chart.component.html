@@ -1,0 +1,21 @@
+<div class="chart-heading"><h3>{{title}}</h3><span>{{observations()}} observed intervals</span></div>
+<div class="legend">@for(s of series;track s.key){<button type="button" [attr.aria-pressed]="!hidden().includes(s.key)" (click)="toggle(s.key)"><i [style.background]="s.color"></i>{{s.label}}</button>}</div>
+@if(points.length){
+ <svg viewBox="0 0 640 206" role="img" tabindex="0" [attr.aria-label]="title+'. Use left and right arrow keys to inspect observations. Shaded intervals show idle periods or missing observations.'" (keydown.arrowleft)="move(-1,$event)" (keydown.arrowright)="move(1,$event)" (pointermove)="hover($event)">
+  @for(band of bands();track $index){<rect class="band" [class.band--missing]="band.state==='missing'" [attr.x]="band.x" y="20" [attr.width]="band.width" height="136"><title>{{band.state==='idle'?'Idle: no application requests':'No monitoring observation collected'}}</title></rect>}
+  @for(tick of ticks();track tick.y){<line x1="58" [attr.y1]="tick.y" x2="628" [attr.y2]="tick.y" stroke="currentColor" opacity=".16"/><text x="50" [attr.y]="tick.y+4" text-anchor="end">{{tickLabel(tick.value)}}</text>}
+  <text x="58" y="12">{{unit()}}</text>
+  @for(plot of plots();track plot.key){<path [attr.d]="plot.path" fill="none" [attr.stroke]="plot.color" stroke-width="2" stroke-linejoin="round"/>
+   @for(marker of plot.markers;track marker.index){<circle class="measurement" [attr.cx]="marker.x" [attr.cy]="marker.y" r="2.5" [attr.fill]="plot.color"/>}
+  }
+  @if(points[selected()]){<line [attr.x1]="x(selected())" y1="20" [attr.x2]="x(selected())" y2="156" stroke="#94a3b8" stroke-dasharray="3 4"/>}
+  <text x="58" y="190">{{points[0].at|date:'MMM d, HH:mm'}}</text><text x="628" y="190" text-anchor="end">{{points[points.length-1].at|date:'MMM d, HH:mm'}}</text>
+ </svg>
+ <div class="coverage-legend">@if(idleCount()){<span><i class="idle-key"></i>{{idleCount()}} idle intervals: no application requests</span>}@if(missingCount()){<span><i class="missing-key"></i>{{missingCount()}} intervals without observations</span>}</div>
+ @if(!hasValues()){<p class="empty">{{idleCount()&&!missingCount()?'No application requests in this range. Monitoring is running; response times and error percentages require requests.':'No measurements for this metric in the selected range. Missing observations remain visible as gaps.'}}</p>}
+ <div class="tooltip" aria-live="polite">@if(points[selected()];as point){<time>{{point.at|date:'medium'}}</time>
+  @if(selectionState()==='missing'){<span>No monitoring observation was collected in this interval.</span>}
+  @else if(selectionState()==='idle'){<span>Idle interval: <b>0 application requests</b>. Response time and error percentage are not calculated.</span>}
+  @else{@for(s of series;track s.key){@if(!hidden().includes(s.key)){<span><i [style.background]="s.color"></i>{{s.label}}: <b>@if(point[s.key]===null || point[s.key]===undefined){Measurement unavailable}@else{{{point[s.key]|number:'1.0-2'}} {{s.unit}}}</b></span>}}}
+ }</div>
+}@else{<div class="empty">No monitoring observations collected for this range yet.</div>}

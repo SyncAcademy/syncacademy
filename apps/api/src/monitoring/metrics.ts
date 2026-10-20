@@ -15,7 +15,7 @@ export function percentile(a: Aggregate, p: number) { if (!a.count)
     if (n >= Math.ceil(a.count * p))
         return bounds[i];
 } return bounds.at(-1)!; }
-export function summarize(a: Aggregate) { return { ...a, avgMs: a.count ? a.totalMs / a.count : null, p50Ms: percentile(a, .5), p95Ms: percentile(a, .95), p99Ms: percentile(a, .99), errorRate: a.count ? 100 * a.serverErrors / a.count : null, clientErrorRate: a.count ? 100 * a.clientErrors / a.count : null, successRate: a.count ? 100 * (a.count - a.clientErrors - a.serverErrors) / a.count : null }; }
+export function summarize(a: Aggregate) { return { ...a, state: a.count ? 'measured' : 'idle', avgMs: a.count ? a.totalMs / a.count : null, p50Ms: percentile(a, .5), p95Ms: percentile(a, .95), p99Ms: percentile(a, .99), errorRate: a.count ? 100 * a.serverErrors / a.count : null, clientErrorRate: a.count ? 100 * a.clientErrors / a.count : null, successRate: a.count ? 100 * (a.count - a.clientErrors - a.serverErrors) / a.count : null }; }
 @Injectable()
 export class Metrics {
     private endpoints = new Map<string, Aggregate>();

@@ -64,3 +64,9 @@ No extra secrets or npm monitoring dependencies are needed. The dashboard polls 
 - The current `lint` script runs TypeScript checking (`tsc --noEmit`); no ESLint rules are configured. Production builds report existing bundle-size, ExcelJS CommonJS and unused-import warnings.
 
 Reference semantics: https://nodejs.org/api/process.html and https://www.postgresql.org/docs/17/monitoring-stats.html.
+
+## Idle intervals and chart interpretation
+
+A completed collection interval with zero ordinary API requests is `idle`. Latency, percentiles and response percentages remain null because no requests were available to measure; the dashboard labels this "No requests". Monitoring/readiness calls are excluded to avoid measuring the monitoring page itself. An interval with requests and zero server failures correctly has a 0% error rate.
+
+Historical responses include explicit empty time buckets with `observations: 0` and `requestState: missing`. These are coverage gaps, not zero-valued measurements. API intervals with observed zero requests are labeled idle separately. All charts share time-proportional positioning, labeled scales, point markers (including isolated measurements) and distinct idle/missing shading. Lines never interpolate across unavailable values. Tooltips default to the latest observed interval and describe idle or missing states without misleading unit suffixes. WebSocket failure trends sum interval failures rather than joining lifetime counters across process restarts.

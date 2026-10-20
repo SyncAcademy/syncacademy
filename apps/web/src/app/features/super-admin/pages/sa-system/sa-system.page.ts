@@ -56,7 +56,7 @@ export class SaSystemPage {
         { title: 'Database connection capacity', series: [{ key: 'connectionPercent', label: 'This database / server limit', color: '#8b5cf6', unit: '%' }] },
         { title: 'Database operation failures', series: [{ key: 'databaseFailures', label: 'Application errors per interval', color: '#dc5163' }] },
         { title: 'WebSocket connections', series: [{ key: 'sockets', label: 'Active clients', color: '#0d9488' }] },
-        { title: 'WebSocket connection failures', series: [{ key: 'socketFailures', label: 'Failures since API start', color: '#dc5163' }] },
+        { title: 'WebSocket connection failures', series: [{ key: 'socketFailures', label: 'Failures per interval', color: '#dc5163' }] },
     ];
     constructor() { void this.refresh(true); const visibility = () => { if (!document.hidden && this.auto())
         void this.refresh(); }; document.addEventListener('visibilitychange', visibility); this.timer = setInterval(() => { this.now.set(Date.now()); if (!document.hidden && this.auto() && !this.loading() && (!this.updated() || Date.now() - this.updated()!.getTime() >= (this.summary()?.settings?.refreshSeconds ?? 30) * 1000))
@@ -151,6 +151,7 @@ export class SaSystemPage {
     }
     queueFor(rows: any[] | null | undefined, channel: string) { if (!rows)
         return { pending: null, failed: null, sent: null }; return rows.find(row => row.channel === channel) ?? { pending: 0, failed: 0, sent: 0 }; }
+    apiMetric(value: unknown, suffix = '') { return this.current()?.api?.count === 0 ? 'No requests' : this.format(value, suffix); }
     format(value: unknown, suffix = '') { return typeof value === 'number' && Number.isFinite(value) ? new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(value) + suffix : 'Unavailable'; }
     bytes(value: unknown) { return typeof value === 'number' ? this.format(value / 1048576, ' MB') : 'Unavailable'; }
     uptime(value: number) { if (!Number.isFinite(value))
