@@ -1,8 +1,13 @@
 import 'zone.js';
 import '@angular/compiler';
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { BrowserDynamicTestingModule, platformBrowserDynamicTesting } from '@angular/platform-browser-dynamic/testing';
+import { of } from 'rxjs';
+import { ActivatedRoute } from '@angular/router';
+import { StudentSubjectsPage } from '../src/app/features/academic/student-subjects.page';
+import { SchoolApiService } from '../src/app/core/services/school-api.service';
+import { AcademicYearService } from '../src/app/core/services/academic-year.service';
 import { NetworkActivityService } from '../src/app/core/services/network-activity.service';
 import { ChartRevealDirective } from '../src/app/shared/directives/chart-reveal.directive';
 import { ActionLoadingDirective } from '../src/app/shared/directives/action-loading.directive';
@@ -51,5 +56,27 @@ const check=(value:unknown,label:string)=>{if(!value)throw new Error(label);pass
   const slow=network.start();await delay(8100);
   check(network.slow(),'Long request shows connection feedback');slow();
   check(!network.slow(),'Connection feedback clears after completion');
+  fixture.destroy();
+  TestBed.resetTestingModule();
+  let fail = true;
+  const api = {schoolId:signal('school'),role:signal('TEACHER'),schoolRevisionNotice:signal(0),auth:{
+    request:async()=>{if(fail)throw new Error('failed');return {classes:[]};},
+    error:()=> 'Unable to load student subjects. Try again.',
+  }};
+  TestBed.configureTestingModule({imports:[StudentSubjectsPage],providers:[
+    {provide:ActivatedRoute,useValue:{data:of({audience:'teacher'})}},
+    {provide:SchoolApiService,useValue:api},
+    {provide:AcademicYearService,useValue:{selected:()=>({id:'year',label:'2026',status:'open'})}},
+  ]});
+  const subjects=TestBed.createComponent(StudentSubjectsPage);
+  document.body.appendChild(subjects.nativeElement);subjects.detectChanges();await delay(300);subjects.detectChanges();
+  check(subjects.nativeElement.textContent.includes('Unable to load student subjects'), 'Roster loading error is visible');
+  check(!subjects.nativeElement.textContent.includes('No classes are available'), 'Failed request does not claim there are no classes');
+  const retry=subjects.nativeElement.querySelector('[role="alert"] button') as HTMLButtonElement;
+  check(!!retry, 'Failed roster has an accessible retry button');
+  retry.focus();check(document.activeElement===retry, 'Retry is keyboard focusable');
+  fail=false;retry.click();await delay(50);subjects.detectChanges();
+  check(!subjects.nativeElement.querySelector('[role="alert"]'), 'Successful retry clears the error');
+  check(subjects.nativeElement.textContent.includes('No classes are available'), 'Successful empty response displays the empty state');
   document.body.dataset['testResult']=JSON.stringify({passed});
 })().catch(error=>{document.body.dataset['testResult']=JSON.stringify({failed:String(error),passed});});

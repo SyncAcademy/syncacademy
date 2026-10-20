@@ -5,8 +5,8 @@ import {
   NotFoundException 
 } from '@nestjs/common';
 import { Database } from './database/database.service';
-import { MockPaymentProvider } from './payments/mock-payment.provider';
 import { PaymentProvider } from './payments/payment-provider.interface';
+import { createPaymentProvider } from './payments/payment-provider.factory';
 
 export const SUBSCRIPTION_STATUSES = [
   'trial',
@@ -25,7 +25,7 @@ export class SubscriptionService {
   private readonly paymentProvider: PaymentProvider;
 
   constructor(private readonly db: Database) {
-    this.paymentProvider = new MockPaymentProvider();
+    this.paymentProvider = createPaymentProvider();
   }
 
   /**

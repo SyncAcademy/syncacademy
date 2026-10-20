@@ -1,20 +1,22 @@
 .preloader-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: #ffffff; /* White background requested */
+  inset: 0;
   z-index: 99999;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.25s ease-out, visibility 0.25s ease-out;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  overflow-x: hidden;
+  background: #fff;
+  opacity: 1;
+  transition: opacity 500ms ease-out, visibility 500ms ease-out;
 
   &.fade-out {
-    opacity: 0;
     visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
   }
 }
 
@@ -22,105 +24,167 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: min(100%, 680px);
+  color: #172338;
   text-align: center;
-  color: #E87E24; /* Orange color requested */
-}
-.entry-slow { max-width: 320px; margin: 18px 20px 0; color: #475569; font-size: .9rem; line-height: 1.5; }
-.network-progress { position: fixed; inset: 0 0 auto; height: 3px; z-index: 100000; overflow: hidden; background: #fff4e8; pointer-events: none; }
-.network-progress span { display: block; width: 38%; height: 100%; background: #e87e24; animation: networkTravel 1.2s ease-in-out infinite alternate; }
-@keyframes networkTravel { from { transform: translateX(-100%); } to { transform: translateX(270%); } }
-
-.logo-container {
-  /* Enlarge the SVG significantly and make it adapt to screen size using clamp */
-  width: clamp(120px, 20vw, 250px);
-  height: clamp(120px, 20vw, 250px);
-  margin-bottom: 24px;
-  svg {
-    width: 100%;
-    height: 100%;
-    filter: drop-shadow(0 4px 6px rgba(232, 126, 36, 0.2));
-  }
 }
 
-.logo-mark {
+.loader-stage {
+  position: relative;
+  width: clamp(220px, 42vw, 340px);
+  aspect-ratio: 1;
+  margin-bottom: clamp(30px, 5vh, 46px);
+  isolation: isolate;
+}
+
+.loading-track,
+.loading-ring,
+.graduation-cap {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.loading-track {
+  z-index: 0;
   overflow: visible;
 }
 
-.logo-fill,
-.logo-outline {
-  fill: currentColor;
-}
-
-.logo-fill {
-  opacity: 0;
-  animation: logoFillIn 0.2s ease-out .4s forwards;
-}
-
-.logo-outline {
+.loading-track circle {
   fill: none;
-  stroke: currentColor;
-  stroke-width: 0.35;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 100;
-  stroke-dashoffset: 100;
-  animation: drawLogo .55s ease-in-out forwards;
+  stroke: #fff1e2;
+  stroke-width: 4.5;
+}
+
+.loading-ring {
+  z-index: 1;
+  overflow: visible;
+  animation: loading-ring-rotation 2s linear infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.graduation-cap {
+  z-index: 2;
+  inset: 15%;
+  width: 70%;
+  height: 70%;
+  overflow: visible;
+  animation: graduation-cap-float 3s ease-in-out infinite;
+  will-change: transform;
 }
 
 .brand-name {
-  font-size: 3rem;
+  max-width: 100%;
+  margin: 0;
+  color: #172338;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: clamp(2rem, 7vw, 3.5rem);
   font-weight: 800;
-  margin: 0 0 12px 0;
-  letter-spacing: -0.02em;
-  font-family: "Inter", -apple-system, sans-serif;
-  opacity: 1; /* Reset from previous slide up */
-  transform: none;
+  letter-spacing: -0.045em;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
-.brand-name-text {
-  display: inline-block;
-  clip-path: inset(0 100% 0 0); /* Hides text from the right */
-  animation: writeText .4s linear .1s forwards;
-  
-  .text-black {
-    color: #000000 !important;
-  }
-  .text-orange {
-    color: #E87E24 !important;
-  }
+.text-black {
+  color: #172338;
+}
+
+.text-orange {
+  color: #e87e24;
 }
 
 .brand-tagline {
-  font-size: 1.25rem;
+  max-width: 100%;
+  margin: 14px 0 0;
+  padding-inline: 4px;
+  color: #89909c;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: clamp(0.95rem, 3.3vw, 1.25rem);
   font-weight: 500;
-  margin: 0;
-  font-family: "Inter", -apple-system, sans-serif;
-  color: #E87E24;
-  opacity: 0.9;
-  
-  display: inline-block;
-  clip-path: inset(0 100% 0 0); /* Hides text from the right */
-  animation: writeText .3s linear .3s forwards;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
-@keyframes drawLogo {
-  to { stroke-dashoffset: 0; }
+.entry-slow {
+  max-width: 320px;
+  margin: 18px 20px 0;
+  color: #475569;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
-@keyframes logoFillIn {
-  to { opacity: 1; }
+.network-progress {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 100000;
+  height: 3px;
+  overflow: hidden;
+  background: #fff4e8;
+  pointer-events: none;
 }
 
-@keyframes writeText {
+.network-progress span {
+  display: block;
+  width: 38%;
+  height: 100%;
+  background: #e87e24;
+  animation: network-travel 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes loading-ring-rotation {
   to {
-    clip-path: inset(0 0 0 0);
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes graduation-cap-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes network-travel {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(270%);
+  }
+}
+
+@media (max-width: 360px) {
+  .preloader-overlay {
+    padding-inline: 12px;
+  }
+
+  .brand-name {
+    font-size: clamp(1.8rem, 9vw, 2rem);
+    letter-spacing: -0.055em;
+  }
+
+  .brand-tagline {
+    margin-top: 10px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .logo-fill { opacity: 1; animation: none; }
-  .logo-outline { stroke-dashoffset: 0; animation: none; }
-  .brand-name-text, .brand-tagline { clip-path: none; animation: none; }
-  .network-progress span { width: 100%; animation: none; }
-  .preloader-overlay { transition: none; }
+  .loading-ring,
+  .graduation-cap,
+  .network-progress span {
+    animation: none;
+  }
+
+  .preloader-overlay {
+    transition: opacity 500ms ease-out;
+  }
 }

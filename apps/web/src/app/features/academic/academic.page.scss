@@ -167,7 +167,6 @@ button.class-summary-card:hover { border-color:#d5a16a; transform:translateY(-1p
 .responsibility-class-picker { position:relative; margin-top:5px; font-weight:400; }
 .responsibility-class-picker summary { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:40px; padding:8px 12px; border:1px solid #d5dfeb; border-radius:8px; background:#fff; color:#172338; cursor:pointer; list-style:none; }
 .responsibility-class-picker summary::-webkit-details-marker { display:none; }
-.responsibility-class-picker summary::after { content:'⌄'; color:#64748b; font-size:1.1rem; }
 .responsibility-class-picker[open] summary { border-color:#c48b4d; border-radius:8px 8px 0 0; }
 .responsibility-class-menu { position:absolute; z-index:20; top:100%; left:0; width:100%; padding:8px; border:1px solid #d5dfeb; border-top:0; border-radius:0 0 9px 9px; background:#fff; box-shadow:0 12px 26px #17233824; }
 .responsibility-class-menu input { width:100%; min-width:0; margin-bottom:7px; }

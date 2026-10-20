@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 190" fill="none">
+  <defs>
+    <linearGradient id="cap-top" x1="27" y1="43" x2="203" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#263449"/>
+      <stop offset=".52" stop-color="#121D2E"/>
+      <stop offset="1" stop-color="#0B1422"/>
+    </linearGradient>
+    <linearGradient id="cap-edge" x1="35" y1="117" x2="204" y2="120" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F4A341"/>
+      <stop offset=".48" stop-color="#C96A1C"/>
+      <stop offset="1" stop-color="#F5A342"/>
+    </linearGradient>
+    <linearGradient id="cap-crown" x1="73" y1="99" x2="171" y2="171" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#172337"/>
+      <stop offset=".55" stop-color="#101A2A"/>
+      <stop offset="1" stop-color="#253248"/>
+    </linearGradient>
+    <linearGradient id="cap-band" x1="73" y1="151" x2="172" y2="171" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8B64E"/>
+      <stop offset=".46" stop-color="#E78322"/>
+      <stop offset="1" stop-color="#C96517"/>
+    </linearGradient>
+    <linearGradient id="tassel-gold" x1="187" y1="80" x2="206" y2="167" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD36A"/>
+      <stop offset=".48" stop-color="#F08C25"/>
+      <stop offset="1" stop-color="#D96717"/>
+    </linearGradient>
+    <radialGradient id="cap-highlight" cx="0" cy="0" r="1" gradientTransform="matrix(0 28 -88 0 111 69)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#64748B" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#64748B" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="cap-shadow" x="9" y="30" width="224" height="145" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+    <filter id="tassel-shadow" x="182" y="101" width="31" height="75" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="119" cy="157" fill="#BA6726" fill-opacity=".18" rx="88" ry="13" filter="url(#cap-shadow)"/>
+  <ellipse cx="196" cy="147" fill="#D87521" fill-opacity=".16" rx="8" ry="24" filter="url(#tassel-shadow)"/>
+
+  <path d="M54 91v44c0 17 27 31 66 31s66-14 66-31V91H54Z" fill="url(#cap-crown)"/>
+  <path d="M54 127c8 13 34 22 66 22s58-9 66-22v11c0 17-27 31-66 31s-66-14-66-31v-11Z" fill="url(#cap-band)"/>
+  <path d="M54 127c8 13 34 22 66 22s58-9 66-22" stroke="#FFD06A" stroke-opacity=".75" stroke-width="2"/>
+  <path d="M54 91v44c0 17 27 31 66 31s66-14 66-31V91" stroke="#0A1422" stroke-opacity=".8" stroke-width="2"/>
+  <path d="M61 96v34c0 12 23 23 59 23s59-11 59-23V96" stroke="#64748B" stroke-opacity=".2" stroke-width="1.5"/>
+
+  <path d="m24 69 91-36a13 13 0 0 1 10 0l91 36a5 5 0 0 1 0 9l-91 40a13 13 0 0 1-10 0L24 78a5 5 0 0 1 0-9Z" fill="url(#cap-top)"/>
+  <path d="m24 76 91 40a13 13 0 0 0 10 0l91-40" stroke="url(#cap-edge)" stroke-width="2"/>
+  <path d="m29 70 86-34a13 13 0 0 1 10 0l84 34-84 37a13 13 0 0 1-10 0L29 70Z" fill="url(#cap-highlight)"/>
+  <path d="m24 69 91-36a13 13 0 0 1 10 0l91 36a5 5 0 0 1 0 9l-91 40a13 13 0 0 1-10 0L24 78a5 5 0 0 1 0-9Z" stroke="#344256" stroke-width="1.5"/>
+  <path d="m36 70 78-31a13 13 0 0 1 10 0l75 31" stroke="#A9B4C3" stroke-opacity=".14" stroke-width="1"/>
+
+  <path d="M117 61c22 2 49 9 73 15 7 2 11 6 11 13v24" stroke="#A95117" stroke-width="7" stroke-linecap="round"/>
+  <path d="M117 59c22 2 49 9 73 15 7 2 11 6 11 13v25" stroke="url(#tassel-gold)" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="118" cy="59" fill="#B85C18" rx="12" ry="7"/>
+  <ellipse cx="118" cy="57" fill="#FFD05A" rx="12" ry="7"/>
+  <ellipse cx="115" cy="55" fill="#FFF0A5" fill-opacity=".56" rx="5" ry="2"/>
+
+  <circle cx="201" cy="111" r="7.5" fill="#B85D17"/>
+  <circle cx="201" cy="109" r="7" fill="url(#tassel-gold)"/>
+  <path d="M196 115c-.5 8-2 17-5 29m10-29c0 8 0 18 1 31m4-31c2 8 4 18 5 27m-18-27c-2 9-4 17-7 25m14-26c-.5 8-1 18-1 30" stroke="url(#tassel-gold)" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="M190 147c3 2 6 3 10 3 4 0 7-1 10-3" stroke="#F8A338" stroke-width="2" stroke-linecap="round"/>
+</svg>

@@ -60,6 +60,10 @@ export class TeacherClassPage {
   readonly trend = computed(() => this.assessments().slice().sort((a, b) => a.deadline.localeCompare(b.deadline)).map(a => { const rows = this.allResults().filter(r => r.assessmentId === a.id); return { id: a.id, label: a.name, date: a.deadline, count: rows.length, average: rows.length ? rows.reduce((s, r) => s + r.mark, 0) / rows.length : null }; }));
   readonly roster = computed(() => this.store.roster(this.selectedClass()?.id ?? ''));
   readonly sheets = computed(() => this.store.sheets().filter(s => s.classId === this.selectedClass()?.id).sort((a, b) => b.date.localeCompare(a.date)));
+  readonly recordedDatesPage = signal(1);
+  readonly recordedDatesPageSize = 10;
+  readonly recordedDatesPages = computed(() => Math.max(1, Math.ceil(this.sheets().length / this.recordedDatesPageSize)));
+  readonly recordedDatesPageSheets = computed(() => this.sheets().slice((this.recordedDatesPage() - 1) * this.recordedDatesPageSize, this.recordedDatesPage() * this.recordedDatesPageSize));
   readonly revisions = computed(() => this.store.attendanceHistory().filter(s => s.classId === this.selectedClass()?.id && s.date === this.date()).sort((a, b) => b.revision - a.revision));
   readonly saved = computed(() => this.sheets().find(s => s.date === this.date()));
   readonly attendanceRoster = computed(() => this.attendanceDirty() ? this.draftRoster : this.store.attendance.roster(this.selectedClass()?.id ?? '', this.date()));
@@ -73,6 +77,8 @@ export class TeacherClassPage {
   entries: Partial<Record<string, { status: string; note: string }>> = {}; reason = '';
   constructor() {
     effect(() => { this.store.year()?.id; this.section(); untracked(() => { this.classId.set(''); this.examId.set(''); this.reportAssessmentId.set(''); this.selectedTerm.set(''); this.subject.set(''); this.studentNumber.set(''); this.status.set('approved'); this.search.set(''); this.notice.set(''); this.error.set(''); }); });
+    effect(() => { this.selectedClass()?.id; this.recordedDatesPage.set(1); });
+    effect(() => { const pages = this.recordedDatesPages(); if (this.recordedDatesPage() > pages) this.recordedDatesPage.set(pages); });
     effect(() => { this.store.attendance.roster(this.selectedClass()?.id ?? '', this.date()); const saved = this.saved(); this.attendanceContext(); untracked(() => { if (this.saving()) return; if (this.attendanceDirty()) { if ((saved?.revision ?? 0) !== this.draftRevision || this.draftContext !== this.attendanceContext()) this.error.set('Attendance changed. Your draft is preserved. Review it before discarding and reloading.'); return; } this.loadAttendanceDraft(); }); });
     effect(() => { this.classId(); this.examId(); this.subject(); this.studentNumber(); this.status(); this.search(); this.page.set(1); });
     effect(() => { if (this.page() > this.pages()) this.page.set(this.pages()); });

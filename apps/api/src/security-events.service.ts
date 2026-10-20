@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Database } from './database/database.service';
+import { sanitizeAuditDetails } from './audit-log.service';
 
 export type SecurityCategory = 
   | 'AUTHENTICATION'
@@ -24,18 +25,7 @@ export class SecurityEventsService {
    * Sanitize security event metadata to guarantee zero secret leakage
    */
   public sanitizeDetails(details: any): any {
-    if (!details || typeof details !== 'object') return {};
-    const sanitized = { ...details };
-    const sensitiveKeys = ['password', 'token', 'secret', 'otp', 'code', 'pin', 'authorization', 'cookie'];
-
-    for (const key of Object.keys(sanitized)) {
-      if (sensitiveKeys.some(s => key.toLowerCase().includes(s))) {
-        sanitized[key] = '[REDACTED]';
-      } else if (typeof sanitized[key] === 'object' && sanitized[key] !== null) {
-        sanitized[key] = this.sanitizeDetails(sanitized[key]);
-      }
-    }
-    return sanitized;
+    return sanitizeAuditDetails(details) ?? {};
   }
 
   /**

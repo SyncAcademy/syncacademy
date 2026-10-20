@@ -1,4 +1,5 @@
-import { Component, OnDestroy, OnInit, HostListener, signal, computed, AfterViewInit, ElementRef } from '@angular/core';
+import { requestErrorMessage } from '../../core/services/request-error';
+import { Component, OnDestroy, OnInit, HostListener, signal, computed, AfterViewInit, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -14,6 +15,7 @@ export interface HeroSlide {
 }
 
 export type SchoolRole = 'leadership' | 'teachers' | 'bursar';
+type MobileNavSection = 'home' | 'features' | 'solutions' | 'services' | 'about' | 'contact';
 
 export interface RoleInfo {
   id: SchoolRole;
@@ -49,6 +51,13 @@ export interface StatCounter {
 })
 export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
   showScrollTop = signal(false);
+  mobileNavOpen = signal(false);
+  activeMobileNav = signal<MobileNavSection>('home');
+  private readonly mobileNavSections: MobileNavSection[] = ['home', 'features', 'solutions', 'services', 'about', 'contact'];
+  @ViewChild('mobileNavToggle') private mobileNavToggle?: ElementRef<HTMLButtonElement>;
+  @ViewChild('mobileNav') private mobileNav?: ElementRef<HTMLElement>;
+  private previousBodyOverflow: string | null = null;
+  private previousDocumentOverflow: string | null = null;
   private observer: IntersectionObserver | null = null;
   private statsObserver: IntersectionObserver | null = null;
   private countersAnimated = false;
@@ -173,11 +182,14 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
       this.contactData = { fullName: '', emailAddress: '', phoneNumber: '', subject: '', message: '' };
     } catch (err: any) {
       this.contactStatus.set('error');
-      this.contactMessage.set(err?.error?.message || 'Failed to send message. Please try again.');
+      this.contactMessage.set(requestErrorMessage(err));
     }
   }
 
   ngAfterViewInit() {
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      this.el.nativeElement.querySelector('.landing-page')?.classList.add('landing-motion-ready');
+    }
     this.observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
@@ -186,8 +198,16 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
       });
     }, { threshold: 0.1 });
 
-    const elements = this.el.nativeElement.querySelectorAll('.scroll-animate, .staggered-card-grid');
+    const elements = this.el.nativeElement.querySelectorAll('.scroll-animate, .staggered-card-grid, .about-reveal');
     elements.forEach((el: Element) => this.observer?.observe(el));
+
+    // The landing page is loaded lazily, after the browser's first hash jump.
+    requestAnimationFrame(() => {
+      const id = window.location.hash.slice(1);
+      if (['home', 'features', 'solutions', 'services', 'about', 'roles', 'contact'].includes(id)) {
+        document.getElementById(id)?.scrollIntoView();
+      }
+    });
 
     const statsEl = this.el.nativeElement.querySelector('.stats-counter-strip');
     if (statsEl) {
@@ -247,12 +267,86 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
   @HostListener('window:scroll', [])
   onWindowScroll() {
     this.showScrollTop.set(window.scrollY > 200);
+    const activationLine = 140;
+    let activeSection: MobileNavSection = 'home';
+    for (const section of this.mobileNavSections) {
+      const element = document.getElementById(section);
+      if (element && element.getBoundingClientRect().top <= activationLine) activeSection = section;
+    }
+    this.activeMobileNav.set(activeSection);
   }
 
   scrollToTop(): void {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+
+  toggleMobileNav(): void {
+    if (this.mobileNavOpen()) {
+      this.closeMobileNav();
+      return;
+    }
+
+    this.previousBodyOverflow = document.body.style.overflow;
+    this.previousDocumentOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    this.mobileNavOpen.set(true);
+    requestAnimationFrame(() => this.mobileNav?.nativeElement.focus());
+  }
+
+  closeMobileNav(restoreFocus = true): void {
+    if (!this.mobileNavOpen()) return;
+    this.mobileNavOpen.set(false);
+    this.restoreBodyScrolling();
+    if (restoreFocus) this.mobileNavToggle?.nativeElement.focus();
+  }
+
+  selectMobileNav(section: MobileNavSection, event: MouseEvent): void {
+    event.preventDefault();
+    this.activeMobileNav.set(section);
+    this.closeMobileNav(false);
+    history.pushState(null, '', `#${section}`);
+
+    const target = document.getElementById(section);
+    if (!target) return;
+
+    const top = target.getBoundingClientRect().top + window.scrollY - 112;
+    const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 'instant'
+      : 'smooth';
+    window.scrollTo({ top: Math.max(0, top), behavior });
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  onMobileNavKeydown(event: KeyboardEvent): void {
+    if (!this.mobileNavOpen()) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.closeMobileNav();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+
+    const links = this.mobileNav?.nativeElement.querySelectorAll<HTMLElement>('a[href]');
+    if (!links?.length) return;
+    const drawer = this.mobileNav?.nativeElement;
+    const first = links[0];
+    const last = links[links.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === drawer)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === drawer)) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  @HostListener('window:resize')
+  onResize(): void { if (window.innerWidth > 1024) this.closeMobileNav(false); }
+
   ngOnInit() {
+    const initialSection = this.mobileNavSections.find(section => section === window.location.hash.slice(1));
+    if (initialSection) this.activeMobileNav.set(initialSection);
     document.documentElement.classList.add('landing-route');
     document.body.classList.add('landing-route');
 
@@ -271,7 +365,9 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
   startSlideTimer(): void {
     if (this.slideIntervalId) {
       clearInterval(this.slideIntervalId);
+      this.slideIntervalId = null;
     }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     this.slideIntervalId = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
       if (this.isPaused()) return;
@@ -315,6 +411,7 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnDestroy() {
+    this.restoreBodyScrolling();
     if (this.slideIntervalId) {
       clearInterval(this.slideIntervalId);
       this.slideIntervalId = null;
@@ -323,5 +420,16 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
     this.statsObserver?.disconnect();
     document.documentElement.classList.remove('landing-route');
     document.body.classList.remove('landing-route');
+  }
+
+  private restoreBodyScrolling(): void {
+    if (this.previousBodyOverflow !== null) {
+      document.body.style.overflow = this.previousBodyOverflow;
+      this.previousBodyOverflow = null;
+    }
+    if (this.previousDocumentOverflow !== null) {
+      document.documentElement.style.overflow = this.previousDocumentOverflow;
+      this.previousDocumentOverflow = null;
+    }
   }
 }

@@ -1021,6 +1021,138 @@ test(
           403,
         );
       });
+      await t.test("teacher assignment directory groups unique teachers and scopes filters and pages to one year", async () => {
+        const teacherMembership = await db.membership.findFirstOrThrow({
+          where: { schoolId: schoolA.id, userId: teacherUser.id, role: "TEACHER" },
+        });
+        const secondTeacher = await db.membership.findFirstOrThrow({
+          where: { schoolId: schoolA.id, role: "TEACHER", user: { email: "academic@example.test" } },
+        });
+        const otherClass = await db.classroom.create({
+          data: { schoolId: schoolA.id, yearId: yearA.id, name: "Class 1B" },
+        });
+        const civics = await db.subject.create({
+          data: { schoolId: schoolA.id, name: "Civics", code: "CIV" },
+        });
+        const history = await db.subject.create({
+          data: { schoolId: schoolA.id, name: "History", code: "HIS" },
+        });
+        await db.teachingAssignment.createMany({
+          data: [
+            { schoolId: schoolA.id, membershipId: teacherMembership.id, classroomId: classA.id, subjectId: civics.id },
+            { schoolId: schoolA.id, membershipId: teacherMembership.id, classroomId: otherClass.id, subjectId: civics.id },
+            { schoolId: schoolA.id, membershipId: teacherMembership.id, classroomId: classA.id, subjectId: history.id },
+            { schoolId: schoolA.id, membershipId: secondTeacher.id, classroomId: classA.id, subjectId: history.id },
+          ],
+        });
+        const priorYear = await db.academicYear.create({
+          data: {
+            schoolId: schoolA.id,
+            name: "2025",
+            startsAt: new Date("2025-01-01"),
+            endsAt: new Date("2025-12-31"),
+            closed: true,
+          },
+        });
+        const priorClass = await db.classroom.create({
+          data: { schoolId: schoolA.id, yearId: priorYear.id, name: "Form 4A" },
+        });
+        await db.teachingAssignment.create({
+          data: { schoolId: schoolA.id, membershipId: teacherMembership.id, classroomId: priorClass.id, subjectId: civics.id },
+        });
+        const extraUsers = Array.from({ length: 12 }, (_, index) => ({
+          email: `directory-teacher-${index}@example.test`,
+          name: `Directory Teacher ${String(index).padStart(2, "0")}`,
+          passwordHash: "test-only-hash",
+        }));
+        await db.user.createMany({ data: extraUsers });
+        const extraTeacherUsers = await db.user.findMany({
+          where: { email: { in: extraUsers.map(user => user.email) } },
+          select: { id: true },
+        });
+        await db.membership.createMany({
+          data: extraTeacherUsers.map(user => ({ schoolId: schoolA.id, userId: user.id, role: "TEACHER" })),
+        });
+
+        const baseRoute = `schools/${schoolA.id}/teacher-assignments?yearId=${yearA.id}`;
+        const firstPage = await c.call("GET", `${baseRoute}&page=1&pageSize=12`);
+        assert.equal(firstPage.status, 200, JSON.stringify(firstPage.body));
+        assert.equal(firstPage.body.total, 15, "counts unique school teacher memberships, not assignment rows");
+        assert.equal(firstPage.body.items.length, 12);
+        assert.equal(firstPage.body.year.id, yearA.id);
+        const secondPage = await c.call("GET", `${baseRoute}&page=2&pageSize=12`);
+        assert.equal(secondPage.status, 200);
+        assert.equal(secondPage.body.items.length, 3);
+        assert.equal(
+          new Set([...firstPage.body.items, ...secondPage.body.items].map(item => item.id)).size,
+          15,
+          "unique teacher pages have no duplicates or missing memberships",
+        );
+        const teacherProfile = [...firstPage.body.items, ...secondPage.body.items]
+          .find(item => item.id === teacherUser.id);
+        assert.ok(teacherProfile);
+        assert.deepEqual(teacherProfile.classTeacherClasses.map(item => item.id), [classA.id]);
+        assert.deepEqual(
+          teacherProfile.teachingAssignments.map(item => item.name),
+          ["Civics", "History"],
+        );
+        assert.deepEqual(
+          teacherProfile.teachingAssignments.find(item => item.id === civics.id).classes.map(item => item.id).sort(),
+          [classA.id, otherClass.id].sort(),
+        );
+        assert.equal(teacherProfile.teachingAssignments.some(item => item.classes.some(classroom => classroom.id === priorClass.id)), false);
+        const priorYearResults = await c.call(
+          "GET",
+          `schools/${schoolA.id}/teacher-assignments?yearId=${priorYear.id}`,
+        );
+        assert.equal(priorYearResults.status, 200);
+        const historicalTeacher = priorYearResults.body.items.find(item => item.id === teacherUser.id);
+        assert.deepEqual(historicalTeacher.teachingAssignments.map(item => item.name), ["Civics"]);
+        assert.equal(historicalTeacher.classTeacherClasses.length, 0);
+
+        const civicsFilter = await c.call("GET", `${baseRoute}&subjectId=${civics.id}`);
+        assert.equal(civicsFilter.body.total, 1);
+        assert.equal(civicsFilter.body.items[0].id, teacherUser.id);
+        const classFilter = await c.call("GET", `${baseRoute}&classId=${classA.id}`);
+        assert.equal(classFilter.body.total, 2);
+        const roleFilter = await c.call("GET", `${baseRoute}&role=class_teacher`);
+        assert.equal(roleFilter.body.total, 1);
+        const searchFilter = await c.call("GET", `${baseRoute}&search=TEACHER%20User`);
+        assert.equal(searchFilter.status, 200);
+        assert.equal(searchFilter.body.total, 1);
+        assert.equal(searchFilter.body.items[0].id, teacherUser.id);
+        assert.equal(
+          (await c.call("GET", `${baseRoute}&classId=${classA.id}&subjectId=${civics.id}`)).body.total,
+          1,
+          "class and subject filters can combine",
+        );
+        assert.equal(
+          (await c.call("GET", `${baseRoute}&subjectId=${civics.id}&role=subject_teacher`)).body.total,
+          1,
+          "subject and role filters can combine",
+        );
+        assert.equal(
+          (await c.call("GET", `${baseRoute}&search=TEACHER%20User&role=subject_teacher`)).body.total,
+          1,
+          "name search and role filters can combine",
+        );
+        const combinedFilter = await c.call(
+          "GET",
+          `${baseRoute}&classId=${classA.id}&subjectId=${civics.id}&role=subject_teacher&search=TEACHER%20User`,
+        );
+        assert.equal(combinedFilter.body.total, 1, JSON.stringify(combinedFilter.body));
+        assert.equal(combinedFilter.body.items[0].id, teacherUser.id);
+        assert.equal(
+          (await head.call("GET", `schools/${schoolB.id}/teacher-assignments?yearId=${yearA.id}`)).status,
+          403,
+          "school memberships cannot read another school's teacher directory",
+        );
+        assert.equal(
+          (await c.call("GET", `schools/${schoolA.id}/teacher-assignments?yearId=${priorYear.id}&pageSize=13`)).status,
+          400,
+          "unsupported page sizes are rejected",
+        );
+      });
       await t.test(
         "original portal projections use real school records and protect profile fields",
         async () => {
@@ -1030,6 +1162,9 @@ test(
           assert.equal(summary.body.students, 1);
           assert.equal(summary.body.admins[0].email, admin.email);
           assert.equal(summary.body.admins[0].passwordHash, undefined);
+          const compactAdmin = await c.call("GET", `schools/${schoolA.id}/workspace?view=summary`);
+          assert.equal(compactAdmin.status, 200);
+          assert.deepEqual(compactAdmin.body.assignments, [], "Super Admin summary does not load all assignment rows");
           assert.equal(
             (await head.call("GET", "platform/summary")).status,
             403,
@@ -1044,8 +1179,7 @@ test(
           const t = (
             await teacher.call("GET", `schools/${schoolA.id}/workspace`)
           ).body;
-          assert.equal(t.assignments[0].classroomId, classA.id);
-          assert.equal(t.assignments[0].membership.user.id, teacherUser.id);
+          assert.ok(t.assignments.some(assignment => assignment.classroomId === classA.id && assignment.membership.user.id === teacherUser.id));
           assert.equal(t.years[0].id, yearA.id);
           assert.equal(t.students[0].address, undefined);
           assert.equal(t.students[0].dateOfBirth, undefined);
@@ -1060,6 +1194,50 @@ test(
           assert.equal((await teacher.call("GET", `schools/${schoolB.id}/workspace?view=summary`)).status, 403);
         },
       );
+      await t.test("teacher guardian and report-link access stays within assigned classes", async () => {
+        const privateClass = await db.classroom.create({
+          data: { schoolId: schoolA.id, yearId: yearA.id, name: "Unassigned Class" },
+        });
+        const privateStudent = await db.student.create({
+          data: { schoolId: schoolA.id, name: "Private Student", admissionNumber: "PRIVATE-001" },
+        });
+        await db.enrollment.create({
+          data: { schoolId: schoolA.id, studentId: privateStudent.id, classroomId: privateClass.id },
+        });
+        const visibleGuardian = await db.guardian.create({
+          data: { schoolId: schoolA.id, name: "Assigned Guardian", phone: "+255712345678" },
+        });
+        const privateGuardian = await db.guardian.create({
+          data: { schoolId: schoolA.id, name: "Unassigned Guardian", phone: "+255712345679" },
+        });
+        await db.studentGuardian.createMany({
+          data: [
+            { schoolId: schoolA.id, studentId: student.id, guardianId: visibleGuardian.id },
+            { schoolId: schoolA.id, studentId: privateStudent.id, guardianId: privateGuardian.id },
+          ],
+        });
+        await db.reportAccessLink.createMany({
+          data: [
+            { schoolId: schoolA.id, studentId: student.id, guardianId: visibleGuardian.id, reportCardId: "visible-report", tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 86400000) },
+            { schoolId: schoolA.id, studentId: privateStudent.id, guardianId: privateGuardian.id, reportCardId: "private-report", tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 86400000) },
+          ],
+        });
+
+        const guardianList = await teacher.call("GET", `schools/${schoolA.id}/guardians`);
+        assert.equal(guardianList.status, 200);
+        assert.deepEqual(guardianList.body.items.map(item => item.id), [visibleGuardian.id]);
+        assert.equal((await teacher.call("GET", `schools/${schoolA.id}/guardians/${privateGuardian.id}`)).status, 404);
+
+        const reportLinks = await teacher.call("GET", `schools/${schoolA.id}/reports/links`);
+        assert.equal(reportLinks.status, 200);
+        assert.deepEqual(reportLinks.body.items.map(item => item.id), [
+          (await db.reportAccessLink.findFirstOrThrow({ where: { studentId: student.id } })).id,
+        ]);
+        assert.equal(
+          (await teacher.call("GET", `schools/${schoolA.id}/reports/links?classId=${privateClass.id}`)).status,
+          403,
+        );
+      });
       await t.test(
         "student and parent accounts are not supported",
         async () => {

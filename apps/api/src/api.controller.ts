@@ -4,6 +4,7 @@ import { Request, Response } from 'express';
 import { Prisma, Role } from '@prisma/client';
 import { z } from 'zod';
 import { PlatformService } from './platform.service';
+import { AuditCategory, AuditLogService, AuditSource, auditCategories } from './audit-log.service';
 import { termsForYear, termsInput, validateTerms } from './academic-terms';
 
 const email = z.string().trim().email().max(254).transform(v => v.toLowerCase());
@@ -24,16 +25,32 @@ const registrars: Role[] = ['HEADMASTER', 'REGISTRAR'];
 const academics: Role[] = ['HEADMASTER', 'ACADEMIC'];
 const leadFields = z.object({ schoolName: name, contactName: name, contactEmail: email,
   contactPhone: z.string().trim().max(40).default(''), location: name,
-  source: z.enum(['website', 'referral', 'social', 'event', 'cold-outreach']),
+  source: z.enum(['website', 'referral', 'social', 'event', 'cold-outreach', 'friend-relative', 'other']),
   status: z.enum(['new', 'contacted', 'demo-scheduled', 'demo-done', 'negotiation', 'won', 'lost']),
   studentCount: z.coerce.number().int().min(0).max(1000000),
   notes: z.string().trim().max(2000).default(''), owner: z.string().trim().max(150).default(''),
   followUp: z.union([date, z.literal('')]).default('') }).strict();
 const listPage = z.coerce.number().int().min(1).max(100000).default(1);
 const listSize = z.coerce.number().int().min(1).max(100).default(25);
+const auditQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  pageSize: z.coerce.number().int().refine(value => [10, 20, 50, 100].includes(value), 'Choose a page size of 10, 20, 50, or 100.').default(20),
+  q: z.string().trim().max(200).default(''),
+  actor: z.string().trim().max(200).default(''),
+  schoolId: uuid.optional(),
+  category: z.enum(auditCategories).optional(),
+  action: z.string().trim().max(100).default(''),
+  outcome: z.enum(['SUCCESS', 'FAILED', 'DENIED', 'UNAVAILABLE']).optional(),
+  severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+  from: date.optional(),
+  to: date.optional(),
+}).strict().refine(value => !value.from || !value.to || value.from <= value.to, {
+  message: 'The end date must be on or after the start date.',
+  path: ['to'],
+});
 @Controller('api/v1')
 export class ApiController {
-  constructor(private readonly svc: PlatformService) {}
+  constructor(private readonly svc: PlatformService, private readonly auditLog: AuditLogService) {}
   @Get('health/live') live() { return { status: 'ok' }; }
   @Get('health/ready') async ready() { await this.svc.db.$queryRaw`SELECT 1`; return { status: 'ready' }; }
   @Get('platform/summary') async platformSummary(@Req() req: Request) {
@@ -230,7 +247,7 @@ export class ApiController {
       this.svc.db.student.count({ where: studentWhere }),
       staffManager || academic ? this.svc.db.membership.findMany({ where: { schoolId: id }, select: { id: true, role: true, active: true, createdAt: true, user: { select: { id: true, name: true, email: true, enabled: true } } }, orderBy: { createdAt: 'desc' } }) : [],
       staffManager || academic ? this.svc.db.invitation.findMany({ where: { schoolId: id, ...(staffManager ? {} : { role: 'TEACHER' }) }, select: { id: true, name: true, email: true, role: true, createdAt: true, expiresAt: true, expiresInMinutes: true, acceptedAt: true, revokedAt: true }, orderBy: { createdAt: 'desc' } }) : [],
-      staffManager || academic || teacher ? this.svc.db.teachingAssignment.findMany({ where: { schoolId: id, ...(!staffManager && !academic ? { membership: { userId: user.id, active: true } } : {}) }, select: { id: true, classroomId: true, membershipId: true, subjectId: true, subject: true, confirmedAt: true, membership: { select: { active: true, user: { select: { id: true, name: true, enabled: true } } } }, classroom: { select: { name: true, yearId: true, year: { select: { name: true } }, _count: { select: { enrollments: { where: { status: 'active' } } } } } } } }) : [],
+      !(view === 'summary' && user.platformAdmin) && (staffManager || academic || teacher) ? this.svc.db.teachingAssignment.findMany({ where: { schoolId: id, ...(!staffManager && !academic ? { membership: { userId: user.id, active: true } } : {}) }, select: { id: true, classroomId: true, membershipId: true, subjectId: true, subject: true, confirmedAt: true, membership: { select: { active: true, user: { select: { id: true, name: true, enabled: true } } } }, classroom: { select: { name: true, yearId: true, year: { select: { name: true } }, _count: { select: { enrollments: { where: { status: 'active' } } } } } } } }) : [],
     ]);
     // Scope the batch to already-authorized enrollments and avoid Prisma's large composite-key IN query.
     const enrollmentIds = studentRows.flatMap(student => student.enrollments.map(enrollment => enrollment.id));
@@ -296,6 +313,153 @@ export class ApiController {
       };
     }
     return { view: view ?? 'full', studentsComplete: view !== 'summary' && !page, school, years: years.map(year => ({ ...year, terms: termsForYear(year) })), classes, students, studentCount, registryAdmissions, registryIssues, subjects, classSubjects, members, invitations, assignments, audit, financeSummary: bursar ? financeSummaryData : null, permissions: { staffManager, registrar, academic, bursar } };
+  }
+  @Get('schools/:id/teacher-assignments') async teacherAssignments(@Req() req: Request, @Param('id') id: string, @Query() query: unknown) {
+    const { user, memberships } = await this.svc.authorize(req, schoolId(id), academics);
+    if (!user.platformAdmin && !memberships.some(membership => academics.includes(membership.role))) throw new ForbiddenException('Academic management access required.');
+    const q = parse(z.object({
+      yearId: uuid,
+      page: listPage,
+      pageSize: z.coerce.number().int().refine(value => [12, 20, 24, 48].includes(value), 'Choose a supported page size.').default(20),
+      search: z.string().trim().max(150).default(''),
+      classId: uuid.optional(),
+      subjectId: uuid.optional(),
+      role: z.enum(['all', 'class_teacher', 'subject_teacher']).default('all'),
+    }).strict(), query);
+    const [year, academicWorkspace] = await Promise.all([
+      this.svc.db.academicYear.findFirst({
+        where: { id: q.yearId, schoolId: id },
+        select: { id: true, name: true, closed: true, classes: { select: { id: true, name: true } } },
+      }),
+      this.svc.db.academicWorkspace.findFirst({
+        where: { schoolId: id, yearId: q.yearId },
+        select: { data: true },
+      }),
+    ]);
+    if (!year) throw new BadRequestException('Choose an academic year in this school.');
+    const classesById = new Map(year.classes.map(classroom => [classroom.id, classroom.name]));
+    if (q.classId && !classesById.has(q.classId)) throw new BadRequestException('Choose a class in this academic year.');
+    if (q.subjectId && !await this.svc.db.subject.findFirst({ where: { id: q.subjectId, schoolId: id }, select: { id: true } })) {
+      throw new BadRequestException('Choose a subject in this school.');
+    }
+    const rawClassTeachers = (academicWorkspace?.data as { classTeachers?: unknown[] } | null)?.classTeachers ?? [];
+    const classTeacherRecords = rawClassTeachers.filter((record): record is { classId: string; teacherId: string; endedAt?: unknown } => {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) return false;
+      const item = record as Record<string, unknown>;
+      return typeof item.classId === 'string' &&
+        typeof item.teacherId === 'string' &&
+        !item.endedAt &&
+        classesById.has(item.classId);
+    });
+    const classTeacherClassesByUser = new Map<string, Map<string, string>>();
+    for (const record of classTeacherRecords) {
+      const className = classesById.get(record.classId);
+      if (!className) continue;
+      const assignedClasses = classTeacherClassesByUser.get(record.teacherId) ?? new Map<string, string>();
+      assignedClasses.set(record.classId, className);
+      classTeacherClassesByUser.set(record.teacherId, assignedClasses);
+    }
+    const classTeacherUserIds = [...new Set(classTeacherRecords.map(record => record.teacherId))];
+    const assignmentWhere: Prisma.TeachingAssignmentWhereInput = {
+      schoolId: id,
+      classroom: { yearId: q.yearId },
+    };
+    const matchingTeacherSets: Set<string>[] = [];
+    if (q.classId) {
+      const classAssignments = await this.svc.db.membership.findMany({
+        where: {
+          schoolId: id,
+          role: 'TEACHER',
+          assignments: { some: { ...assignmentWhere, classroomId: q.classId } },
+        },
+        select: { userId: true },
+      });
+      const classTeacherIds = classTeacherRecords
+        .filter(record => record.classId === q.classId)
+        .map(record => record.teacherId);
+      matchingTeacherSets.push(new Set([...classAssignments.map(membership => membership.userId), ...classTeacherIds]));
+    }
+    if (q.subjectId || q.role === 'subject_teacher') {
+      const subjectAssignments = await this.svc.db.membership.findMany({
+        where: {
+          schoolId: id,
+          role: 'TEACHER',
+          assignments: {
+            some: {
+              ...assignmentWhere,
+              subjectId: q.subjectId ?? { not: null },
+            },
+          },
+        },
+        select: { userId: true },
+      });
+      matchingTeacherSets.push(new Set(subjectAssignments.map(membership => membership.userId)));
+    }
+    if (q.role === 'class_teacher') matchingTeacherSets.push(new Set(classTeacherUserIds));
+    let matchingTeacherIds: Set<string> | undefined;
+    for (const matches of matchingTeacherSets) {
+      if (!matchingTeacherIds) {
+        matchingTeacherIds = new Set(matches);
+      } else {
+        for (const teacherId of matchingTeacherIds) {
+          if (!matches.has(teacherId)) matchingTeacherIds.delete(teacherId);
+        }
+      }
+    }
+    const where: Prisma.MembershipWhereInput = {
+      schoolId: id,
+      role: 'TEACHER',
+      ...(q.search ? { user: { name: { contains: q.search, mode: 'insensitive' } } } : {}),
+      ...(matchingTeacherIds ? { userId: { in: [...matchingTeacherIds] } } : {}),
+    };
+    const [teacherMemberships, total] = await Promise.all([
+      this.svc.db.membership.findMany({
+        where,
+        orderBy: [{ user: { name: 'asc' } }, { userId: 'asc' }],
+        skip: (q.page - 1) * q.pageSize,
+        take: q.pageSize,
+        select: {
+          userId: true,
+          active: true,
+          user: { select: { id: true, name: true, enabled: true } },
+          assignments: {
+            where: assignmentWhere,
+            select: {
+              subjectId: true,
+              subject: { select: { id: true, name: true } },
+              classroom: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+      this.svc.db.membership.count({ where }),
+    ]);
+    const items = teacherMemberships.map(membership => {
+      const subjectAssignments = new Map<string, { id: string; name: string; classes: Map<string, string> }>();
+      const classTeacherClasses = classTeacherClassesByUser.get(membership.userId) ?? new Map<string, string>();
+      for (const assignment of membership.assignments) {
+        if (!assignment.subjectId || !assignment.subject) continue;
+        let subject = subjectAssignments.get(assignment.subjectId);
+        if (!subject) {
+          subject = { id: assignment.subjectId, name: assignment.subject.name, classes: new Map() };
+          subjectAssignments.set(assignment.subjectId, subject);
+        }
+        subject.classes.set(assignment.classroom.id, assignment.classroom.name);
+      }
+      return {
+        id: membership.userId,
+        name: membership.user.name,
+        role: 'TEACHER' as const,
+        status: membership.active && membership.user.enabled ? 'active' as const : 'inactive' as const,
+        classTeacherClasses: [...classTeacherClasses].map(([classId, name]) => ({ id: classId, name })),
+        teachingAssignments: [...subjectAssignments.values()].map(subject => ({
+          id: subject.id,
+          name: subject.name,
+          classes: [...subject.classes].map(([classId, name]) => ({ id: classId, name })),
+        })).sort((a, b) => a.name.localeCompare(b.name)),
+      };
+    });
+    return { year: { id: year.id, name: year.name, closed: year.closed }, items, total, page: q.page, pageSize: q.pageSize };
   }
   @Post('schools/:id/invitations') async invite(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
     const { user, memberships } = await this.svc.authorize(req, schoolId(id));
@@ -441,28 +605,54 @@ export class ApiController {
       await tx.auditEvent.create({ data: { actorId: user.id, schoolId: id, action: 'STUDENT_ENROLLED', target: student.id } }); return student;
     });
   }
+  @Get('audit/summary') async auditSummary(@Req() req: Request, @Query() query: unknown) {
+    const q = parse(z.object({
+      periodDays: z.coerce.number().int().refine(value => [7, 30, 90, 365].includes(value)).default(30),
+      schoolId: uuid.optional(),
+    }).strict(), query);
+    if (q.schoolId) await this.svc.authorize(req, q.schoolId, managers);
+    else await this.svc.administrator(req);
+    return this.auditLog.summary(q.periodDays, q.schoolId);
+  }
+  @Get('audit/filter-options') async auditFilterOptions(@Req() req: Request, @Query() query: unknown) {
+    await this.svc.administrator(req);
+    const q = parse(z.object({
+      schoolSearch: z.string().trim().max(100).default(''),
+      schoolId: uuid.optional(),
+    }).strict(), query);
+    return this.auditLog.filterOptions(q.schoolSearch, q.schoolId);
+  }
+  @Get('audit/export') async exportAudit(@Req() req: Request, @Query() query: unknown, @Res() res: Response) {
+    const q = parse(auditQuerySchema, query);
+    const actor = q.schoolId ? (await this.svc.authorize(req, q.schoolId, managers)).user : await this.svc.administrator(req);
+    const csv = await this.auditLog.export(q, actor.id);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="platform-audit.csv"');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).send(csv);
+  }
+  @Get('audit/:source/:eventId') async auditDetail(
+    @Req() req: Request,
+    @Param('source') source: string,
+    @Param('eventId') eventId: string,
+    @Query() query: unknown,
+  ) {
+    const q = parse(z.object({ schoolId: uuid.optional() }).strict(), query);
+    const eventSource = parse(z.enum(['AUDIT', 'SECURITY']), source) as AuditSource;
+    const id = parse(uuid, eventId);
+    if (q.schoolId) await this.svc.authorize(req, q.schoolId, managers);
+    else await this.svc.administrator(req);
+    return this.auditLog.detail(eventSource, id, q.schoolId);
+  }
   @Get('audit') async audit(@Req() req: Request, @Query() query: unknown) {
-    const q = parse(z.object({ schoolId: uuid.optional(), page: listPage, pageSize: listSize, q: z.string().trim().max(200).default(''), actor: z.string().trim().max(200).default(''), action: z.string().trim().max(100).default(''), from: date.optional(), to: date.optional() }).strict(), query);
-    if (q.schoolId) await this.svc.authorize(req, q.schoolId, managers); else await this.svc.administrator(req);
-    const actorMatches = q.actor ? await this.svc.db.user.findMany({ where: { OR: [{ name: { contains: q.actor, mode: 'insensitive' } }, { email: { contains: q.actor, mode: 'insensitive' } }] }, select: { id: true } }) : [];
-    const searchActors = q.q ? await this.svc.db.user.findMany({ where: { OR: [{ name: { contains: q.q, mode: 'insensitive' } }, { email: { contains: q.q, mode: 'insensitive' } }] }, select: { id: true } }) : [];
-    const where: Prisma.AuditEventWhereInput = { ...(q.schoolId ? { schoolId: q.schoolId } : {}), ...(q.action ? { action: { contains: q.action, mode: 'insensitive' } } : {}), ...(q.actor ? { actorId: { in: actorMatches.map(actor => actor.id) } } : {}), ...(q.q ? { OR: [{ action: { contains: q.q, mode: 'insensitive' } }, { target: { contains: q.q, mode: 'insensitive' } }, { actorId: { in: searchActors.map(actor => actor.id) } }] } : {}), ...(q.from || q.to ? { createdAt: { ...(q.from ? { gte: new Date(q.from + 'T00:00:00.000Z') } : {}), ...(q.to ? { lt: new Date(new Date(q.to + 'T00:00:00.000Z').getTime() + 86400000) } : {}) } } : {}) };
-    const [events, total] = await this.svc.db.$transaction([
-      this.svc.db.auditEvent.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
-      this.svc.db.auditEvent.count({ where }),
-    ]);
-    const actorIds = [...new Set(events.flatMap(event => event.actorId ? [event.actorId] : []))];
-    const [actors, memberships] = actorIds.length
-      ? await Promise.all([
-        this.svc.db.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, name: true } }),
-        this.svc.db.membership.findMany({ where: { userId: { in: actorIds }, ...(q.schoolId ? { schoolId: q.schoolId } : {}) }, select: { userId: true, schoolId: true, role: true } }),
-      ])
-      : [[], []];
-    return { items: events.map(event => ({
-      ...event,
-      actor: actors.find(actor => actor.id === event.actorId) ?? null,
-      role: memberships.find(membership => membership.userId === event.actorId && membership.schoolId === event.schoolId)?.role ?? null,
-    })), total, page: q.page, pageSize: q.pageSize };
+    const q = parse(auditQuerySchema, query);
+    if (q.schoolId) await this.svc.authorize(req, q.schoolId, managers);
+    else await this.svc.administrator(req);
+    return this.auditLog.list({
+      ...q,
+      category: q.category as AuditCategory | undefined,
+    });
   }
   @Post('contact') async contactForm(@Req() req: Request, @Body() body: unknown) {
     const b = parse(z.object({

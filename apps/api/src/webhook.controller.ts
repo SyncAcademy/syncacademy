@@ -5,20 +5,24 @@ import {
   Headers, 
   HttpCode, 
   Post, 
+  Req,
+  ServiceUnavailableException,
   UnauthorizedException 
 } from '@nestjs/common';
+import { Request } from 'express';
 import { Database } from './database/database.service';
 import { config } from './config';
 import { NextSmsWebhookHandler } from './communication/webhooks/nextsms-webhook';
-import { normalizePhoneNumber } from './communication/communication.service';
+import { verifyResendWebhookSignature } from './communication/webhooks/resend-webhook';
 import { DeliveryStatus } from '@prisma/client';
+import { z } from 'zod';
 
 @Controller('api/v1/webhooks')
 export class WebhookController {
   private readonly nextSmsHandler: NextSmsWebhookHandler;
 
   constructor(private readonly db: Database) {
-    this.nextSmsHandler = new NextSmsWebhookHandler(config.NEXTSMS_WEBHOOK_VERIFY_TOKEN || 'syncacademy-verify-token');
+    this.nextSmsHandler = new NextSmsWebhookHandler(config.NEXTSMS_WEBHOOK_VERIFY_TOKEN);
   }
 
   /**
@@ -105,14 +109,24 @@ export class WebhookController {
   @HttpCode(200)
   async resendWebhookCallback(
     @Headers('svix-signature') signature: string | undefined,
-    @Body() body: any
+    @Headers('svix-id') id: string | undefined,
+    @Headers('svix-timestamp') timestamp: string | undefined,
+    @Req() req: Request,
+    @Body() body: unknown
   ) {
-    if (config.RESEND_WEBHOOK_SECRET && !signature) {
-      throw new UnauthorizedException('Missing webhook signature.');
+    if (!config.RESEND_WEBHOOK_SECRET) throw new ServiceUnavailableException('Email webhook authentication is not configured.');
+    const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+    if (!verifyResendWebhookSignature(config.RESEND_WEBHOOK_SECRET, { id, timestamp, signature }, rawBody)) {
+      throw new UnauthorizedException('Invalid webhook signature.');
     }
 
-    const eventType = body?.type;
-    const emailId = body?.data?.email_id;
+    const parsed = z.object({
+      type: z.string().trim().min(1).max(100),
+      data: z.object({ email_id: z.string().trim().min(1).max(200).optional() }).passthrough(),
+    }).passthrough().safeParse(body);
+    if (!parsed.success) return { received: true, ignored: true };
+    const eventType = parsed.data.type;
+    const emailId = parsed.data.data.email_id;
 
     if (!eventType || !emailId) {
       return { received: true, ignored: true };

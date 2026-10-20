@@ -1,4 +1,5 @@
 import { NextSmsWebhookPayload, DeliveryStatus } from '../interfaces/provider.interfaces';
+import { timingSafeEqual } from 'node:crypto';
 
 export interface WebhookValidationResult {
   valid: boolean;
@@ -15,9 +16,9 @@ export interface WebhookValidationResult {
 }
 
 export class NextSmsWebhookHandler {
-  private readonly expectedVerifyToken: string;
+  private readonly expectedVerifyToken?: string;
 
-  constructor(expectedVerifyToken: string) {
+  constructor(expectedVerifyToken?: string) {
     this.expectedVerifyToken = expectedVerifyToken;
   }
 
@@ -32,7 +33,7 @@ export class NextSmsWebhookHandler {
     const data = payload as Partial<NextSmsWebhookPayload>;
 
     // 1. Verify token
-    if (!data.token || data.token !== this.expectedVerifyToken) {
+    if (!this.expectedVerifyToken || typeof data.token !== 'string' || !data.token || !this.tokenMatches(data.token)) {
       return { valid: false, reason: 'Invalid or missing webhook verification token' };
     }
 
@@ -84,5 +85,11 @@ export class NextSmsWebhookHandler {
     if (id === 50) return 'PENDING';
     if (id === 57 || id === 58 || id === 64) return 'FAILED';
     return 'ENROUTE';
+  }
+
+  private tokenMatches(candidate: string): boolean {
+    const candidateBytes = Buffer.from(candidate);
+    const expectedBytes = Buffer.from(this.expectedVerifyToken!);
+    return candidateBytes.length === expectedBytes.length && timingSafeEqual(candidateBytes, expectedBytes);
   }
 }

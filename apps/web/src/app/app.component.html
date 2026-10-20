@@ -1,12 +1,13 @@
-<div class="preloader-overlay" *ngIf="showPreloader" [class.fade-out]="fadePreloader">
+<div class="preloader-overlay" *ngIf="showPreloader" [class.fade-out]="fadePreloader" role="status" aria-label="Loading SyncAcademy">
   <div class="preloader-content">
-    <div class="logo-container">
-      <svg class="logo-mark" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <path class="logo-fill" d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z"/>
-        <path class="logo-outline" d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z"/>
+    <div class="loader-stage" aria-hidden="true">
+      <svg class="loading-track" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r="52"/>
       </svg>
+      <img class="loading-ring" src="/assets/loading-ring.svg" alt="">
+      <img class="graduation-cap" src="/assets/graduation-cap.svg" alt="">
     </div>
-    <h1 class="brand-name"><span class="brand-name-text"><span class="text-black">Sync</span><span class="text-orange">Academy</span></span></h1>
+    <h1 class="brand-name"><span class="text-black">Sync</span><span class="text-orange">Academy</span></h1>
     <p class="brand-tagline">A smarter way to manage your school</p>
     <p class="entry-slow" *ngIf="entrySlow">Taking longer than usual. Check your connection if this continues.</p>
   </div>

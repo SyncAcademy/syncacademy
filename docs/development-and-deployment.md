@@ -54,6 +54,8 @@ npm run build --workspace=apps/web
 ```bash
 # In-memory unit tests (no PostgreSQL required)
 node --test apps/api/test/email-templates.test.cjs apps/api/test/platform-settings.test.cjs
+npm run test:audit-log --workspace=apps/api
+npm run test:security-hardening --workspace=apps/api
 
 # Full database integration suite (requires PostgreSQL running on DATABASE_URL)
 npm test --workspace=apps/api
@@ -166,6 +168,7 @@ Configure these variables in the production secret manager (never commit to Git)
 | `MAIL_FROM` | Yes | `no-reply@syncacademy.co.tz` |
 | `CONTACT_NOTIFICATION_EMAIL` | No | `support@syncacademy.co.tz` |
 | `WORKER_POLL_MS` | No | `5000` |
+| `MOCK_PAYMENT_PROVIDER` | No | `false`; set to `true` only for local development. Tests use the isolated mock provider automatically. Production rejects this setting and has no configured payment provider until a real gateway is integrated. |
 
 ---
 

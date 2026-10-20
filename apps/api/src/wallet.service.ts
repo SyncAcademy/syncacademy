@@ -6,15 +6,15 @@ import {
 } from '@nestjs/common';
 import { CommunicationChannel, Prisma } from '@prisma/client';
 import { Database } from './database/database.service';
-import { MockPaymentProvider } from './payments/mock-payment.provider';
 import { PaymentProvider } from './payments/payment-provider.interface';
+import { createPaymentProvider } from './payments/payment-provider.factory';
 
 @Injectable()
 export class WalletService {
   private readonly paymentProvider: PaymentProvider;
 
   constructor(private readonly db: Database) {
-    this.paymentProvider = new MockPaymentProvider();
+    this.paymentProvider = createPaymentProvider();
   }
 
   /**

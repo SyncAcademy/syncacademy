@@ -381,6 +381,7 @@ model AuditEvent {
   target String
   createdAt DateTime @default(now())
   @@index([schoolId, createdAt])
+  @@index([createdAt, id])
 }
 model Outbox {
   id String @id @default(uuid()) @db.Uuid
@@ -903,6 +904,9 @@ model SecurityEvent {
   @@index([schoolId, createdAt])
   @@index([category, severity])
   @@index([investigationStatus])
+  @@index([createdAt, id])
+  @@index([category, createdAt])
+  @@index([severity, createdAt])
 }
 // Aggregated operational metadata only; never request payloads or school records.
 model MonitorSample {

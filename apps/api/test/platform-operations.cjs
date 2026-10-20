@@ -12,8 +12,14 @@ module.exports = async function platformOperations({ t, db, client, admin }) {
     const lead = created.body;
     assert.equal((await admin.call('POST', 'platform/leads', values, { 'Idempotency-Key': key })).body.id, lead.id);
     assert.equal((await admin.call('POST', `platform/leads/${lead.id}/convert`, { code: 'PIPE-TEST', expiresInMinutes: 2880 }, { 'Idempotency-Key': randomUUID() })).status, 409);
-    const edited = await admin.call('PATCH', `platform/leads/${lead.id}`, { ...values, status: 'won' });
+    const edited = await admin.call('PATCH', `platform/leads/${lead.id}`, { ...values, source: 'friend-relative', status: 'won' });
     assert.equal(edited.status, 200, JSON.stringify(edited.body));
+    assert.equal(edited.body.source, 'friend-relative');
+    const otherSource = await admin.call('PATCH', `platform/leads/${lead.id}`, { ...values, source: 'other', status: 'won' });
+    assert.equal(otherSource.status, 200, JSON.stringify(otherSource.body));
+    assert.equal(otherSource.body.source, 'other');
+    const sourceFiltered = await admin.call('GET', 'platform/leads?source=other');
+    assert.ok(sourceFiltered.body.items.some(item => item.id === lead.id), 'new source values can be filtered');
     const converted = await admin.call('POST', `platform/leads/${lead.id}/convert`, { code: 'PIPE-TEST', expiresInMinutes: 2880 }, { 'Idempotency-Key': randomUUID() });
     assert.equal(converted.status, 201, JSON.stringify(converted.body));
     assert.equal(converted.body.invitation.role, 'HEADMASTER');

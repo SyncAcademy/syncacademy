@@ -50,6 +50,13 @@ module.exports = async function studentSubjects({ t, db, client, fixture }) {
     const membership = await db.membership.findFirstOrThrow({ where: { schoolId: school.id, userId: teacherUser.id } });
     const assigned = await academic.call('POST', `schools/${school.id}/academics/commands`, { yearId: year.id, action: 'class-teacher', payload: { classId: classroom.id, teacherId: membership.id } }, { 'Idempotency-Key': randomUUID() });
     assert.equal(assigned.status, 201, JSON.stringify(assigned.body));
+    for (const agent of [academic, teacher]) {
+      const workspace = await agent.call('GET', `schools/${school.id}/workspace?view=summary`);
+      assert.equal(workspace.status, 200, JSON.stringify(workspace.body));
+      assert.equal(workspace.body.view, 'summary');
+      assert.ok(workspace.body.years.some(item => item.id === year.id), 'summary supplies the student subjects year selector');
+    }
+
     assert.equal((await roster(teacher)).body.classes.length, 1, 'class teacher sees only their class');
     assert.equal((await roster(otherTeacher)).body.classes.length, 0);
     assert.equal((await roster(otherTeacher, classroom.id)).status, 403);

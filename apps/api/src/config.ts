@@ -28,8 +28,10 @@ const schema = z.object({
   RESEND_API_KEY: z.string().optional(),
   RESEND_WEBHOOK_SECRET: z.string().optional(),
   EMAIL_PROVIDER: z.enum(['smtp', 'resend', 'mock']).default('smtp'),
+  MOCK_PAYMENT_PROVIDER: z.enum(['true', 'false']).default('false'),
   COMMUNICATION_MOCK_DISPATCH: z.enum(['true', 'false']).default('false'),
 });
 export const config = schema.parse(process.env);
 if (config.NODE_ENV === 'production' && !config.APP_ORIGIN.startsWith('https://')) throw new Error('Production requires an HTTPS APP_ORIGIN');
 if (new URL(config.APP_ORIGIN).origin !== config.APP_ORIGIN) throw new Error('APP_ORIGIN must be an origin without a path or trailing slash');
+if (config.NODE_ENV === 'production' && config.MOCK_PAYMENT_PROVIDER === 'true') throw new Error('Mock payments are not permitted in production.');

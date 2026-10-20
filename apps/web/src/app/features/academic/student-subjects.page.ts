@@ -49,6 +49,9 @@ export class StudentSubjectsPage {
   readonly students = signal<SubjectRosterStudent[]>([]);
   readonly loadingClasses = signal(false);
   readonly loadingStudents = signal(false);
+  readonly classesLoaded = signal(false);
+  readonly studentsLoaded = signal(false);
+  readonly loadFailed = signal(false);
   readonly busy = signal(false);
   readonly error = signal('');
   readonly notice = signal('');
@@ -79,6 +82,11 @@ export class StudentSubjectsPage {
       const { id: yearId, closed } = this.yearContext();
       const role = this.api.role();
       untracked(() => {
+        this.loadingClasses.set(false);
+        this.loadingStudents.set(false);
+        this.classesLoaded.set(false);
+        this.studentsLoaded.set(false);
+        this.loadFailed.set(false);
         this.classesGeneration++;
         this.studentsGeneration++;
         this.classes.set([]);
@@ -117,18 +125,27 @@ export class StudentSubjectsPage {
     });
   }
 
+  retryLoad(): void {
+    const school = this.api.schoolId(), year = this.year()?.id;
+    if (!school || !year) return;
+    if (this.selectedClassId()) void this.loadStudents(this.selectedClassId());
+    else void this.loadClasses(school, year);
+  }
+
   private async loadClasses(schoolId: string, yearId: string): Promise<void> {
     const generation = ++this.classesGeneration;
     this.loadingClasses.set(true);
+    this.loadFailed.set(false);
     this.error.set('');
     try {
       const query = new URLSearchParams({ yearId });
       const result: any = await this.api.auth.request('GET', `schools/${schoolId}/registry/student-subjects?${query}`);
       if (generation !== this.classesGeneration || schoolId !== this.api.schoolId() || yearId !== this.year()?.id) return;
       this.classes.set(result.classes ?? []);
+      this.classesLoaded.set(true);
       this.yearClosed.set(!!result.year?.closed);
     } catch (error) {
-      if (generation === this.classesGeneration) this.error.set(this.api.auth.error(error));
+      if (generation === this.classesGeneration) { this.loadFailed.set(true); this.error.set(this.api.auth.error(error)); }
     } finally {
       if (generation === this.classesGeneration) this.loadingClasses.set(false);
     }
@@ -136,6 +153,7 @@ export class StudentSubjectsPage {
 
   async openClass(classroomId: string): Promise<void> {
     if (!this.canLeave()) return;
+    this.studentsLoaded.set(false);
     this.selectedClassId.set(classroomId);
     this.students.set([]);
     this.search.set('');
@@ -161,6 +179,7 @@ export class StudentSubjectsPage {
     if (!schoolId || !yearId) return;
     const generation = ++this.studentsGeneration;
     this.loadingStudents.set(true);
+    this.loadFailed.set(false);
     this.error.set('');
     try {
       const query = new URLSearchParams({ yearId, classroomId, page: String(this.page()), pageSize: String(this.pageSize), q: this.search() });
@@ -168,6 +187,7 @@ export class StudentSubjectsPage {
       if (generation !== this.studentsGeneration || classroomId !== this.selectedClassId() || schoolId !== this.api.schoolId() || yearId !== this.year()?.id) return;
       this.classes.set(result.classes ?? this.classes());
       this.total.set(result.total ?? 0);
+      this.studentsLoaded.set(true);
       // Keep the editing row visible even if it moved out of this page.
       const draftRow = this.students().find(row => row.enrollmentId === this.editingEnrollmentId());
       const rows: SubjectRosterStudent[] = result.students ?? [];
@@ -178,7 +198,7 @@ export class StudentSubjectsPage {
       }
       this.yearClosed.set(!!result.year?.closed);
     } catch (error) {
-      if (generation === this.studentsGeneration) this.error.set(this.api.auth.error(error));
+      if (generation === this.studentsGeneration) { this.loadFailed.set(true); this.error.set(this.api.auth.error(error)); }
     } finally {
       if (generation === this.studentsGeneration) this.loadingStudents.set(false);
     }

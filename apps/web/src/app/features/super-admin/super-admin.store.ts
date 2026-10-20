@@ -43,7 +43,7 @@ export interface PlatformLead {
   contactEmail: string;
   contactPhone: string;
   location: string;
-  source: 'website' | 'referral' | 'social' | 'event' | 'cold-outreach';
+  source: 'website' | 'referral' | 'social' | 'event' | 'cold-outreach' | 'friend-relative' | 'other';
   status: 'new' | 'contacted' | 'demo-scheduled' | 'demo-done' | 'negotiation' | 'won' | 'lost';
   studentCount: number;
   notes: string;
@@ -56,12 +56,26 @@ export interface PlatformLead {
 
 export interface PlatformAuditEntry {
   id: string;
+  source: 'AUDIT' | 'SECURITY';
   action: string;
-  actor: string;
-  target: string;
-  details: string;
-  ip: string;
+  category: string;
+  actor: { name: string; email: string | null } | null;
+  role: string | null;
+  school: { name: string; code: string | null } | null;
+  target: string | null;
+  outcome: 'SUCCESS' | 'FAILED' | 'DENIED' | 'UNAVAILABLE';
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | null;
+  ipAddress: string | null;
+  userAgent: string | null;
   timestamp: Date;
+}
+
+export interface PlatformAuditDetails extends Omit<PlatformAuditEntry, 'timestamp'> {
+  createdAt: string;
+  actorId: string | null;
+  schoolId: string | null;
+  targetId: string | null;
+  details: unknown;
 }
 
 export interface SystemHealth {
@@ -87,7 +101,11 @@ export class SuperAdminStore {
   readonly schoolRangeEnd = computed(() => Math.min(this.page() * this.schoolPageSize(), this.total()));
   readonly summaryError = signal('');
   readonly leadPage=signal(1);readonly leadTotal=signal(0);readonly leadSearch=signal('');readonly leadStatus=signal('');readonly leadSource=signal('');readonly leadStages=signal<Record<string,number>>({});
-  readonly auditPage=signal(1);readonly auditTotal=signal(0);readonly auditSearch=signal('');readonly auditActor=signal('');readonly auditAction=signal('');readonly auditFrom=signal('');readonly auditTo=signal('');
+  readonly auditPage=signal(1);readonly auditPageSize=signal(20);readonly auditTotal=signal(0);readonly auditSearch=signal('');readonly auditActor=signal('');readonly auditSchoolId=signal('');readonly auditCategory=signal('');readonly auditAction=signal('');readonly auditOutcome=signal('');readonly auditSeverity=signal('');readonly auditFrom=signal('');readonly auditTo=signal('');
+  readonly auditSummary=signal<{periodDays:number;totalEvents:number;failedAuthentication:number;securityEvents:number;highRiskEvents:number}|null>(null);
+  readonly auditPeriodDays=signal(30);
+  readonly auditFilterOptions=signal<{schools:{id:string;name:string;code:string}[];actions:string[];categories:string[]}>({schools:[],actions:[],categories:[]});
+  readonly auditLoading=signal(false);
   readonly activeSchools = computed(() => this.schools().filter(s => s.status === 'active'));
   readonly trialSchools = computed(() => this.schools().filter(s => s.status === 'trial'));
   readonly totalStudents = computed(() => this.schools().reduce((sum, s) => sum + s.students, 0));
@@ -172,7 +190,7 @@ export class SuperAdminStore {
       const identity = this.auth.identity();
       this.realtime.select(this.canSync() ? this.context() : '');
       if (!identity?.platformAdmin) {
-        this.schoolRequest++; this.leadRequest++; this.auditRequest++;
+        this.schoolRequest++; this.leadRequest++; this.auditRequest++; this.lastAuditQuery = '';
         this.schools.set([]); this.leads.set([]); this.auditLog.set([]); this.admins.set([]); this.summary.set(null);
         this.settings.set({platformName:'SyncAcademy',supportEmail:'',maintenanceMessage:''});
         this.loading.set(false); this.schoolsLoading.set(false);
@@ -189,7 +207,7 @@ export class SuperAdminStore {
     this.destroyRef.onDestroy(() => { clearTimeout(this.refreshTimer); this.realtime.select(''); });
   }
   private params(values:Record<string,string|number>){return new URLSearchParams(Object.entries(values).filter(([,value])=>String(value).length).map(([key,value])=>[key,String(value)])).toString();}
-  private schoolRequest=0;private leadRequest=0;private auditRequest=0;
+  private schoolRequest=0;private leadRequest=0;private auditRequest=0;private lastAuditQuery='';
   async loadSchools() {
     const request = ++this.schoolRequest; const context = this.context();
     this.schoolsLoading.set(true);
@@ -204,7 +222,12 @@ export class SuperAdminStore {
     }
   }
   async loadLeads(){const request=++this.leadRequest;const context=this.context();const list=await this.auth.request('GET','platform/leads?'+this.params({page:this.leadPage(),q:this.leadSearch(),status:this.leadStatus(),source:this.leadSource()}));if(request!==this.leadRequest||context!==this.context())return;this.leads.set(list.items);this.leadTotal.set(list.total);this.leadStages.set(list.stages);}
-  async loadAudit(){const request=++this.auditRequest;const context=this.context();const list=await this.auth.request('GET','audit?'+this.params({page:this.auditPage(),q:this.auditSearch(),actor:this.auditActor(),action:this.auditAction(),from:this.auditFrom(),to:this.auditTo()}));if(request!==this.auditRequest||context!==this.context())return;this.auditTotal.set(list.total);this.auditLog.set(list.items.map((a:any)=>({id:a.id,action:a.action,actor:a.actor?.name||a.actorId||'System',target:a.target,details:'',ip:'Not recorded',timestamp:new Date(a.createdAt)})));}
+  private auditQueryKey(){return this.params({page:this.auditPage(),pageSize:this.auditPageSize(),q:this.auditSearch(),actor:this.auditActor(),schoolId:this.auditSchoolId(),category:this.auditCategory(),action:this.auditAction(),outcome:this.auditOutcome(),severity:this.auditSeverity(),from:this.auditFrom(),to:this.auditTo()});}
+  async loadAuditIfNeeded(){if(this.lastAuditQuery===this.auditQueryKey())return;await this.loadAudit();}
+  async loadAudit(){const request=++this.auditRequest;const context=this.context();const query=this.auditQueryKey();this.auditLoading.set(true);try{const list=await this.auth.request('GET','audit?'+query);if(request!==this.auditRequest||context!==this.context())return;this.auditTotal.set(list.total);this.auditLog.set(list.items.map((a:any)=>({id:a.id,source:a.source,action:a.action,category:a.category,actor:a.actor,role:a.role,school:a.school,target:a.target,outcome:a.outcome,severity:a.severity,ipAddress:a.ipAddress,userAgent:a.userAgent,timestamp:new Date(a.createdAt)})));this.lastAuditQuery=query;}finally{if(request===this.auditRequest)this.auditLoading.set(false);}}
+  async loadAuditSummary(){const result=await this.auth.request('GET','audit/summary?'+this.params({periodDays:this.auditPeriodDays(),schoolId:this.auditSchoolId()}));this.auditSummary.set(result);}
+  async loadAuditFilterOptions(schoolSearch='', schoolId=''){const result=await this.auth.request('GET','audit/filter-options?'+this.params({schoolSearch,schoolId}));this.auditFilterOptions.set(result);}
+  async auditDetail(source:'AUDIT'|'SECURITY',id:string){return this.auth.request<PlatformAuditDetails>('GET',`audit/${source}/${encodeURIComponent(id)}?`+this.params({schoolId:this.auditSchoolId()}));}
   load(): Promise<void> {
     if (this.activeLoad) { this.reloadPending = true; return this.activeLoad; }
     const promise = (async () => { try { do { this.reloadPending = false; await this.fetch(); } while (this.reloadPending && this.canSync()); } finally { this.activeLoad = null; } })();

@@ -57,6 +57,7 @@ flowchart LR
 ### 2.1 Component & State Architecture
 - **Framework**: Angular `^18.2.0` using **Standalone Components** (`standalone: true`), lazy-loaded routes (`loadComponent` in `src/app/app.routes.ts`), and **Angular Signals** (`signal`, `computed`).
 - **UI System**: Custom SCSS design tokens (`src/styles.scss`) paired with `@ionic/angular ^8.0.0` and `ionicons ^7.0.0`.
+- **Application startup**: `AppComponent` displays a responsive SVG graduation-cap preloader while the initial router navigation is unresolved. The cap float and two-second loading-ring rotation use independent CSS transforms; successful, canceled, or failed navigation fades the overlay out over 500ms, with a bounded initialization watchdog and reduced-motion support.
 - **Core State Services (`src/app/core/services/`)**:
   - `AuthService` (`auth.service.ts`) — Bootstraps `/api/auth/session`, manages login/logout/invitations/password-reset, and attaches `withCredentials: true` + `x-csrf-token` headers.
   - `SchoolService` (`school.service.ts`) — Manages active tenant context (`schoolId`), directory queries, bursar finance state, and live SSE invalidation streams (`/api/realtime/stream`).
@@ -239,11 +240,11 @@ All communication channels implement a unified interface under `apps/api/src/com
 
 ### 7.3 Delivery Reports, Webhooks & Transactional Outbox Integration
 - **NextSMS & Resend Webhook Integration (`apps/api/src/webhook.controller.ts`)**:
-  - Registered in NextSMS Dashboard (`Customer Info -> Customization -> Webhooks`) with shared verify token.
+  - NextSMS callbacks require the configured `NEXTSMS_WEBHOOK_VERIFY_TOKEN`; requests are rejected if it is absent.
   - Delivery reports: `POST /api/v1/webhooks/nextsms/delivery` updates `CommunicationLog` status (`DELIVERED`, `READ`, `UNDELIVERABLE`, `REJECTED`, etc.).
   - Inbound WhatsApp replies: `POST /api/v1/webhooks/nextsms/inbound` parses customer messages and automatically executes opt-out regulations on keywords (`STOP`, `SIMAMA`, `ONDOA`, `UNSUBSCRIBE`).
   - Resend email webhooks: `POST /api/v1/webhooks/resend` handles `email.delivered`, `email.bounced`, `email.complained`.
-  - Webhooks are exempt from browser Origin and CSRF token restrictions, validating provider tokens and signatures instead.
+  - Webhooks are exempt from browser Origin and CSRF token restrictions. NextSMS uses its configured shared token; Resend verifies the Svix HMAC signature over the captured raw body and rejects timestamps outside a five-minute window. Missing verification configuration fails closed.
 - **Transactional Outbox Integration (`worker.ts`)**:
   - Domain state changes (e.g. report card publishing, fee payment receipting) and outbox rows are committed in a single ACID transaction (`prisma.$transaction`).
   - Worker polls outbox every second, dispatches via the target channel (`SMS`, `WHATSAPP`, `EMAIL`), updates `CommunicationLog` telemetry, and applies exponential backoff on retryable errors. If WhatsApp delivery encounters non-retryable issues, it automatically falls back to SMS. Messages exceeding 8 attempts are transitioned to dead-letter state (`failedAt`).
@@ -264,7 +265,7 @@ Allows parents to view and download term report cards from an SMS, WhatsApp mess
 - **ADR-003 (Async Messaging & Outbox)**: Use the **PostgreSQL Transactional Outbox (`Outbox` + `worker.ts`)** instead of Redis/Kafka, guaranteeing atomic event enqueueing and low infrastructure cost.
 - **ADR-004 (Multi-Tenancy)**: Use a **shared PostgreSQL schema discriminated by `schoolId`** with global `User` identity so staff and cross-school guardians can hold relationships across multiple schools.
 - **ADR-005 (Academic Schema Unification)**: Complete consolidation of legacy academic tables (`Examination`, `Mark`, `ReportCard`) into the active normalized `Academic*` relational tables in Phase 2.
-- **ADR-006 (Authoritative Payment Gateway & Mock Provider)**: Decouple school subscription and credit purchase payments behind a pluggable `PaymentProvider` abstraction with deterministic test mock provider and HMAC-signed webhook validation, preventing unverified client updates.
+- **ADR-006 (Payment Provider Safety Boundary)**: School subscription and credit purchases use a pluggable `PaymentProvider`. The mock provider is enabled only for tests or when explicitly enabled in development. No production payment provider is configured in the current implementation, so payment initiation fails closed rather than confirming invoices or credit purchases automatically.
 - **ADR-007 (Messaging Credit Wallet with Atomic Reservation)**: Enforce a dedicated two-phase messaging credit lifecycle (`RESERVATION` -> `CONSUMPTION` / `RELEASE`) with row-level locks on `SchoolCreditWallet` to strictly prevent credit overdraft across high-volume notification bursts.
 - **ADR-008 (Bank Statement Reconciliation & Heuristic Matching)**: Process Bursar bank and mobile money CSV statements via SHA-256 duplicate detection and a multi-tier matching engine (exact reference: 100%, date + amount + student identifier: 85-95%) with Bursar confirmation and dispute controls.
 
@@ -316,8 +317,8 @@ Extends student class enrollment with a formal verification and attendance sanit
   - `suspended`: Administrative freeze initiated by Super Admin.
 - **Invoicing & Payments**:
   - Sequential invoice numbers (`INV-SUB-YYYY-SEQ`).
-  - Pluggable `PaymentProvider` abstraction with `MockPaymentProvider` for deterministic test simulation.
-  - Authoritative HMAC-SHA256 webhook processing (`apps/api/src/webhook.controller.ts`) ensuring state changes occur only on verified gateway callbacks.
+  - Pluggable `PaymentProvider` abstraction with `MockPaymentProvider` available only in isolated tests or explicitly enabled development environments.
+  - A real production payment provider is not yet configured. Production payment initiation returns a service-unavailable response and cannot mark subscriptions or credit purchases paid through the mock.
 
 ### 9.4 Messaging Credit Wallet & Atomic Ledger Architecture
 
@@ -348,10 +349,18 @@ Extends student class enrollment with a formal verification and attendance sanit
   - Categorized telemetry: `AUTHENTICATION`, `AUTHORIZATION`, `MFA`, `OTP`, `REPORT_ACCESS`, `WEBHOOK`, `FINANCIAL`, `WALLET`, `INTEGRITY`.
   - Severity classification: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`.
 - **Zero-Secret Leakage Guarantee**:
-  - Automatic recursive redaction replaces sensitive keys (`password`, `token`, `secret`, `otp`, `code`, `pin`, `authorization`, `cookie`) with `[REDACTED]` before database insertion.
+  - Automatic recursive redaction replaces sensitive keys, including password, token, secret, OTP, authorization, cookie, CSRF, credential, API-key, private-key, and session fields, with `[REDACTED]` before database insertion.
 - **Access Scoping**:
   - Headmaster and School Admin can inspect security events strictly belonging to their `schoolId`.
   - Super Admin has platform-wide query capabilities for threat detection and compliance auditing.
+
+### 9.7 Super Admin Audit Log
+
+- **Unified event view**: `GET /api/v1/audit` combines immutable `AuditEvent` records with `SecurityEvent` telemetry. The API applies search, actor, school, category, action, outcome, severity and UTC date-range filters before returning a page; accepted page sizes are 10, 20, 50 and 100 (the Super Admin UI defaults to 20).
+- **Summary and filter options**: `GET /api/v1/audit/summary` returns bounded-period totals, failed authentication and high-risk counts, optionally scoped to a school. `GET /api/v1/audit/filter-options` returns bounded school and action choices for the filters.
+- **Event details and export**: `GET /api/v1/audit/:source/:eventId` returns one event's details, with recursively redacted security metadata. `GET /api/v1/audit/export` exports only events matching the same filters and rejects more than 5,000 results. CSV cells are quoted and spreadsheet-formula prefixes are neutralized.
+- **Authorization and privacy**: Platform-wide views require Super Admin authorization. School-scoped views are authorized against the selected school at the API boundary. List results omit resource identifiers and event payloads; details are loaded only on demand. Security-event details are redacted before persistence and again before presentation.
+- **Frontend behavior**: The Super Admin page preserves filters and pagination in URL query parameters, supports combined filters and server-side pagination, and does not download the complete event stream to paginate locally.
 
 ## 10. Current Implementation: Administrative System Health
 

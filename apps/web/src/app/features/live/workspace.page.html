@@ -91,7 +91,7 @@
               <line x1="8" y1="21" x2="16" y2="21"/>
               <line x1="12" y1="17" x2="12" y2="21"/>
             </svg>
-            Classes &amp; Assignments
+            {{ auth.identity()?.platformAdmin ? 'Teacher Assignments' : 'Classes & Assignments' }}
           </button>
         }
 
@@ -175,7 +175,7 @@
             <span class="current">{{ workspace?.school?.name || (auth.identity()?.platformAdmin ? 'Platform Administration' : 'School Workspace') }}</span>
           </div>
           <h1>
-            {{ tab === 'overview' ? 'Overview' : tab === 'people' ? 'People & Invitations' : tab === 'students' ? 'Students' : tab === 'audit' ? 'Audit History' : 'Classes & Assignments' }}
+            {{ tab === 'overview' ? 'Overview' : tab === 'people' ? 'People & Invitations' : tab === 'students' ? 'Students' : tab === 'audit' ? 'Audit History' : (auth.identity()?.platformAdmin ? 'Teacher Assignments' : 'Classes & Assignments') }}
           </h1>
         </div>
       </div>
@@ -189,7 +189,7 @@
             Schools Directory
           </a>
         }
-        <button class="action-btn" (click)="load()" [disabled]="busy">
+        <button class="action-btn" (click)="refresh()" [disabled]="busy">
           <svg viewBox="0 0 20 20" fill="currentColor" class="btn-icon">
             <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.451a.75.75 0 000-1.5H4.5a.75.75 0 00-.75.75v3.75a.75.75 0 001.5 0v-2.146l.405.405a7 7 0 0011.83-3.165.75.75 0 00-1.423-.449zM4.688 8.576a5.5 5.5 0 019.201-2.466l.312.311H11.75a.75.75 0 000 1.5H15.5a.75.75 0 00.75-.75V3.421a.75.75 0 00-1.5 0v2.146l-.405-.405A7 7 0 002.515 8.327a.75.75 0 001.423.449z" clip-rule="evenodd" />
           </svg>
@@ -493,6 +493,127 @@
 
         <!-- STUDENTS TAB -->
         @if (tab === 'students') {
+          @if (auth.identity()?.platformAdmin) {
+            @if (!selectedClassId) {
+              <section class="panel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="panel-sub"><a routerLink="/super-admin/schools">Schools</a> / {{ w.school.name }} / Students</p>
+                    <h2>Choose a class</h2>
+                    <p class="panel-sub">Student records are loaded only after selecting a class.</p>
+                  </div>
+                  @if (w.permissions.registrar) {
+                    <button class="action-btn action-btn--primary" (click)="addStudent()" [disabled]="!w.classes.length">Register Student</button>
+                  }
+                </div>
+                <div class="workspace-class-filters">
+                  <input type="search" aria-label="Search classes" placeholder="Search classes" maxlength="150" [(ngModel)]="classSearch" />
+                  <select aria-label="Filter classes by academic year" [(ngModel)]="classYearId">
+                    <option value="">All academic years</option>
+                    @for (year of w.years; track year.id) {
+                      <option [value]="year.id">{{ year.name }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="oversight-class-grid">
+                  @for (c of visibleClasses; track c.id) {
+                    <article class="oversight-class-card">
+                      <div class="class-card-top">
+                        <strong class="class-card-name">{{ displayClassName(c.name) }}</strong>
+                        <span class="badge">{{ c.year.closed ? 'Closed' : 'Open' }}</span>
+                      </div>
+                      <span>{{ c.year.name }}</span>
+                      <strong>{{ c._count.enrollments | number }} active {{ c._count.enrollments === 1 ? 'student' : 'students' }}</strong>
+                      <button type="button" class="action-btn action-btn--primary" (click)="openClassStudents(c.id)">View students</button>
+                    </article>
+                  } @empty {
+                    <p class="empty">{{ classSearch || classYearId ? 'No classes match these filters.' : 'No classes are available for this school.' }}</p>
+                  }
+                </div>
+              </section>
+            } @else {
+              @if (selectedStudentClass; as classroom) {
+                <section class="panel">
+                  <div class="class-view-toolbar">
+                    <div>
+                      <p class="panel-sub"><a routerLink="/super-admin/schools">Schools</a> / {{ w.school.name }} / <button type="button" class="text-link" (click)="backToStudentClasses()">Classes</button> / {{ displayClassName(classroom.name) }}</p>
+                      <h2>{{ displayClassName(classroom.name) }} students</h2>
+                      <p class="panel-sub">{{ classroom.year.name }} · {{ classroom._count.enrollments | number }} active {{ classroom._count.enrollments === 1 ? 'student' : 'students' }}</p>
+                    </div>
+                  </div>
+                  <div class="workspace-student-toolbar">
+                    <div class="workspace-student-toolbar__actions">
+                      <button type="button" class="action-btn" (click)="backToStudentClasses()">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>
+                        </svg>
+                        All Classes
+                      </button>
+                      @if (w.permissions.registrar) {
+                        <button class="action-btn action-btn--primary" (click)="addStudent()">
+                          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M20 8v6"/><path d="M23 11h-6"/>
+                          </svg>
+                          Register Student
+                        </button>
+                      }
+                    </div>
+                    <label class="workspace-student-search">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                      </svg>
+                      <input type="search" aria-label="Search students in this class" placeholder="Search by student name or admission number" maxlength="150" [ngModel]="studentSearch" (ngModelChange)="filterClassStudents($event)" />
+                    </label>
+                  </div>
+                  @if (studentsError) {
+                    <div class="portal-notice portal-notice--error" role="alert">
+                      {{ studentsError }}
+                      <button type="button" class="action-btn action-btn--sm" (click)="loadClassStudents()" [disabled]="studentsLoading">Retry</button>
+                    </div>
+                  }
+                  @if (studentsLoading) {
+                    <div class="workspace-student-skeleton" role="status" aria-label="Loading students">
+                      <span>Loading students...</span>
+                      @for (row of [1, 2, 3, 4, 5]; track row) {
+                        <div class="workspace-student-skeleton__row"><i></i><i></i></div>
+                      }
+                    </div>
+                  } @else if (!studentsError) {
+                    <div class="table-scroll">
+                      <table>
+                        <thead><tr><th>Student</th><th>Admission Number</th><th>Class</th></tr></thead>
+                        <tbody>
+                          @for (s of classStudents; track s.id) {
+                            <tr>
+                              <td><strong>{{ s.name }}</strong></td>
+                              <td><code>{{ s.admissionNumber }}</code></td>
+                              <td><span class="role-badge">{{ displayClassName(classroom.name) }}</span></td>
+                            </tr>
+                          } @empty {
+                            <tr><td colspan="3" class="empty">{{ studentSearch ? 'No students match this search.' : 'No active students are enrolled in this class.' }}</td></tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                    @if (classStudentTotal > studentPageSize) {
+                      <div class="pagination-bar" role="navigation" aria-label="Class student pagination">
+                        <span>Showing {{ classStudentRangeStart }}–{{ classStudentRangeEnd }} of {{ classStudentTotal | number }} students · Page {{ studentPage }} of {{ classStudentPages }}</span>
+                        <div class="pagination-actions">
+                          <button type="button" [disabled]="studentPage <= 1 || studentsLoading" (click)="changeStudentPage(-1)">Previous</button>
+                          <button type="button" [disabled]="studentPage >= classStudentPages || studentsLoading" (click)="changeStudentPage(1)">Next</button>
+                        </div>
+                      </div>
+                    }
+                  }
+                </section>
+              } @else {
+                <section class="panel empty">
+                  <p>This class is no longer available. Return to the class list and select another class.</p>
+                  <button type="button" class="action-btn" (click)="backToStudentClasses()">All classes</button>
+                </section>
+              }
+            }
+          } @else {
           <section class="panel">
             <div class="panel-heading">
               <div>
@@ -546,10 +667,162 @@
               </div>
             </div>
           </section>
+          }
         }
 
         <!-- CLASSES & ASSIGNMENTS TAB -->
         @if (tab === 'classes') {
+          @if (auth.identity()?.platformAdmin) {
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-sub"><a routerLink="/super-admin/schools">Schools</a> / {{ w.school.name }}</p>
+                <h2>Teacher Assignments</h2>
+                <p class="panel-sub">One card per teacher · {{ w.school.name }}</p>
+              </div>
+              @if (w.permissions.academic) {
+                <div class="actions">
+                  <button class="action-btn" (click)="addYear()">Create Year</button>
+                  <button class="action-btn" (click)="addClass()" [disabled]="!w.years.length">Create Class</button>
+                  <button class="action-btn action-btn--primary" (click)="assignTeacher()" [disabled]="!w.classes.length">Assign Teacher</button>
+                </div>
+              }
+            </div>
+
+            <div class="teacher-assignment-toolbar">
+              <label>
+                <span>Academic year</span>
+                <select aria-label="Filter teacher assignments by academic year" [ngModel]="teacherAssignmentYearId" (ngModelChange)="changeTeacherAssignmentYear($event)">
+                  <option value="">Select academic year</option>
+                  @for (year of w.years; track year.id) {
+                    <option [value]="year.id">{{ year.name }}{{ year.closed ? ' (Closed)' : '' }}</option>
+                  }
+                </select>
+              </label>
+              <label class="teacher-assignment-search">
+                <span>Search teachers</span>
+                <input type="search" aria-label="Search teachers by name" placeholder="Search by teacher name" maxlength="150" [ngModel]="teacherAssignmentSearch" (ngModelChange)="searchTeacherAssignments($event)" />
+              </label>
+              <label>
+                <span>Class</span>
+                <select aria-label="Filter by class" [ngModel]="teacherAssignmentClassId" (ngModelChange)="teacherAssignmentClassId = $event; filterTeacherAssignments()">
+                  <option value="">All classes</option>
+                  @for (classroom of teacherAssignmentClasses; track classroom.id) {
+                    <option [value]="classroom.id">{{ displayClassName(classroom.name) }}</option>
+                  }
+                </select>
+              </label>
+              <label>
+                <span>Subject</span>
+                <select aria-label="Filter by subject" [ngModel]="teacherAssignmentSubjectId" (ngModelChange)="teacherAssignmentSubjectId = $event; filterTeacherAssignments()">
+                  <option value="">All subjects</option>
+                  @for (subject of w.subjects; track subject.id) {
+                    <option [value]="subject.id">{{ subject.name }}</option>
+                  }
+                </select>
+              </label>
+              <label>
+                <span>Role</span>
+                <select aria-label="Filter by teacher role" [ngModel]="teacherAssignmentRole" (ngModelChange)="teacherAssignmentRole = $event; filterTeacherAssignments()">
+                  <option value="all">All Teachers</option>
+                  <option value="class_teacher">Class Teachers</option>
+                  <option value="subject_teacher">Subject Teachers</option>
+                </select>
+              </label>
+              <button type="button" class="action-btn teacher-assignment-reset" (click)="resetTeacherAssignmentFilters()" [disabled]="teacherAssignmentsLoading">Reset filters</button>
+            </div>
+
+            @if (teacherAssignmentsError) {
+              <div class="portal-notice portal-notice--error" role="alert">
+                {{ teacherAssignmentsError }}
+                <button type="button" class="action-btn action-btn--sm" (click)="loadTeacherAssignments()" [disabled]="teacherAssignmentsLoading">Retry</button>
+              </div>
+            }
+            @if (teacherAssignmentsLoading) {
+              <div class="teacher-assignment-skeleton" role="status" aria-label="Loading teacher assignments">
+                <span>Loading teacher assignments...</span>
+                <div class="teacher-assignment-skeleton__grid">
+                  @for (row of [1, 2, 3]; track row) {
+                    <i></i>
+                  }
+                </div>
+              </div>
+            } @else if (!teacherAssignmentsError) {
+            <div class="teacher-assignment-grid">
+              @for (teacher of teacherAssignments; track teacher.id) {
+                <article class="teacher-assignment-card">
+                  <header class="teacher-assignment-card__header">
+                    <span class="teacher-assignment-avatar" aria-hidden="true">{{ teacherInitials(teacher.name) }}</span>
+                    <div class="teacher-assignment-card__identity">
+                      <h3>{{ teacher.name }}</h3>
+                      <span>{{ roleNames[teacher.role] || 'Teacher' }} · {{ teacher.status === 'active' ? 'Active' : 'Inactive' }}</span>
+                    </div>
+                    @if (teacher.classTeacherClasses.length) {
+                      <span class="teacher-assignment-badge">Class Teacher</span>
+                    }
+                  </header>
+                  @if (teacher.classTeacherClasses.length) {
+                    <section class="teacher-assignment-section">
+                      <h4>Class teacher</h4>
+                      <div class="teacher-assignment-chips">
+                        @for (classroom of teacher.classTeacherClasses; track classroom.id) {
+                          <span class="teacher-assignment-chip teacher-assignment-chip--class-teacher">{{ displayClassName(classroom.name) }}</span>
+                        }
+                      </div>
+                    </section>
+                  }
+                  @if (teacher.teachingAssignments.length) {
+                    <section class="teacher-assignment-section">
+                      <h4>Teaching assignments</h4>
+                      <div class="teacher-assignment-subjects">
+                        @for (subject of teacher.teachingAssignments; track subject.id) {
+                          <div class="teacher-assignment-subject-row">
+                            <strong>{{ subject.name }}</strong>
+                            <div class="teacher-assignment-chips">
+                              @for (classroom of subject.classes; track classroom.id) {
+                                <span class="teacher-assignment-chip">{{ displayClassName(classroom.name) }}</span>
+                              }
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    </section>
+                  }
+                  @if (!teacher.classTeacherClasses.length && !teacher.teachingAssignments.length) {
+                    <p class="teacher-assignment-no-duties">No active class or subject assignments for this academic year.</p>
+                  }
+                </article>
+              } @empty {
+                <div class="teacher-assignment-empty">
+                  <h3>{{ teacherAssignmentTotal ? 'No teachers match these filters' : 'No teacher assignments yet' }}</h3>
+                  <p>{{ teacherAssignmentTotal ? 'Try a different search or reset the filters.' : 'Assign teachers to classes to see their responsibilities here.' }}</p>
+                  @if (teacherAssignmentTotal) {
+                    <button type="button" class="action-btn" (click)="resetTeacherAssignmentFilters()">Reset filters</button>
+                  }
+                </div>
+              }
+            </div>
+            <div class="teacher-assignment-pagination" role="navigation" aria-label="Teacher assignment pagination">
+              <div class="teacher-assignment-pagination__summary">
+                <span>Showing {{ teacherAssignmentRangeStart }}–{{ teacherAssignmentRangeEnd }} of {{ teacherAssignmentTotal | number }} teachers</span>
+                <label>Per page
+                  <select aria-label="Teachers per page" [ngModel]="teacherAssignmentPageSize" (ngModelChange)="changeTeacherAssignmentPageSize(+$event)">
+                    <option [ngValue]="12">12</option>
+                    <option [ngValue]="20">20</option>
+                    <option [ngValue]="24">24</option>
+                    <option [ngValue]="48">48</option>
+                  </select>
+                </label>
+              </div>
+              <span>Page {{ teacherAssignmentPage }} of {{ teacherAssignmentPages }}</span>
+              <div class="pagination-actions">
+                <button type="button" [disabled]="teacherAssignmentPage <= 1 || teacherAssignmentsLoading" (click)="changeTeacherAssignmentPage(-1)">Previous</button>
+                <button type="button" [disabled]="teacherAssignmentPage >= teacherAssignmentPages || teacherAssignmentsLoading" (click)="changeTeacherAssignmentPage(1)">Next</button>
+              </div>
+            </div>
+            }
+          </section>
+          } @else {
           <section class="panel">
             <div class="panel-heading">
               <div>
@@ -560,55 +833,41 @@
                 <div class="actions">
                   <button class="action-btn" (click)="addYear()">Create Year</button>
                   <button class="action-btn" (click)="addClass()" [disabled]="!w.years.length">Create Class</button>
-                  <button
-                    class="action-btn action-btn--primary"
-                    (click)="assignTeacher()"
-                    [disabled]="!w.classes.length"
-                  >
-                    Assign Teacher
-                  </button>
+                  <button class="action-btn action-btn--primary" (click)="assignTeacher()" [disabled]="!w.classes.length">Assign Teacher</button>
                 </div>
               }
             </div>
-
-            <div class="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Class</th>
-                    <th>Academic Year</th>
-                    <th>Year Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (c of w.classes; track c.id) {
-                    <tr>
-                      <td><strong>{{ displayClassName(c.name) }}</strong></td>
-                      <td>{{ c.year.name }}</td>
-                      <td>
-                        <span class="portal-pill" [attr.data-status]="c.year.closed ? 'Suspended' : 'Active'">
-                          {{ c.year.closed ? 'Closed' : 'Open' }}
-                        </span>
-                      </td>
-                    </tr>
-                  } @empty {
-                    <tr>
-                      <td colspan="3" class="empty">No classes available.</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-
             @if (w.permissions.academic) {
               <h3>Teacher Assignments</h3>
               @for (a of w.assignments; track a.id) {
-                <p>{{ assignmentName(a) }}</p>
+                <article class="workspace-assignment-card">
+                  <strong>{{ assignmentName(a) }}</strong>
+                  <small>{{ a.subject?.name || 'Class teacher' }}</small>
+                  <small>{{ a.classroom.year.name }} · {{ a.classroom._count.enrollments | number }} active {{ a.classroom._count.enrollments === 1 ? 'student' : 'students' }}</small>
+                </article>
               } @empty {
                 <p class="panel-sub">No teacher assignments yet.</p>
               }
+            } @else {
+              <div class="table-scroll">
+                <table>
+                  <thead><tr><th>Class</th><th>Academic Year</th><th>Year Status</th></tr></thead>
+                  <tbody>
+                    @for (c of w.classes; track c.id) {
+                      <tr>
+                        <td><strong>{{ displayClassName(c.name) }}</strong></td>
+                        <td>{{ c.year.name }}</td>
+                        <td><span class="portal-pill" [attr.data-status]="c.year.closed ? 'Suspended' : 'Active'">{{ c.year.closed ? 'Closed' : 'Open' }}</span></td>
+                      </tr>
+                    } @empty {
+                      <tr><td colspan="3" class="empty">No classes available.</td></tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
             }
           </section>
+          }
         }
       }
 

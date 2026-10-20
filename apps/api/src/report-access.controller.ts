@@ -216,17 +216,38 @@ export class ReportAccessController {
     @Param('schoolId') schoolId: string,
     @Query() query: unknown
   ) {
-    await this.svc.authorize(req, parse(uuid, schoolId), ['HEADMASTER', 'ACADEMIC', 'TEACHER', 'REGISTRAR']);
+    const access = await this.svc.authorize(req, parse(uuid, schoolId), ['HEADMASTER', 'ACADEMIC', 'TEACHER', 'REGISTRAR']);
     const b = parse(z.object({
       ...paging,
       studentId: uuid.optional(),
       classId: uuid.optional(),
     }).strict(), query);
 
+    let authorizedClassIds: string[] | undefined;
+    if (req.session.selectedRole === 'TEACHER') {
+      const assignments = await this.svc.db.teachingAssignment.findMany({
+        where: { schoolId, membershipId: { in: access.memberships.map(membership => membership.id) } },
+        select: { classroomId: true },
+        distinct: ['classroomId'],
+      });
+      authorizedClassIds = assignments.map(assignment => assignment.classroomId);
+      if (!authorizedClassIds.length) throw new ForbiddenException('No authorized class assignments were found.');
+      if (b.classId && !authorizedClassIds.includes(b.classId)) {
+        throw new ForbiddenException('You do not have access to reports for this class.');
+      }
+    }
+
     const where: Prisma.ReportAccessLinkWhereInput = {
       schoolId,
       ...(b.studentId ? { studentId: b.studentId } : {}),
       ...(b.classId ? { student: { enrollments: { some: { classroomId: b.classId, status: 'active' } } } } : {}),
+      ...(authorizedClassIds ? {
+        student: {
+          enrollments: {
+            some: { schoolId, classroomId: { in: authorizedClassIds }, status: 'active' },
+          },
+        },
+      } : {}),
     };
 
     const [total, items] = await Promise.all([

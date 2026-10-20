@@ -4,6 +4,7 @@ import { Request } from 'express';
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 import { Database } from './database/database.service';
+import { AuditLogService } from './audit-log.service';
 import { config } from './config';
 import { decrypt, digest, encrypt, passwordHash, passwordMatches, randomToken } from './security';
 import { buildInvitationEmail, buildPasswordResetEmail } from './communication/email/email-templates';
@@ -21,7 +22,7 @@ const invitationExpiryLabel = (minutes: number) => {
 @Injectable()
 export class PlatformService {
   private dummyHash = passwordHash(randomToken());
-  constructor(readonly db: Database) {}
+  constructor(readonly db: Database, private readonly auditLog: AuditLogService) {}
   async atomic<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try { return await this.db.$transaction(work, { isolationLevel: 'Serializable', timeout: 15000 }); }
@@ -66,7 +67,18 @@ export class PlatformService {
     const hasRole = user && data.role === 'SUPER_ADMIN'
       ? user.platformAdmin
       : user && !!await this.db.membership.findFirst({ where: { userId: user.id, role: data.role as Role, active: true, school: { active: true } }, select: { id: true } });
-    if (!user?.enabled || !valid || !hasRole) throw new UnauthorizedException('Sign-in failed. Check your email, password, or access for the selected role.');
+    if (!user?.enabled || !valid || !hasRole) {
+      await this.auditLog.recordSecurityEvent({
+        actorId: user?.id,
+        category: 'AUTHENTICATION',
+        eventType: 'LOGIN_FAILED',
+        severity: 'MEDIUM',
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')?.slice(0, 500),
+        details: { requestedRole: data.role, reason: 'credentials_or_role_invalid' },
+      });
+      throw new UnauthorizedException('Sign-in failed. Check your email, password, or access for the selected role.');
+    }
     await this.session(req, user, false, data.rememberMe, data.role);
     await this.db.auditEvent.create({ data: { actorId: user.id, action: 'PASSWORD_VERIFIED', target: user.id } });
     return this.me(req);

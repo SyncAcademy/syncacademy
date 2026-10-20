@@ -1,92 +1,338 @@
 <header class="page-header">
   <div>
-    <h2>Platform Audit Log</h2>
-    <p>Search and review recorded platform actions.</p>
+    <p class="eyebrow">Platform oversight</p>
+    <h2>Audit Log</h2>
+    <p>Review and export recorded platform and security activity.</p>
   </div>
   <button
-    class="action-btn action-btn--primary"
+    class="action-btn action-btn--primary export-button"
+    type="button"
     [disabled]="exporting()"
     (click)="exportCsv()"
   >
-    {{ exporting() ? 'Exporting...' : 'Export matching CSV' }}
+    <ion-icon name="download-outline" aria-hidden="true"></ion-icon>
+    {{ exporting() ? 'Preparing export...' : 'Export matching CSV' }}
   </button>
 </header>
 
 @if (error()) {
   <p class="portal-notice portal-notice--error" role="alert">{{ error() }}</p>
 }
+@if (summaryError()) {
+  <p class="portal-notice portal-notice--error" role="alert">{{ summaryError() }}</p>
+}
 
-<section class="filters" aria-label="Filter audit entries">
-  <input
-    type="search"
-    aria-label="Search audit actions and targets"
-    placeholder="Search actions, targets or actors"
-    [ngModel]="search()"
-    (ngModelChange)="filter($event, 'search')"
-  />
-  <input
-    type="search"
-    aria-label="Filter by actor"
-    placeholder="Actor name or email"
-    [ngModel]="actorFilter()"
-    (ngModelChange)="filter($event, 'actor')"
-  />
-  <input
-    type="search"
-    aria-label="Filter by action"
-    placeholder="Action"
-    [ngModel]="actionFilter()"
-    (ngModelChange)="filter($event, 'action')"
-  />
-  <label>
-    <span>From</span>
-    <input type="date" [ngModel]="from()" (ngModelChange)="filter($event, 'from')" />
-  </label>
-  <label>
-    <span>To</span>
-    <input type="date" [ngModel]="to()" (ngModelChange)="filter($event, 'to')" />
-  </label>
+<section class="summary-section" aria-label="Audit summary">
+  <div class="summary-heading">
+    <div>
+      <h3>Activity overview</h3>
+      <p>Summary for the selected time range, optionally scoped to one school.</p>
+    </div>
+    <label class="period-select">
+      <span>Period</span>
+      <select
+        [ngModel]="store.auditPeriodDays()"
+        (ngModelChange)="periodChanged($event)"
+        aria-label="Audit summary period"
+      >
+        <option [ngValue]="7">Last 7 days</option>
+        <option [ngValue]="30">Last 30 days</option>
+        <option [ngValue]="90">Last 90 days</option>
+        <option [ngValue]="365">Last 12 months</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="summary-grid" [attr.aria-busy]="summaryLoading()">
+    @if (summaryLoading() && !store.auditSummary()) {
+      @for (skeleton of [1, 2, 3, 4]; track skeleton) {
+        <div class="summary-card summary-card--skeleton" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+      }
+    } @else {
+      <article class="summary-card">
+        <div class="summary-icon summary-icon--navy"><ion-icon name="list-outline" aria-hidden="true"></ion-icon></div>
+        <p>Total events</p>
+        <strong>{{ store.auditSummary()?.totalEvents ?? '—' }}</strong>
+        <span>Selected period</span>
+      </article>
+      <article class="summary-card">
+        <div class="summary-icon summary-icon--orange"><ion-icon name="log-in-outline" aria-hidden="true"></ion-icon></div>
+        <p>Failed sign-ins</p>
+        <strong>{{ store.auditSummary()?.failedAuthentication ?? '—' }}</strong>
+        <span>Authentication failures</span>
+      </article>
+      <article class="summary-card">
+        <div class="summary-icon summary-icon--blue"><ion-icon name="shield-checkmark-outline" aria-hidden="true"></ion-icon></div>
+        <p>Security events</p>
+        <strong>{{ store.auditSummary()?.securityEvents ?? '—' }}</strong>
+        <span>Recorded security signals</span>
+      </article>
+      <article class="summary-card">
+        <div class="summary-icon summary-icon--red"><ion-icon name="warning-outline" aria-hidden="true"></ion-icon></div>
+        <p>High-risk events</p>
+        <strong>{{ store.auditSummary()?.highRiskEvents ?? '—' }}</strong>
+        <span>High or critical severity</span>
+      </article>
+    }
+  </div>
 </section>
 
-<section class="panel audit-panel" aria-label="Audit entries">
-  <div class="table-scroll">
+<section class="filter-panel" aria-label="Filter audit events">
+  <div class="filter-heading">
+    <div>
+      <h3>Find an event</h3>
+      <p>Filters work together and are preserved in the page URL.</p>
+    </div>
+    <button class="text-button" type="button" (click)="resetFilters()">Clear filters</button>
+  </div>
+
+  <div class="filters">
+    <label class="field field--search">
+      <span>Search all events</span>
+      <span class="search-control">
+        <ion-icon name="search-outline" aria-hidden="true"></ion-icon>
+        <input
+          type="search"
+          aria-label="Search actions, targets, actors, and schools"
+          placeholder="Action, target, actor or school"
+          [ngModel]="search()"
+          (ngModelChange)="filter($event, 'search')"
+        />
+      </span>
+    </label>
+    <label class="field field--school">
+      <span>School</span>
+      <input
+        type="search"
+        list="audit-school-options"
+        placeholder="Search schools"
+        aria-label="Search and filter by school"
+        [ngModel]="schoolSearch()"
+        (ngModelChange)="searchSchools($event)"
+        (change)="selectSchoolFromEvent($event)"
+      />
+      <datalist id="audit-school-options">
+        @for (school of store.auditFilterOptions().schools; track school.id) {
+          <option [value]="school.name + ' · ' + school.code"></option>
+        }
+      </datalist>
+    </label>
+    <label class="field">
+      <span>Category</span>
+      <select [ngModel]="store.auditCategory()" (ngModelChange)="filter($event, 'category')">
+        <option value="">All categories</option>
+        @for (category of categories; track category[0]) {
+          <option [value]="category[0]">{{ category[1] }}</option>
+        }
+      </select>
+    </label>
+    <label class="field">
+      <span>Action</span>
+      <select [ngModel]="actionFilter()" (ngModelChange)="filter($event, 'action')">
+        <option value="">All actions</option>
+        @for (action of store.auditFilterOptions().actions; track action) {
+          <option [value]="action">{{ actionLabel(action) }}</option>
+        }
+      </select>
+    </label>
+    <label class="field">
+      <span>Actor</span>
+      <input
+        type="search"
+        placeholder="Name or email"
+        aria-label="Filter by actor name or email"
+        [ngModel]="actorFilter()"
+        (ngModelChange)="filter($event, 'actor')"
+      />
+    </label>
+    <label class="field">
+      <span>Outcome</span>
+      <select [ngModel]="store.auditOutcome()" (ngModelChange)="filter($event, 'outcome')">
+        <option value="">All outcomes</option>
+        <option value="SUCCESS">Success</option>
+        <option value="FAILED">Failed</option>
+        <option value="DENIED">Denied</option>
+        <option value="UNAVAILABLE">Unavailable</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>Severity</span>
+      <select [ngModel]="store.auditSeverity()" (ngModelChange)="filter($event, 'severity')">
+        <option value="">All severities</option>
+        <option value="LOW">Low</option>
+        <option value="MEDIUM">Medium</option>
+        <option value="HIGH">High</option>
+        <option value="CRITICAL">Critical</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>From</span>
+      <input type="date" [ngModel]="from()" (ngModelChange)="filter($event, 'from')" />
+    </label>
+    <label class="field">
+      <span>To</span>
+      <input type="date" [ngModel]="to()" (ngModelChange)="filter($event, 'to')" />
+    </label>
+  </div>
+</section>
+
+<section class="audit-panel" aria-label="Audit events">
+  <div class="table-heading">
+    <div>
+      <h3>Recorded activity</h3>
+      <p>{{ firstResult() }}–{{ lastResult() }} of {{ store.auditTotal() }} events</p>
+    </div>
+    <label class="page-size">
+      <span>Rows</span>
+      <select [ngModel]="store.auditPageSize()" (ngModelChange)="pageSizeChanged($event)" aria-label="Events per page">
+        <option [ngValue]="20">20</option>
+        <option [ngValue]="50">50</option>
+        <option [ngValue]="100">100</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="table-scroll" [attr.aria-busy]="store.auditLoading()">
     <table>
       <thead>
         <tr>
           <th scope="col">Action</th>
+          <th scope="col">Category</th>
           <th scope="col">Actor</th>
+          <th scope="col">School</th>
           <th scope="col">Target</th>
+          <th scope="col">Outcome</th>
+          <th scope="col">Severity</th>
           <th scope="col">Time</th>
+          <th scope="col"><span class="visually-hidden">Details</span></th>
         </tr>
       </thead>
       <tbody>
-        @for (log of filtered(); track log.id) {
-          <tr>
-            <td data-label="Action">
-              <span class="action-badge" [attr.data-action]="log.action">{{ log.action }}</span>
-            </td>
-            <td data-label="Actor">{{ log.actor }}</td>
-            <td data-label="Target"><strong>{{ log.target }}</strong></td>
-            <td data-label="Time">
-              <time [attr.datetime]="log.timestamp | date:'yyyy-MM-ddTHH:mm:ssXXX'">
-                {{ log.timestamp | date:'medium' }}
-              </time>
-            </td>
-          </tr>
-        } @empty {
-          <tr class="empty-row">
-            <td colspan="4">No audit entries match your filters.</td>
-          </tr>
+        @if (store.auditLoading() && !store.auditLog().length) {
+          @for (row of [1, 2, 3, 4, 5]; track row) {
+            <tr class="skeleton-row" aria-hidden="true">
+              @for (cell of [1, 2, 3, 4, 5, 6, 7, 8, 9]; track cell) {
+                <td><span></span></td>
+              }
+            </tr>
+          }
+        } @else {
+          @for (log of store.auditLog(); track log.source + ':' + log.id) {
+            <tr>
+              <td data-label="Action">
+                <div class="event-action">
+                  <span class="source-mark" [class.source-mark--security]="log.source === 'SECURITY'" aria-hidden="true"></span>
+                  <span>{{ actionLabel(log.action) }}</span>
+                </div>
+              </td>
+              <td data-label="Category">{{ humanize(log.category) }}</td>
+              <td data-label="Actor">
+                <span class="primary-cell">{{ log.actor?.name || 'System or unavailable' }}</span>
+                @if (log.actor?.email) { <span class="secondary-cell">{{ log.actor?.email }}</span> }
+                @if (log.role) { <span class="role-badge">{{ humanize(log.role) }}</span> }
+              </td>
+              <td data-label="School">{{ log.school?.name || 'Platform' }}</td>
+              <td data-label="Target">{{ log.target || 'Unavailable' }}</td>
+              <td data-label="Outcome"><span class="outcome-badge" [attr.data-outcome]="log.outcome">{{ humanize(log.outcome) }}</span></td>
+              <td data-label="Severity">
+                @if (log.severity) {
+                  <span class="severity-badge" [attr.data-severity]="log.severity">{{ humanize(log.severity) }}</span>
+                } @else { <span class="muted-value">—</span> }
+              </td>
+              <td data-label="Time">
+                <time [attr.datetime]="log.timestamp | date:'yyyy-MM-ddTHH:mm:ssXXX'">
+                  {{ log.timestamp | date:'medium' }}
+                </time>
+              </td>
+              <td data-label="Details" class="details-cell">
+                <button class="details-button" type="button" (click)="inspect(log, $event)">View details</button>
+              </td>
+            </tr>
+          } @empty {
+            <tr class="empty-row">
+              <td colspan="9">
+                <div class="empty-state">
+                  <div class="empty-icon"><ion-icon name="search-outline" aria-hidden="true"></ion-icon></div>
+                  <h4>No matching events</h4>
+                  <p>Try changing your search or filters to see more activity.</p>
+                  <button class="text-button" type="button" (click)="resetFilters()">Clear all filters</button>
+                </div>
+              </td>
+            </tr>
+          }
         }
       </tbody>
     </table>
   </div>
+
+  <nav class="pagination-bar" aria-label="Audit pagination">
+    <span>Page {{ store.auditPage() }} of {{ pageCount() }}</span>
+    <div class="pagination-actions">
+      <button class="action-btn" type="button" [disabled]="store.auditPage() <= 1 || store.auditLoading()" (click)="page(-1)">Previous</button>
+      <button class="action-btn" type="button" [disabled]="store.auditPage() >= pageCount() || store.auditLoading()" (click)="page(1)">Next</button>
+    </div>
+  </nav>
 </section>
 
-<nav class="pagination-bar" aria-label="Audit pagination">
-  <span>Page {{ store.auditPage() }} of {{ pageCount() }} · {{ store.auditTotal() }} matching events</span>
-  <div class="pagination-actions">
-    <button class="action-btn" [disabled]="store.auditPage() <= 1" (click)="page(-1)">Previous</button>
-    <button class="action-btn" [disabled]="store.auditPage() >= pageCount()" (click)="page(1)">Next</button>
+@if (selectedEvent(); as event) {
+  <div class="drawer-backdrop" (click)="closeDetails()">
+    <section
+      class="details-drawer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="drawer-title"
+      (click)="$event.stopPropagation()"
+      (keydown)="trapDrawerFocus($event)"
+    >
+      <header class="drawer-header">
+        <div>
+          <p class="eyebrow">Event details</p>
+          <h3 id="drawer-title">{{ actionLabel(event.action) }}</h3>
+        </div>
+        <button #drawerClose class="drawer-close" type="button" aria-label="Close event details" (click)="closeDetails()">×</button>
+      </header>
+
+      @if (drawerLoading()) {
+        <div class="drawer-loading" role="status">Loading event details…</div>
+      } @else if (detailError()) {
+        <p class="portal-notice portal-notice--error" role="alert">{{ detailError() }}</p>
+      } @else if (details(); as detail) {
+        <div class="drawer-body">
+          <div class="drawer-event-summary">
+            <span class="source-mark" [class.source-mark--security]="detail.source === 'SECURITY'" aria-hidden="true"></span>
+            <div>
+              <strong>{{ actionLabel(detail.action) }}</strong>
+              <span>{{ humanize(detail.category) }}</span>
+            </div>
+            <span class="outcome-badge" [attr.data-outcome]="detail.outcome">{{ humanize(detail.outcome) }}</span>
+          </div>
+
+          <dl class="detail-list">
+            <div><dt>Time</dt><dd>{{ detail.createdAt | date:'full' }}</dd></div>
+            <div><dt>Actor</dt><dd>{{ detail.actor?.name || 'System or unavailable' }}<span class="detail-secondary">{{ detail.actor?.email || '' }}</span></dd></div>
+            <div><dt>Role</dt><dd>{{ humanize(detail.role) }}</dd></div>
+            <div><dt>School</dt><dd>{{ detail.school?.name || 'Platform' }}</dd></div>
+            <div><dt>Target</dt><dd>{{ detail.target || 'Unavailable' }}</dd></div>
+            <div><dt>Target ID</dt><dd class="monospace">{{ detail.targetId || 'Unavailable' }}</dd></div>
+            <div><dt>Severity</dt><dd>{{ humanize(detail.severity) }}</dd></div>
+            <div><dt>IP address</dt><dd class="monospace">{{ detail.ipAddress || 'Unavailable' }}</dd></div>
+            <div><dt>User agent</dt><dd class="detail-user-agent">{{ detail.userAgent || 'Unavailable' }}</dd></div>
+          </dl>
+
+          @if (detailEntries().length) {
+            <section class="metadata-section" aria-labelledby="metadata-title">
+              <h4 id="metadata-title">Recorded context</h4>
+              <dl class="detail-list detail-list--metadata">
+                @for (entry of detailEntries(); track entry[0]) {
+                  <div><dt>{{ humanize(entry[0]) }}</dt><dd>{{ displayMetadata(entry[1]) }}</dd></div>
+                }
+              </dl>
+            </section>
+          }
+        </div>
+      }
+    </section>
   </div>
-</nav>
+}

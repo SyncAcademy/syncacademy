@@ -20,16 +20,27 @@ export class AppComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private finishNavigation?: () => void;
+  private slowMessageTimer?: number;
+  private initializationTimeout?: number;
+  private exitTimer?: number;
   showPreloader = true;
   fadePreloader = false;
   entrySlow = false;
-  private minimumPassed = false;
   private routeFinished = false;
 
   ngOnInit(): void {
     this.routeFinished = this.router.navigated;
-    window.setTimeout(() => { this.minimumPassed = true; this.finishEntry(); }, 650);
-    window.setTimeout(() => { if (this.showPreloader) this.entrySlow = true; }, 8000);
+    this.slowMessageTimer = window.setTimeout(() => {
+      if (this.showPreloader && !this.routeFinished) this.entrySlow = true;
+    }, 8000);
+    this.initializationTimeout = window.setTimeout(() => {
+      if (!this.routeFinished) {
+        this.entrySlow = true;
+        this.routeFinished = true;
+        this.finishEntry();
+      }
+    }, 15000);
+    if (this.routeFinished) this.finishEntry();
     this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
       if (event instanceof NavigationStart) {
         this.finishNavigation?.();
@@ -42,11 +53,19 @@ export class AppComponent implements OnInit {
         this.finishEntry();
       }
     });
+    this.destroyRef.onDestroy(() => {
+      this.finishNavigation?.();
+      if (this.slowMessageTimer) window.clearTimeout(this.slowMessageTimer);
+      if (this.initializationTimeout) window.clearTimeout(this.initializationTimeout);
+      if (this.exitTimer) window.clearTimeout(this.exitTimer);
+    });
   }
 
   private finishEntry(): void {
-    if (!this.minimumPassed || !this.routeFinished || this.fadePreloader) return;
+    if (!this.routeFinished || this.fadePreloader) return;
     this.fadePreloader = true;
-    window.setTimeout(() => { this.showPreloader = false; }, 250);
+    if (this.slowMessageTimer) window.clearTimeout(this.slowMessageTimer);
+    if (this.initializationTimeout) window.clearTimeout(this.initializationTimeout);
+    this.exitTimer = window.setTimeout(() => { this.showPreloader = false; }, 500);
   }
 }

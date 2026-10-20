@@ -82,6 +82,19 @@ export class GuardianController {
     return this.svc.authorize(req, parse(uuid, schoolId), write ? writers : readers);
   }
 
+  private async teacherClassrooms(req: Request, schoolId: string, memberships: { id: string }[]) {
+    if (req.session.selectedRole !== 'TEACHER') return undefined;
+    if (!memberships.length) throw new ForbiddenException('No authorized class assignments were found.');
+    const assignments = await this.svc.db.teachingAssignment.findMany({
+      where: { schoolId, membershipId: { in: memberships.map(membership => membership.id) } },
+      select: { classroomId: true },
+      distinct: ['classroomId'],
+    });
+    const classroomIds = assignments.map(assignment => assignment.classroomId);
+    if (!classroomIds.length) throw new ForbiddenException('No authorized class assignments were found.');
+    return classroomIds;
+  }
+
   /**
    * List guardians registered in the school with paging, search, and student count
    */
@@ -91,11 +104,20 @@ export class GuardianController {
     @Param('schoolId') schoolId: string,
     @Query() query: unknown
   ) {
-    await this.access(req, schoolId, false);
+    const access = await this.access(req, schoolId, false);
+    const classroomIds = await this.teacherClassrooms(req, schoolId, access.memberships);
     const b = parse(z.object(paging).strict(), query);
 
     const where: Prisma.GuardianWhereInput = {
       schoolId,
+      ...(classroomIds ? {
+        students: {
+          some: {
+            active: true,
+            student: { enrollments: { some: { schoolId, classroomId: { in: classroomIds }, status: 'active' } } },
+          },
+        },
+      } : {}),
       ...(b.q ? {
         OR: [
           { name: { contains: b.q, mode: 'insensitive' } },
@@ -113,8 +135,21 @@ export class GuardianController {
         skip: (b.page - 1) * b.pageSize,
         take: b.pageSize,
         include: {
-          _count: { select: { students: true } },
+          _count: {
+            select: {
+              students: classroomIds ? {
+                where: {
+                  active: true,
+                  student: { enrollments: { some: { schoolId, classroomId: { in: classroomIds }, status: 'active' } } },
+                },
+              } : true,
+            },
+          },
           students: {
+            where: classroomIds ? {
+              active: true,
+              student: { enrollments: { some: { schoolId, classroomId: { in: classroomIds }, status: 'active' } } },
+            } : undefined,
             include: {
               student: {
                 select: { id: true, name: true, admissionNumber: true },
@@ -210,13 +245,29 @@ export class GuardianController {
     @Param('schoolId') schoolId: string,
     @Param('guardianId') guardianId: string
   ) {
-    await this.access(req, schoolId, false);
+    const access = await this.access(req, schoolId, false);
     parse(uuid, guardianId);
+    const classroomIds = await this.teacherClassrooms(req, schoolId, access.memberships);
 
     const guardian = await this.svc.db.guardian.findFirst({
-      where: { id: guardianId, schoolId },
+      where: {
+        id: guardianId,
+        schoolId,
+        ...(classroomIds ? {
+          students: {
+            some: {
+              active: true,
+              student: { enrollments: { some: { schoolId, classroomId: { in: classroomIds }, status: 'active' } } },
+            },
+          },
+        } : {}),
+      },
       include: {
         students: {
+          where: classroomIds ? {
+            active: true,
+            student: { enrollments: { some: { schoolId, classroomId: { in: classroomIds }, status: 'active' } } },
+          } : undefined,
           include: {
             student: {
               select: {
@@ -641,13 +692,22 @@ export class GuardianController {
     @Param('guardianId') guardianId: string,
     @Query() query: unknown
   ) {
-    await this.access(req, schoolId, false);
+    const access = await this.access(req, schoolId, false);
     parse(uuid, guardianId);
     const b = parse(z.object(paging).strict(), query);
+    const classroomIds = await this.teacherClassrooms(req, schoolId, access.memberships);
+    const studentIds = classroomIds
+      ? (await this.svc.db.enrollment.findMany({
+        where: { schoolId, classroomId: { in: classroomIds }, status: 'active' },
+        select: { studentId: true },
+        distinct: ['studentId'],
+      })).map(enrollment => enrollment.studentId)
+      : undefined;
 
     const where: Prisma.CommunicationLogWhereInput = {
       schoolId,
       guardianId,
+      ...(studentIds ? { studentId: { in: studentIds } } : {}),
     };
 
     const [total, items] = await Promise.all([

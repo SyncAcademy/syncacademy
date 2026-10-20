@@ -34,10 +34,12 @@
   <select aria-label="Lead source" [ngModel]="sourceFilter()" (ngModelChange)="filter($event, 'source')">
     <option value="">All sources</option>
     <option value="website">Website</option>
-    <option value="referral">Referral</option>
     <option value="social">Social Media</option>
+    <option value="friend-relative">Friend or Relative</option>
+    <option value="referral">Referral</option>
     <option value="event">Event</option>
     <option value="cold-outreach">Cold Outreach</option>
+    <option value="other">Other</option>
   </select>
 </div>
 
@@ -63,7 +65,7 @@
             <td>{{ l.contactName }}<span class="cell-sub">{{ l.contactEmail }}</span></td>
             <td>{{ l.location }}</td>
             <td>{{ l.studentCount | number }}</td>
-            <td><span class="source-pill">{{ l.source }}</span></td>
+            <td><span class="source-pill">{{ sourceLabel(l.source) }}</span></td>
             <td><span class="portal-pill" [attr.data-status]="l.status">{{ statusLabel(l.status) }}</span></td>
             <td class="notes-cell">{{ l.notes }}</td>
             <td>{{ l.owner || 'Unassigned' }}<span class="cell-sub">{{ l.followUp || 'No follow-up set' }}</span></td><td><div class="row-actions"><button class="action-btn" (click)="openLead(l)">Edit</button>@if (l.status === 'won' && !l.convertedSchoolId) { <button class="action-btn" (click)="openConversion(l)">Create school</button> } @if (l.convertedSchoolId) { <a [href]="'/workspace?school=' + l.convertedSchoolId">View school</a> }</div></td>

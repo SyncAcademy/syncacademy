@@ -46,6 +46,19 @@ export class SaLeadsPage {
     return status.replace(/-/g, ' ').replace(/^\w/, c => c.toUpperCase());
   }
 
+  sourceLabel(source: string): string {
+    const labels: Record<string, string> = {
+      website: 'Website',
+      referral: 'Referral',
+      social: 'Social Media',
+      event: 'Event',
+      'cold-outreach': 'Cold Outreach',
+      'friend-relative': 'Friend or Relative',
+      other: 'Other',
+    };
+    return labels[source] ?? this.statusLabel(source);
+  }
+
   editingId = '';
   convertingId = '';
   busy = false;
@@ -56,7 +69,15 @@ export class SaLeadsPage {
     { key: 'schoolName', label: 'School name', required: true }, { key: 'contactName', label: 'Contact name', required: true },
     { key: 'contactEmail', label: 'Email', type: 'email', required: true }, { key: 'contactPhone', label: 'Phone', type: 'tel' },
     { key: 'location', label: 'Region', required: true }, { key: 'studentCount', label: 'Estimated students', type: 'number', min: 0, required: true },
-    { key: 'source', label: 'Source', options: ['website', 'referral', 'social', 'event', 'cold-outreach'] },
+    { key: 'source', label: 'Source', choices: [
+      { value: 'website', label: 'Website' },
+      { value: 'social', label: 'Social Media' },
+      { value: 'friend-relative', label: 'Friend or Relative' },
+      { value: 'referral', label: 'Referral' },
+      { value: 'event', label: 'Event' },
+      { value: 'cold-outreach', label: 'Cold Outreach' },
+      { value: 'other', label: 'Other' },
+    ] },
     { key: 'status', label: 'Stage', options: ['new', 'contacted', 'demo-scheduled', 'demo-done', 'negotiation', 'won', 'lost'] },
     { key: 'owner', label: 'Follow-up owner' }, { key: 'followUp', label: 'Next follow-up', type: 'date' }, { key: 'notes', label: 'Notes' },
   ];

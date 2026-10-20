@@ -44,3 +44,11 @@ assert.equal(requests.at(-1)?.path,'schools/three/workspace');
 requests.at(-1)!.resolve({view:'full',students:[{id:'student'}]});await dashboard;
 assert.equal(routed.data().students.length,1,'detail navigation restores the complete roster');
 TestBed.resetTestingModule();console.log('School sync checks passed: request coalescing, queued writes, event routing, school switching, logout and summary/detail navigation.');
+
+const { HttpErrorResponse } = await import('@angular/common/http');
+const { requestErrorMessage } = await import('../src/app/core/services/request-error');
+assert.ok(!requestErrorMessage(new HttpErrorResponse({status:400,error:{message:": Unrecognized key(s) in object: 'view'"}})).includes('Unrecognized'));
+assert.equal(requestErrorMessage(new HttpErrorResponse({status:409,error:{message:'This record changed. Reload and try again.'}})), 'This record changed. Reload and try again.');
+assert.equal(typeof requestErrorMessage(new HttpErrorResponse({status:400,error:{message:['internal schema diagnostic']}})), 'string');
+assert.ok(requestErrorMessage(new HttpErrorResponse({status:503,error:{message:'private database detail'}})).includes('temporarily unavailable'));
+console.log('Shared error message checks passed.');

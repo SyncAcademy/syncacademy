@@ -47,7 +47,14 @@ async function main() {
     next();
   });
   app.use('/api/v1/schools/:schoolId/registry/imports/preview', express.json({ limit: '8mb' }));
-  app.use(express.json({ limit: '32kb' }));
+  app.use(express.json({
+    limit: '32kb',
+    verify: (req, _res, buffer) => {
+      if (req.url?.split('?')[0] === '/api/v1/webhooks/resend') {
+        (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+      }
+    },
+  }));
   const pool = new Pool({ connectionString: config.DATABASE_URL, max: 5 });
   if (config.REQUEST_METRICS === 'true') {
     const metricsTimer = setInterval(() => { const memory = process.memoryUsage(); console.log(JSON.stringify({ event: 'runtime_metrics', rssBytes: memory.rss, heapUsedBytes: memory.heapUsed, sessionConnections: pool.totalCount, sessionIdleConnections: pool.idleCount, sessionWaiting: pool.waitingCount })); }, 5000);

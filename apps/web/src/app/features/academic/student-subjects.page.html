@@ -1,15 +1,16 @@
 <app-head-page-header [title]="title()" [description]="description()"></app-head-page-header>
 
 <div class="subjects-context"><span class="subjects-context__icon" aria-hidden="true">S</span><div><strong>{{ year()?.label || 'No academic year selected' }}</strong><span>Class subjects are assigned to enrolled students automatically. Edit individual selections when needed.</span></div>@if (readOnly()) { <span class="badge closed">Read-only</span> }</div>
-@if (error()) { <p class="portal-notice portal-notice--error" role="alert">{{ error() }}</p> }
+@if (error()) { <p class="portal-notice portal-notice--error" role="alert">{{ error() }} @if(loadFailed()){<button type="button" (click)="retryLoad()" [disabled]="loadingClasses() || loadingStudents()">Retry</button>}</p> }
 @if (notice()) { <p class="portal-notice" role="status">{{ notice() }}</p> }
 
-@if (!selectedClass()) {
+@if (!year()) { <p class="portal-notice">Select an academic year to view student subjects.</p> }
+@else if (!selectedClass()) {
   <section class="panel subjects-panel">
-    <div class="subjects-heading"><div><span class="subjects-eyebrow">Student subjects</span><h2>Choose a class</h2><p>Open a class to view its students and subject selections.</p></div><span class="subjects-count">{{ classes().length }} classes</span></div>
+    <div class="subjects-heading"><div><span class="subjects-eyebrow">Student subjects</span><h2>Choose a class</h2><p>Open a class to view its students and subject selections.</p></div><span class="subjects-count">{{ classesLoaded() ? classes().length + ' classes' : 'Classes' }}</span></div>
     <div class="subjects-tools"><label class="subjects-search"><span class="sr-only">Search classes or subjects</span><input type="search" placeholder="Search classes or subjects" [ngModel]="classSearch()" (ngModelChange)="classSearch.set($event)"></label></div>
     @if (loadingClasses()) { <app-loading-skeleton /> }
-    @else { <div class="subject-class-grid">
+    @else if (classesLoaded()) { <div class="subject-class-grid">
       @for (classroom of filteredClasses(); track classroom.id) {
         <button type="button" class="subject-class-card" (click)="openClass(classroom.id)">
           <div class="subject-class-card__top"><span class="subject-class-card__number">{{ classroom.studentCount }} students</span><span aria-hidden="true">&#8599;</span></div>
@@ -29,7 +30,7 @@
     <div class="subjects-tools subjects-tools--roster"><p>Review each student below. Class offerings are their default subjects.</p><label class="subjects-search"><span class="sr-only">Search student name or number</span><input type="search" placeholder="Search student or number" [ngModel]="search()" (ngModelChange)="changeSearch($event)" [disabled]="!!editingEnrollmentId() || busy()"></label></div>
     @if (!selectedClass()?.subjects?.length) { <p class="portal-notice">This class has no subject offerings. Set its subjects in Subject Setup first.</p> }
     @if (loadingStudents()) { <app-loading-skeleton /> }
-    @else { <div class="subject-student-list">
+    @else if (studentsLoaded()) { <div class="subject-student-list">
       @for (student of visibleStudents(); track student.enrollmentId) {
         <article class="subject-student-card">
           <div class="subject-student-card__identity"><span class="student-avatar" aria-hidden="true">{{ student.name.charAt(0) }}</span><div class="student-name"><strong>{{ student.name }}</strong><span>{{ student.admissionNumber }}</span></div>@if (!readOnly() && editingEnrollmentId() !== student.enrollmentId) { <button type="button" class="action-btn subject-edit-button" [disabled]="busy()" (click)="startEditing(student)">Edit subjects</button> }</div>

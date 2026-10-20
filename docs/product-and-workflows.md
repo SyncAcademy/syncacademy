@@ -67,8 +67,10 @@ SyncAcademy separates **Global User Identity** (`User`) from **Tenant Authorizat
 
 ### 4.1 Super Admin Portal (`/super-admin`)
 - **School Onboarding & Leads Conversion**: Register a school or convert a won lead into an active `School` tenant and queue a single-use Headmaster invitation in one transaction.
+- **Lead attribution**: Record and filter lead sources including Website, Social Media, Friend or Relative, Referral, Event, Cold Outreach and Other.
 - **Tenant Governance**: Search, filter, suspend, or reactivate schools with mandatory audit reasons; configure platform-wide SMTP settings and monitor `Outbox` email/notification delivery health.
 - **School Registry Oversight**: Select a school from the Schools Directory, browse year-filtered class cards with active enrollment counts, then load a searched and paginated student roster only for the selected class. The Teacher Assignments view groups a teacher's subject and class-teacher responsibilities into one school- and academic-year-scoped card, with server-side search, filtering, and unique-teacher pagination. Class creation and teacher assignment remain available in the same school workspace.
+- **Platform Audit Log**: Search and filter platform and security events by school, actor, category, action, outcome, severity, and date. Review event details on demand, view scoped activity summaries, and export matching results as a bounded, formula-safe CSV.
 
 ### 4.2 Headmaster & School Setup Portals (`/headmaster`, `/school-setup`)
 - **Academic Year & School Configuration**: Create/edit academic years and terms, configure grading bands and pass marks, and close completed academic years once all assessments and submissions are approved.
@@ -102,7 +104,7 @@ SyncAcademy separates **Global User Identity** (`User`) from **Tenant Authorizat
 - **Phase 3 (Completed)**: Architecture Discovery & Controlled Platform Expansion:
   - Teacher roster confirmation & registrar resolution workflow.
   - School subscriptions, tiered plans, billing cycles, and state machine (`trial` -> `active` -> `renewal_due` -> `grace_period` -> `restricted_access` -> `suspended`).
-  - Authoritative payment gateway abstraction & webhooks (`MockPaymentProvider`).
+  - Payment provider abstraction; the mock provider is limited to tests and explicitly enabled development. A production payment gateway is not yet configured, and payment initiation fails closed.
   - Messaging credit wallet & ledger (separate SMS/WhatsApp balances, atomic credit reservation and release).
   - Bank statement reconciliation (safe CSV parsing, SHA-256 duplicate statement detection, and candidate matching engine).
   - Transactional parent relationship limit (max 2 active guardians per student with row locks and soft deactivation).
