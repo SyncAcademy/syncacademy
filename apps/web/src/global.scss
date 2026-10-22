@@ -97,6 +97,8 @@ html:has(.legal-page),
 body:has(.legal-page),
 html:has(.demo-page),
 body:has(.demo-page),
+html:has(.faq-page),
+body:has(.faq-page),
 html:has(.auth-layout, .auth-screen),
 body:has(.auth-layout, .auth-screen) {
   position: static;
@@ -161,11 +163,29 @@ body:has(.demo-page) app-demo-request {
   overflow-y: visible !important;
 }
 
+/* Public FAQ content uses natural document scrolling like other public pages. */
+html:has(.faq-page),
+body:has(.faq-page),
+body:has(.faq-page) ion-app,
+body:has(.faq-page) app-root {
+  height: auto !important;
+  min-height: 100%;
+  overflow-y: visible !important;
+}
+
 html:has(.demo-page) {
   overflow-y: auto !important;
 }
 
+html:has(.faq-page) {
+  overflow-y: auto !important;
+}
+
 body:has(.demo-page) {
+  overflow-x: clip !important;
+}
+
+body:has(.faq-page) {
   overflow-x: clip !important;
 }
 

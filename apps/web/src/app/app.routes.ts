@@ -3,6 +3,7 @@ import { authGuard } from '@core/guards/auth.guard';
 const auth=()=>import('./features/live/auth.page').then(m=>m.LiveAuthPage);
 export const routes:Routes=[
  {path:'',pathMatch:'full',loadComponent:()=>import('./features/landing/landing.page').then(m=>m.LandingPage)},
+ {path:'faq',loadComponent:()=>import('./features/faq/faq.page').then(m=>m.FaqPage)},
  {path:'request-demo',loadComponent:()=>import('./features/landing/demo-request.page').then(m=>m.DemoRequestPage)},
  {path:'privacy',loadComponent:()=>import('./features/legal/legal.page').then(m=>m.LegalPage),data:{document:'privacy'}},
  {path:'terms',loadComponent:()=>import('./features/legal/legal.page').then(m=>m.LegalPage),data:{document:'terms'}},

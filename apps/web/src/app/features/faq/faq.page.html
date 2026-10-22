@@ -1,0 +1,109 @@
+<div class="faq-page">
+  <header class="faq-header">
+    <a class="faq-brand" routerLink="/" aria-label="SyncAcademy home">
+      <app-logo variant="dark" size="md" iconShape="circle"></app-logo>
+    </a>
+
+    <nav class="faq-desktop-nav" aria-label="Main navigation">
+      <a routerLink="/">Home</a>
+      <a routerLink="/" fragment="features">Features</a>
+      <a routerLink="/" fragment="about">About</a>
+      <a routerLink="/faq" aria-current="page">FAQ</a>
+    </nav>
+
+    <div class="faq-header-actions">
+      <a class="faq-sign-in" routerLink="/auth/login">Sign In</a>
+      <a class="faq-demo-button" routerLink="/request-demo">Request a Demo</a>
+      <button
+        class="faq-menu-toggle"
+        type="button"
+        [attr.aria-expanded]="mobileMenuOpen()"
+        aria-controls="faq-mobile-menu"
+        [attr.aria-label]="mobileMenuOpen() ? 'Close navigation menu' : 'Open navigation menu'"
+        (click)="toggleMobileMenu()"
+      >
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+
+    <nav
+      id="faq-mobile-menu"
+      class="faq-mobile-menu"
+      [class.is-open]="mobileMenuOpen()"
+      [attr.aria-hidden]="!mobileMenuOpen()"
+      [attr.inert]="mobileMenuOpen() ? null : ''"
+      aria-label="Mobile navigation"
+    >
+      <a routerLink="/" (click)="closeMobileMenu()">Home</a>
+      <a routerLink="/" fragment="features" (click)="closeMobileMenu()">Features</a>
+      <a routerLink="/" fragment="about" (click)="closeMobileMenu()">About</a>
+      <a routerLink="/faq" aria-current="page" (click)="closeMobileMenu()">FAQ</a>
+      <a routerLink="/auth/login" (click)="closeMobileMenu()">Sign In</a>
+      <a class="faq-mobile-demo" routerLink="/request-demo" (click)="closeMobileMenu()">Request a Demo</a>
+    </nav>
+  </header>
+
+  <main id="main-content">
+    <section class="faq-content" aria-labelledby="faq-heading">
+      <div class="faq-intro">
+        <p class="faq-eyebrow">Help Center</p>
+        <h1 id="faq-heading">Frequently Asked Questions</h1>
+        <p class="faq-subtitle">Everything you need to know about SyncAcademy</p>
+        <p class="faq-description">
+          Find answers to common questions about our school management platform,
+          features, registration, and getting started.
+        </p>
+      </div>
+
+      <section class="faq-list" aria-label="Frequently asked questions">
+        <article class="faq-item" *ngFor="let faq of faqs; let index = index">
+          <h2 class="faq-question-heading">
+            <button
+              class="faq-question"
+              type="button"
+              [attr.id]="'faq-question-' + index"
+              [attr.aria-expanded]="openFaqIndex() === index"
+              [attr.aria-controls]="'faq-answer-' + index"
+              (click)="toggleFaq(index)"
+            >
+              <span>{{ faq.question }}</span>
+              <span class="faq-toggle-icon" aria-hidden="true"></span>
+            </button>
+          </h2>
+          <div
+            class="faq-answer"
+            [class.is-open]="openFaqIndex() === index"
+            [attr.id]="'faq-answer-' + index"
+            role="region"
+            [attr.aria-labelledby]="'faq-question-' + index"
+            [attr.aria-hidden]="openFaqIndex() !== index"
+            [attr.inert]="openFaqIndex() === index ? null : ''"
+          >
+            <div class="faq-answer-inner">
+              <p>{{ faq.answer }}</p>
+              <ul *ngIf="faq.details?.length">
+                <li *ngFor="let detail of faq.details">{{ detail }}</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <aside class="faq-contact" aria-labelledby="faq-contact-heading">
+        <h2 id="faq-contact-heading">Still have questions?</h2>
+        <p>
+          Our team is ready to help you explore how SyncAcademy can support your
+          school's operations.
+        </p>
+        <div class="faq-contact-actions">
+          <a class="faq-demo-button" routerLink="/request-demo">Request a Demo</a>
+          <a class="faq-contact-link" routerLink="/" fragment="contact">Contact Us</a>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <app-public-footer></app-public-footer>
+</div>
