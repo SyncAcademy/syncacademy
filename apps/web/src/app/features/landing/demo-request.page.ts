@@ -5,8 +5,9 @@ import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { requestErrorMessage } from '../../core/services/request-error';
+import { LogoComponent } from '../../shared/components/logo/logo.component';
 
-@Component({ selector: 'app-demo-request', standalone: true, imports: [CommonModule, ReactiveFormsModule, RouterLink], templateUrl: './demo-request.page.html', styleUrls: ['./demo-request.page.scss'] })
+@Component({ selector: 'app-demo-request', standalone: true, imports: [CommonModule, ReactiveFormsModule, RouterLink, LogoComponent], templateUrl: './demo-request.page.html', styleUrls: ['./demo-request.page.scss'] })
 export class DemoRequestPage {
   private readonly fb = inject(FormBuilder);
   private readonly http = inject(HttpClient);

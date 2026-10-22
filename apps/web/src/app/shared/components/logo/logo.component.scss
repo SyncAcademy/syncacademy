@@ -24,7 +24,7 @@
     line-height: 1;
     
     .text-academy {
-      color: $primary-orange;
+      color: var(--logo-academy-color, #{$primary-orange});
     }
   }
 

@@ -1,14 +1,26 @@
 <main class="demo-page">
   <div class="demo-shell">
     <section class="demo-intro">
-      <a class="brand" routerLink="/">Sync<span>Academy</span></a>
-      <p class="eyebrow">REQUEST A DEMO</p>
-      <h1>See How SyncAcademy Can Transform Your School</h1>
-      <p>Tell us about your school. Our team will review your request, arrange a demonstration, and guide you through the next steps.</p>
-      <ul><li>Bring admissions, academics, finance, and communication together.</li><li>See workflows designed for Tanzanian schools.</li><li>Explore a secure workspace tailored to your school.</li></ul>
-      <p class="next-step">Submitting a request does not create an account. A school administrator receives an invitation only after onboarding approval.</p>
+      <div class="demo-intro__content">
+        <a class="demo-brand" routerLink="/" aria-label="SyncAcademy home">
+          <app-logo variant="light" size="md"></app-logo>
+        </a>
+        <p class="eyebrow">REQUEST A DEMO</p>
+        <h1>See How SyncAcademy Can Transform Your School</h1>
+        <p class="demo-intro__description">Tell us about your school. Our team will review your request, arrange a demonstration, and guide you through the next steps.</p>
+        <ul>
+          <li>Bring admissions, academics, finance, and communication together.</li>
+          <li>See workflows designed for Tanzanian schools.</li>
+          <li>Explore a secure workspace tailored to your school.</li>
+        </ul>
+        <p class="next-step">Submitting a request does not create an account. A school administrator receives an invitation only after onboarding approval.</p>
+      </div>
     </section>
+    <a class="demo-brand demo-brand--mobile" routerLink="/" aria-label="SyncAcademy home">
+      <app-logo variant="dark" size="md"></app-logo>
+    </a>
     <section class="demo-card">
+      <div class="demo-form-content">
       @if (done()) {
         <div class="confirmation" role="status"><span class="check" aria-hidden="true">OK</span><h2>Your Demo Request Has Been Received!</h2><p>The SyncAcademy team will review your submission and contact you about the next steps.</p><a class="submit-button" routerLink="/">Back to Home</a></div>
       } @else {
@@ -41,6 +53,7 @@
           <button class="submit-button" type="submit" [disabled]="busy()">{{ busy() ? 'Submitting Request...' : 'Submit Demo Request' }}</button>
         </form>
       }
+      </div>
     </section>
   </div>
 </main>

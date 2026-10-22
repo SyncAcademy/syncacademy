@@ -95,6 +95,8 @@ html.landing-route,
 body.landing-route,
 html:has(.legal-page),
 body:has(.legal-page),
+html:has(.demo-page),
+body:has(.demo-page),
 html:has(.auth-layout, .auth-screen),
 body:has(.auth-layout, .auth-screen) {
   position: static;
@@ -111,6 +113,7 @@ body:has(.auth-layout, .auth-screen) {
 
 body.landing-route app-root,
 body:has(.legal-page) app-root,
+body:has(.demo-page) app-root,
 body:has(.auth-layout, .auth-screen) app-root {
   display: block;
   height: auto;
@@ -145,6 +148,25 @@ body:has(.legal-page) app-root {
   height: auto !important;
   min-height: 100%;
   overflow-y: visible !important;
+}
+
+/* Public demo requests use natural document scrolling for the full form. */
+html:has(.demo-page),
+body:has(.demo-page),
+body:has(.demo-page) ion-app,
+body:has(.demo-page) app-root,
+body:has(.demo-page) app-demo-request {
+  height: auto !important;
+  min-height: 100%;
+  overflow-y: visible !important;
+}
+
+html:has(.demo-page) {
+  overflow-y: auto !important;
+}
+
+body:has(.demo-page) {
+  overflow-x: clip !important;
 }
 
 html:has(.legal-page) { overflow-y: auto !important; }
@@ -419,7 +441,6 @@ details[open] > summary::after {
 .transient-message[hidden] { display: none !important; }
 .transient-message__close { position: absolute; top: 7px; right: 8px; display: grid; place-items: center; width: 25px; height: 25px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
 .transient-message__close:hover { background: #00000012; }
-
 
 
 
