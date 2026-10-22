@@ -24,16 +24,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: min(100%, 680px);
+  width: min(100%, 320px);
   color: #172338;
   text-align: center;
 }
 
 .loader-stage {
   position: relative;
-  width: clamp(220px, 42vw, 340px);
+  width: 88px;
   aspect-ratio: 1;
-  margin-bottom: clamp(30px, 5vh, 46px);
+  margin-bottom: 8px;
   isolation: isolate;
 }
 
@@ -55,26 +55,25 @@
 
 .loading-track circle {
   fill: none;
-  stroke: #fff1e2;
-  stroke-width: 4.5;
+  stroke: #e8ebef;
+  stroke-width: 3.5;
 }
 
 .loading-ring {
   z-index: 1;
   overflow: visible;
-  animation: loading-ring-rotation 2s linear infinite;
+  animation: loading-ring-rotation 1.6s linear infinite;
   transform-origin: center;
   will-change: transform;
 }
 
 .graduation-cap {
   z-index: 2;
-  inset: 15%;
-  width: 70%;
-  height: 70%;
+  inset: 50% auto auto 50%;
+  width: 40%;
+  height: auto;
   overflow: visible;
-  animation: graduation-cap-float 3s ease-in-out infinite;
-  will-change: transform;
+  transform: translate(-50%, -50%);
 }
 
 .brand-name {
@@ -82,10 +81,10 @@
   margin: 0;
   color: #172338;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: clamp(2rem, 7vw, 3.5rem);
-  font-weight: 800;
-  letter-spacing: -0.045em;
-  line-height: 1.1;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
@@ -99,21 +98,22 @@
 
 .brand-tagline {
   max-width: 100%;
-  margin: 14px 0 0;
-  padding-inline: 4px;
+  margin: 2px 0 0;
+  padding-inline: 2px;
   color: #89909c;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: clamp(0.95rem, 3.3vw, 1.25rem);
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 400;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
 .entry-slow {
   max-width: 320px;
-  margin: 18px 20px 0;
+  margin: 8px 12px 0;
   color: #475569;
-  font-size: 0.9rem;
+  font-size: 11px;
+  font-weight: 400;
   line-height: 1.5;
 }
 
@@ -141,17 +141,6 @@
   }
 }
 
-@keyframes graduation-cap-float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-5px);
-  }
-}
-
 @keyframes network-travel {
   from {
     transform: translateX(-100%);
@@ -162,24 +151,22 @@
   }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 600px) {
+  .loader-stage {
+    width: 70px;
+  }
+
+  .graduation-cap {
+    width: 48%;
+  }
+
   .preloader-overlay {
     padding-inline: 12px;
-  }
-
-  .brand-name {
-    font-size: clamp(1.8rem, 9vw, 2rem);
-    letter-spacing: -0.055em;
-  }
-
-  .brand-tagline {
-    margin-top: 10px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .loading-ring,
-  .graduation-cap,
   .network-progress span {
     animation: none;
   }
