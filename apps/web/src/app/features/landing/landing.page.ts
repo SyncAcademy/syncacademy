@@ -87,7 +87,7 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
       metricLabel: 'Audit-ready financial logs',
       badgeLabel: 'Executive Control',
       ctaText: 'Explore Leadership Portal',
-      ctaLink: '/auth/register'
+      ctaLink: '/request-demo'
     },
     teachers: {
       id: 'teachers',
@@ -104,7 +104,7 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
       metricLabel: 'Grading time saved',
       badgeLabel: 'Academic Suite',
       ctaText: 'See Teaching Tools',
-      ctaLink: '/auth/register'
+      ctaLink: '/request-demo'
     },
     bursar: {
       id: 'bursar',
@@ -121,7 +121,7 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
       metricLabel: 'Audit-ready fee ledgers',
       badgeLabel: 'Finance & Bursary',
       ctaText: 'Explore Finance Tools',
-      ctaLink: '/auth/register'
+      ctaLink: '/request-demo'
     }
   };
 
@@ -160,7 +160,8 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
     emailAddress: '',
     phoneNumber: '',
     subject: '',
-    message: ''
+    message: '',
+    websiteField: ''
   };
 
   contactStatus = signal<'idle' | 'submitting' | 'success' | 'error'>('idle');
@@ -179,7 +180,7 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
       }));
       this.contactStatus.set('success');
       this.contactMessage.set(res?.message || 'Your message has been sent successfully.');
-      this.contactData = { fullName: '', emailAddress: '', phoneNumber: '', subject: '', message: '' };
+      this.contactData = { fullName: '', emailAddress: '', phoneNumber: '', subject: '', message: '', websiteField: '' };
     } catch (err: any) {
       this.contactStatus.set('error');
       this.contactMessage.set(requestErrorMessage(err));

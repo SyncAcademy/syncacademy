@@ -383,6 +383,10 @@ async function main() {
 
       if (++cycles % 300 === 0) {
         await db.rateBucket.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+        await db.publicFormBlock.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+        const publicFormCutoff = new Date(Date.now() - config.PUBLIC_FORM_RETENTION_DAYS * 86400000);
+        await db.publicFormAttempt.deleteMany({ where: { createdAt: { lt: publicFormCutoff } } });
+        await db.securityEvent.deleteMany({ where: { category: 'PUBLIC_FORM', createdAt: { lt: publicFormCutoff } } });
         workerMetrics.cleanupAt = new Date().toISOString();
       }
     } catch {

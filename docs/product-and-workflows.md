@@ -66,6 +66,8 @@ SyncAcademy separates **Global User Identity** (`User`) from **Tenant Authorizat
 ## 4. End-to-End Portal Workflows
 
 ### 4.1 Super Admin Portal (`/super-admin`)
+- **Current public demo intake**: Visitors use `/request-demo` to submit school, applicant, and designated Headmaster details. The request enters the existing Leads Pipeline as `new` with source `website-demo-request`; submission creates no school or account. A Super Admin progresses the lead to `won`, reviews its details, and converts it to a school with a single-use Headmaster invitation. Existing manually entered leads continue to use their contact as the invitation recipient when no separate Headmaster is recorded.
+- **Current public form security**: Contact and demo submissions share rolling email and IP limits. Super Admins inspect public form events and manage temporary IP restrictions in Public Form Security.
 - **School Onboarding & Leads Conversion**: Register a school or convert a won lead into an active `School` tenant and queue a single-use Headmaster invitation in one transaction.
 - **Lead attribution**: Record and filter lead sources including Website, Social Media, Friend or Relative, Referral, Event, Cold Outreach and Other.
 - **Tenant Governance**: Search, filter, suspend, or reactivate schools with mandatory audit reasons; configure platform-wide SMTP settings and monitor `Outbox` email/notification delivery health.

@@ -33,9 +33,9 @@
         </button>
         <button
           class="btn btn-primary desktop-only"
-          routerLink="/auth/register"
+          routerLink="/request-demo"
         >
-          Create Account
+          Request a Demo
         </button>
       </div>
     </nav>
@@ -296,7 +296,7 @@
         </a>
         <a
           class="mobile-nav-primary"
-          routerLink="/auth/register"
+          routerLink="/request-demo"
           (click)="closeMobileNav()"
         >
           <svg
@@ -311,7 +311,7 @@
             <path d="M12 5v14"></path>
             <path d="M5 12h14"></path>
           </svg>
-          <span>Create Account</span
+          <span>Request a Demo</span
           ><svg
             class="mobile-nav-chevron"
             viewBox="0 0 24 24"
@@ -378,8 +378,8 @@
           ></button>
         </div>
         <div class="hero-actions">
-          <button class="btn btn-primary btn-lg" routerLink="/auth/register">
-            Create Account
+          <button class="btn btn-primary btn-lg" routerLink="/request-demo">
+            Request a Demo
           </button>
           <button class="btn btn-white btn-lg" routerLink="/auth/login">
             Sign In
@@ -1840,6 +1840,7 @@
           (ngSubmit)="submitContactForm()"
           #contactForm="ngForm"
         >
+          <div aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden"><label>Leave empty<input name="websiteField" [(ngModel)]="contactData.websiteField" tabindex="-1" autocomplete="off"></label></div>
           <div class="form-row">
             <div class="form-group">
               <label for="fullName"

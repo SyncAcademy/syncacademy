@@ -192,14 +192,15 @@ export class PlatformService {
       return result;
     });
   }
-  async createInvitation(tx: Prisma.TransactionClient, actorId: string, schoolId: string, data: { name: string; email: string; role: Role; studentId?: string; expiresInMinutes?: number }) {
+  async createInvitation(tx: Prisma.TransactionClient, actorId: string, schoolId: string, data: { name: string; email: string; role: Role; studentId?: string; expiresInMinutes?: number; welcomeSchool?: boolean }) {
     if (await tx.membership.findFirst({ where: { schoolId, role: data.role, active: true, user: { email: data.email } } })) throw new ConflictException('This person already has this active school role. Manage their existing access instead.');
     if (await tx.invitation.findFirst({ where: { schoolId, email: data.email, role: data.role, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } } })) throw new ConflictException('A pending invitation already exists. Resend it instead.');
     await tx.invitation.updateMany({ where: { schoolId, email: data.email, role: data.role, acceptedAt: null, revokedAt: null, expiresAt: { lte: new Date() } }, data: { revokedAt: new Date() } });
     const token = randomToken();
     const expiresInMinutes = data.expiresInMinutes ?? 2880;
-    const invitation = await tx.invitation.create({ data: { ...data, expiresInMinutes, schoolId, invitedBy: actorId, tokenHash: digest(token), expiresAt: new Date(Date.now() + expiresInMinutes * 60000) } });
-    await this.invitationMail(tx, invitation, token);
+    const { welcomeSchool, ...invitationData } = data;
+    const invitation = await tx.invitation.create({ data: { ...invitationData, expiresInMinutes, schoolId, invitedBy: actorId, tokenHash: digest(token), expiresAt: new Date(Date.now() + expiresInMinutes * 60000) } });
+    await this.invitationMail(tx, invitation, token, welcomeSchool);
     await tx.auditEvent.create({ data: { actorId, schoolId, action: 'USER_INVITED', target: invitation.id } });
     return { id: invitation.id, email: invitation.email, role: invitation.role, expiresAt: invitation.expiresAt };
   }
@@ -214,7 +215,7 @@ export class PlatformService {
     await tx.auditEvent.create({ data: { actorId, action: 'PLATFORM_ADMIN_INVITED', target: invitation.id } });
     return { id: invitation.id, name: invitation.name, email: invitation.email, role: 'SUPER_ADMIN', expiresInMinutes: invitation.expiresInMinutes, expiresAt: invitation.expiresAt };
   }
-  async invitationMail(tx: Prisma.TransactionClient, invitation: { id: string; schoolId: string | null; platformAdmin: boolean; email: string; generation: number; expiresInMinutes: number; name?: string; role?: string }, token: string) {
+  async invitationMail(tx: Prisma.TransactionClient, invitation: { id: string; schoolId: string | null; platformAdmin: boolean; email: string; generation: number; expiresInMinutes: number; name?: string; role?: string }, token: string, welcomeSchool = false) {
     const school = invitation.schoolId ? await tx.school.findUniqueOrThrow({ where: { id: invitation.schoolId } }) : null;
     const expiryLabel = invitationExpiryLabel(invitation.expiresInMinutes);
     const organization = invitation.platformAdmin ? 'the SyncAcademy platform' : school!.name;
@@ -230,7 +231,7 @@ export class PlatformService {
       token,
       appOrigin: config.APP_ORIGIN,
     });
-    await tx.outbox.create({ data: { invitationId: invitation.id, invitationGeneration: invitation.generation, payload: encrypt(JSON.stringify({ to: invitation.email, subject: mail.subject, text: mail.text, html: mail.html })) } });
+    await tx.outbox.create({ data: { invitationId: invitation.id, invitationGeneration: invitation.generation, payload: encrypt(JSON.stringify({ to: invitation.email, subject: welcomeSchool ? 'Welcome to SyncAcademy - Activate Your School Account' : mail.subject, text: mail.text, html: mail.html })) } });
   }
   async invitationInfo(req: Request, token: string) {
     await this.rate('invitation-read:' + req.ip, 60, 900);

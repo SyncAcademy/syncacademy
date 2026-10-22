@@ -1,6 +1,7 @@
 import { Metrics } from './monitoring/metrics';
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
+import { BlockList, isIP } from 'node:net';
 import { NestFactory } from '@nestjs/core';
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -22,14 +23,22 @@ class SafeErrors implements ExceptionFilter {
     if (error instanceof HttpException) { status = error.getStatus(); const details = error.getResponse(); message = typeof details === 'string' ? details : (details as any).message; }
     else if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2002','P2003','P2025','P2034'].includes(error.code)) { status = error.code === 'P2025' ? 404 : 409; message = 'This record already exists, changed, or references an unavailable record. Refresh and try again.'; }
     if (status >= 500) console.error(JSON.stringify({ event: 'request_failed', requestId: response.getHeader('X-Request-ID'), errorType: error instanceof Error ? error.name : 'unknown' }));
-    if (status === 429) response.setHeader('Retry-After', '900');
+    if (status === 429) response.setHeader('Retry-After', String((error instanceof HttpException && typeof error.getResponse() === 'object' ? (error.getResponse() as any).retryAfter : undefined) ?? 900));
     response.status(status).json({ statusCode: status, message, requestId: response.getHeader('X-Request-ID') });
   }
 }
 async function main() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   const server = app.getHttpAdapter().getInstance(); server.disable('x-powered-by');
-  server.set('trust proxy', config.TRUST_PROXY_HOPS);
+  const trustedProxies = new BlockList();
+  for (const entry of config.TRUSTED_PROXY_CIDRS.split(',').map(value => value.trim()).filter(Boolean)) {
+    const [address, mask] = entry.split('/');
+    const family = isIP(address);
+    const prefix = mask === undefined ? (family === 4 ? 32 : 128) : Number(mask);
+    if (!family || !Number.isInteger(prefix) || prefix < 0 || prefix > (family === 4 ? 32 : 128)) throw new Error('Invalid trusted proxy CIDR.');
+    trustedProxies.addSubnet(address, prefix, family === 4 ? 'ipv4' : 'ipv6');
+  }
+  server.set('trust proxy', (address: string) => trustedProxies.check(address));
   const monitoring=app.get(Metrics);
   app.use(helmet());
   app.use((req: Request, res: Response, next: NextFunction) => {

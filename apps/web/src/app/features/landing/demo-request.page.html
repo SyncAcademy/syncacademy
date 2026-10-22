@@ -1,0 +1,46 @@
+<main class="demo-page">
+  <div class="demo-shell">
+    <section class="demo-intro">
+      <a class="brand" routerLink="/">Sync<span>Academy</span></a>
+      <p class="eyebrow">REQUEST A DEMO</p>
+      <h1>See How SyncAcademy Can Transform Your School</h1>
+      <p>Tell us about your school. Our team will review your request, arrange a demonstration, and guide you through the next steps.</p>
+      <ul><li>Bring admissions, academics, finance, and communication together.</li><li>See workflows designed for Tanzanian schools.</li><li>Explore a secure workspace tailored to your school.</li></ul>
+      <p class="next-step">Submitting a request does not create an account. A school administrator receives an invitation only after onboarding approval.</p>
+    </section>
+    <section class="demo-card">
+      @if (done()) {
+        <div class="confirmation" role="status"><span class="check" aria-hidden="true">OK</span><h2>Your Demo Request Has Been Received!</h2><p>The SyncAcademy team will review your submission and contact you about the next steps.</p><a class="submit-button" routerLink="/">Back to Home</a></div>
+      } @else {
+        <h2>Tell us about your school</h2><p class="form-intro">Fields marked * are required.</p>
+        <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+          <h3>School information</h3><div class="grid">
+            <label>School name *<input formControlName="schoolName" autocomplete="organization" maxlength="150"><small *ngIf="invalid('schoolName')">Enter the school name.</small></label>
+            <label>School type *<select formControlName="schoolType"><option value="">Select type</option><option>Primary</option><option>Secondary</option><option>Combined</option></select><small *ngIf="invalid('schoolType')">Select a school type.</small></label>
+            <label>School location *<input formControlName="location" maxlength="150"><small *ngIf="invalid('location')">Enter the school location.</small></label>
+            <label>Region *<input formControlName="region" maxlength="150"><small *ngIf="invalid('region')">Enter the region.</small></label>
+            <label>Approximate number of students<input type="number" min="0" max="1000000" formControlName="studentCount"></label>
+            <label>School website<input type="url" formControlName="schoolWebsite" maxlength="300"><small *ngIf="invalid('schoolWebsite')">Enter a valid http or https website address.</small></label>
+          </div>
+          <h3>Applicant contact</h3><div class="grid">
+            <label>Full name *<input formControlName="contactName" autocomplete="name" maxlength="150"><small *ngIf="invalid('contactName')">Enter your full name.</small></label>
+            <label>Position or role *<input formControlName="applicantPosition" maxlength="150"><small *ngIf="invalid('applicantPosition')">Enter your position.</small></label>
+            <label>Email *<input type="email" formControlName="contactEmail" autocomplete="email" maxlength="254"><small *ngIf="invalid('contactEmail')">Enter a valid email address.</small></label>
+            <label>Phone number *<input type="tel" formControlName="contactPhone" autocomplete="tel" maxlength="40"><small *ngIf="invalid('contactPhone')">Enter a valid phone number.</small></label>
+          </div>
+          <h3>Headmaster information</h3><p class="field-hint">The Headmaster receives an account invitation after school approval. You may enter your own details if you are the Headmaster.</p><div class="grid">
+            <label>Headmaster full name *<input formControlName="headmasterName" maxlength="150"><small *ngIf="invalid('headmasterName')">Enter the Headmaster's name.</small></label>
+            <label>Headmaster email *<input type="email" formControlName="headmasterEmail" maxlength="254"><small *ngIf="invalid('headmasterEmail')">Enter a valid Headmaster email.</small></label>
+            <label>Headmaster phone<input type="tel" formControlName="headmasterPhone" maxlength="40"><small *ngIf="invalid('headmasterPhone')">Enter a valid phone number.</small></label>
+            <label>Preferred demo method<select formControlName="preferredDemoMethod"><option value="">No preference</option><option>Online Demo</option><option>On-Site Demo</option></select></label>
+          </div>
+          <label>Message or special requirements<textarea formControlName="requestMessage" rows="4" maxlength="2000"></textarea></label>
+          <div class="trap" aria-hidden="true"><label>Leave this field empty<input formControlName="websiteField" tabindex="-1" autocomplete="off"></label></div>
+          <label class="consent"><input type="checkbox" formControlName="consent"> I agree that SyncAcademy may contact me about this request. *</label><small *ngIf="invalid('consent')">Please confirm your consent.</small>
+          @if (error()) { <p class="error-banner" role="alert">{{ error() }}</p> }
+          <button class="submit-button" type="submit" [disabled]="busy()">{{ busy() ? 'Submitting Request...' : 'Submit Demo Request' }}</button>
+        </form>
+      }
+    </section>
+  </div>
+</main>

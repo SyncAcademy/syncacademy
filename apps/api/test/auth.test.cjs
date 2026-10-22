@@ -103,7 +103,7 @@ test(
     assert.equal(migrate.status, 0, "Isolated test migrations must apply");
     // Explicitly restricted to the disposable database named above.
     await db.$executeRawUnsafe(
-      'TRUNCATE TABLE "RegistryEvent", "Admission", "session", "Outbox", "Idempotency", "RateBucket", "AuditEvent", "Invitation", "PasswordReset", "TeachingAssignment", "Enrollment", "Student", "Classroom", "AcademicYear", "Membership", "School", "User" CASCADE',
+      'TRUNCATE TABLE "PublicFormAttempt", "PublicFormBlock", "PlatformLeadActivity", "RegistryEvent", "Admission", "session", "Outbox", "Idempotency", "RateBucket", "AuditEvent", "Invitation", "PasswordReset", "TeachingAssignment", "Enrollment", "Student", "Classroom", "AcademicYear", "Membership", "School", "User" CASCADE',
     );
     api = spawn(
       process.execPath,
@@ -1330,6 +1330,58 @@ test(
         },
       );
       await require('./platform-operations.cjs')({ t, db, client, admin: c });
+      await t.test('public demo requests validate, deduplicate, rate limit and enter the lead pipeline', async () => {
+        const visitor = client();
+        const payload = { schoolName: 'Mlimani Primary School', schoolType: 'Primary', location: 'Kinondoni', region: 'Dar es Salaam',
+          studentCount: 450, schoolWebsite: '', contactName: 'Amina Mwinyi', applicantPosition: 'Registrar', contactEmail: 'demo-applicant@example.test', contactPhone: '+255 712 345 678',
+          headmasterName: 'Neema Mushi', headmasterEmail: 'headmaster-demo@example.test', headmasterPhone: '', preferredDemoMethod: 'Online Demo', requestMessage: '', consent: true, websiteField: '' };
+        assert.equal((await visitor.call('POST', 'demo-requests', { ...payload, headmasterEmail: '' })).status, 400);
+        for (let i = 0; i < 3; i++) assert.equal((await visitor.call('POST', 'demo-requests', payload)).status, 201);
+        const limited = await visitor.call('POST', 'demo-requests', payload);
+        assert.equal(limited.status, 429);
+        assert.ok(Number(limited.headers.get('retry-after')) > 0);
+        const leads = await db.platformLead.findMany({ where: { contactEmail: payload.contactEmail } });
+        assert.equal(leads.length, 1);
+        assert.equal(leads[0].headmasterEmail, payload.headmasterEmail);
+        assert.equal(leads[0].status, 'new');
+        assert.equal(leads[0].convertedSchoolId, null);
+        assert.equal((await visitor.call('GET', 'platform/leads')).status, 401);
+        assert.equal((await visitor.call('POST', `platform/leads/${leads[0].id}/activities`, { kind: 'contacted', note: 'Called school office' })).status, 401);
+        assert.equal((await c.call('POST', `platform/leads/${leads[0].id}/activities`, { kind: 'contacted', note: 'Called school office' })).status, 201);
+        assert.equal((await db.platformLead.findUniqueOrThrow({ where: { id: leads[0].id } })).status, 'contacted');
+        const editable = Object.fromEntries(['schoolName', 'contactName', 'contactEmail', 'contactPhone', 'location', 'region', 'schoolType', 'schoolWebsite', 'applicantPosition', 'headmasterName', 'headmasterEmail', 'headmasterPhone', 'preferredDemoMethod', 'requestMessage', 'source', 'studentCount', 'notes', 'owner', 'followUp'].map(field => [field, leads[0][field]]));
+        assert.equal((await c.call('PATCH', `platform/leads/${leads[0].id}`, { ...editable, status: 'won' })).status, 200);
+        const converted = await c.call('POST', `platform/leads/${leads[0].id}/convert`, { code: 'MLIMANI-DEMO', expiresInMinutes: 2880 }, { 'Idempotency-Key': randomUUID() });
+        assert.equal(converted.status, 201);
+        assert.equal(converted.body.invitation.email, payload.headmasterEmail);
+        assert.equal((await db.platformLead.findUniqueOrThrow({ where: { id: leads[0].id } })).convertedSchoolId, converted.body.school.id);
+      });
+      await t.test('contact requests preserve the three per email rolling limit and reject spoofed IP changes', async () => {
+        await db.publicFormAttempt.deleteMany();
+        await db.publicFormBlock.deleteMany();
+        const visitor = client();
+        const payload = { fullName: 'Juma Mushi', emailAddress: 'CONTACT@example.test', phoneNumber: '+255 712 345 678', subject: 'sales', message: 'Please contact our school office.', websiteField: '' };
+        for (let i = 0; i < 3; i++) assert.equal((await visitor.call('POST', 'contact', payload, { 'X-Forwarded-For': `203.0.113.${i + 1}` })).status, 201);
+        const limited = await visitor.call('POST', 'contact', payload, { 'X-Forwarded-For': '203.0.113.99' });
+        assert.equal(limited.status, 429);
+        assert.ok(Number(limited.headers.get('retry-after')) > 0);
+        const attempts = await db.publicFormAttempt.findMany({ where: { form: 'contact' } });
+        assert.equal(attempts.length, 3);
+        assert.equal(new Set(attempts.map(item => item.ipHash)).size, 1);
+        const activity = await c.call('GET', 'platform/public-forms/activity');
+        assert.equal(activity.status, 200);
+        assert.ok(activity.body.total >= 1);
+        assert.equal((await visitor.call('GET', 'platform/public-forms/activity')).status, 401);
+      });
+      await t.test('concurrent public submissions cannot exceed the email limit', async () => {
+        await db.publicFormAttempt.deleteMany();
+        await db.publicFormBlock.deleteMany();
+        const visitor = client();
+        const payload = { fullName: 'Juma Mushi', emailAddress: 'parallel@example.test', phoneNumber: '', subject: 'sales', message: 'Please contact our school office.', websiteField: '' };
+        const results = await Promise.all(Array.from({ length: 5 }, () => visitor.call('POST', 'contact', payload)));
+        assert.equal(results.filter(result => result.status === 201).length, 3);
+        assert.equal(results.filter(result => result.status === 429).length, 2);
+      });
       await require('./realtime-platform.cjs')({ t, db, client, fixture, admin: c });
       await t.test(
         "password recovery works for every supported role",

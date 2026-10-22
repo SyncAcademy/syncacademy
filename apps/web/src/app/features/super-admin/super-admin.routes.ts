@@ -38,6 +38,7 @@ export const SUPER_ADMIN_ROUTES: Routes = [
           import('./pages/sa-audit-log/sa-audit-log.page').then(m => m.SaAuditLogPage),
         data: { title: 'Platform Audit Log', breadcrumb: 'Super Admin / Audit Log' },
       },
+      { path: 'public-form-security', loadComponent: () => import('./pages/sa-public-form-security.page').then(m => m.SaPublicFormSecurityPage), data: { title: 'Public Form Security', breadcrumb: 'Super Admin / Public Form Security' } },
       {
         path: 'settings',
         loadComponent: () =>

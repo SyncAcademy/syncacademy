@@ -6,6 +6,14 @@ This document is the authoritative technical design specification for SyncAcadem
 
 ## 1. End-to-End System Topology
 
+### Current implementation: public school intake
+
+`POST /api/v1/demo-requests` validates a public demo request, applies PostgreSQL-backed public form limits, deduplicates identical school/applicant requests over 24 hours, creates a `PlatformLead`, and queues an acknowledgment in the transactional outbox. `POST /api/v1/contact` uses the same protection service. Public form attempts are stored as hashed email and IP identifiers; restricted and accepted events are visible only to Super Admins through `/api/v1/platform/public-forms/activity`. Authorized administrators can block or unblock an IP for public form submissions through `/api/v1/platform/public-forms/blocks`, with audit records. The worker removes expired blocks and public form telemetry after the configured retention period.
+
+The existing `/api/v1/platform/leads/:leadId/convert` path provisions a school only after a Super Admin has moved an unconverted lead to `won`. It uses the lead's designated Headmaster contact for the pending invitation. Legacy leads without that contact retain their previous applicant invitation behavior. Conversion checks school code and matching school name and region, and the existing idempotency transaction prevents repeat provisioning.
+
+The lead activity table records submissions, edits, stage changes, conversion, internal notes, contact attempts, and demo milestones. Super Admins add activities through `POST /api/v1/platform/leads/:leadId/activities`; each entry is returned with the lead list for the existing details panel.
+
 SyncAcademy is designed as a **modular, multi-tenant web platform** inside an npm workspaces monorepo. It avoids microservice sprawl and external message-broker dependencies (no Redis or Kafka required for MVP) by running three cohesive runtime components backed by **PostgreSQL 16**:
 
 1. **Web Client (`apps/web`)**: Angular 18 + Ionic 8 single-page application serving role-based workspaces.

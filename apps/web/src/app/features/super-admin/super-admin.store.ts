@@ -43,13 +43,16 @@ export interface PlatformLead {
   contactEmail: string;
   contactPhone: string;
   location: string;
-  source: 'website' | 'referral' | 'social' | 'event' | 'cold-outreach' | 'friend-relative' | 'other';
+  region: string; schoolType: string; schoolWebsite: string; applicantPosition: string;
+  headmasterName: string; headmasterEmail: string; headmasterPhone: string; preferredDemoMethod: string; requestMessage: string;
+  source: 'website' | 'website-demo-request' | 'referral' | 'social' | 'event' | 'cold-outreach' | 'friend-relative' | 'other';
   status: 'new' | 'contacted' | 'demo-scheduled' | 'demo-done' | 'negotiation' | 'won' | 'lost';
   studentCount: number;
   notes: string;
   owner?: string;
   followUp?: string;
   convertedSchoolId?: string;
+  activities?: { id: string; kind: string; note: string; scheduledAt?: string | null; createdAt: string }[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -100,7 +103,7 @@ export class SuperAdminStore {
   readonly schoolRangeStart = computed(() => this.total() ? (this.page() - 1) * this.schoolPageSize() + 1 : 0);
   readonly schoolRangeEnd = computed(() => Math.min(this.page() * this.schoolPageSize(), this.total()));
   readonly summaryError = signal('');
-  readonly leadPage=signal(1);readonly leadTotal=signal(0);readonly leadSearch=signal('');readonly leadStatus=signal('');readonly leadSource=signal('');readonly leadStages=signal<Record<string,number>>({});
+  readonly leadPage=signal(1);readonly leadTotal=signal(0);readonly leadSearch=signal('');readonly leadStatus=signal('');readonly leadSource=signal('');readonly leadFrom=signal('');readonly leadTo=signal('');readonly leadStages=signal<Record<string,number>>({});
   readonly auditPage=signal(1);readonly auditPageSize=signal(20);readonly auditTotal=signal(0);readonly auditSearch=signal('');readonly auditActor=signal('');readonly auditSchoolId=signal('');readonly auditCategory=signal('');readonly auditAction=signal('');readonly auditOutcome=signal('');readonly auditSeverity=signal('');readonly auditFrom=signal('');readonly auditTo=signal('');
   readonly auditSummary=signal<{periodDays:number;totalEvents:number;failedAuthentication:number;securityEvents:number;highRiskEvents:number}|null>(null);
   readonly auditPeriodDays=signal(30);
@@ -221,7 +224,7 @@ export class SuperAdminStore {
       if (request === this.schoolRequest) this.schoolsLoading.set(false);
     }
   }
-  async loadLeads(){const request=++this.leadRequest;const context=this.context();const list=await this.auth.request('GET','platform/leads?'+this.params({page:this.leadPage(),q:this.leadSearch(),status:this.leadStatus(),source:this.leadSource()}));if(request!==this.leadRequest||context!==this.context())return;this.leads.set(list.items);this.leadTotal.set(list.total);this.leadStages.set(list.stages);}
+  async loadLeads(){const request=++this.leadRequest;const context=this.context();const list=await this.auth.request('GET','platform/leads?'+this.params({page:this.leadPage(),q:this.leadSearch(),status:this.leadStatus(),source:this.leadSource(),from:this.leadFrom(),to:this.leadTo()}));if(request!==this.leadRequest||context!==this.context())return;this.leads.set(list.items);this.leadTotal.set(list.total);this.leadStages.set(list.stages);}
   private auditQueryKey(){return this.params({page:this.auditPage(),pageSize:this.auditPageSize(),q:this.auditSearch(),actor:this.auditActor(),schoolId:this.auditSchoolId(),category:this.auditCategory(),action:this.auditAction(),outcome:this.auditOutcome(),severity:this.auditSeverity(),from:this.auditFrom(),to:this.auditTo()});}
   async loadAuditIfNeeded(){if(this.lastAuditQuery===this.auditQueryKey())return;await this.loadAudit();}
   async loadAudit(){const request=++this.auditRequest;const context=this.context();const query=this.auditQueryKey();this.auditLoading.set(true);try{const list=await this.auth.request('GET','audit?'+query);if(request!==this.auditRequest||context!==this.context())return;this.auditTotal.set(list.total);this.auditLog.set(list.items.map((a:any)=>({id:a.id,source:a.source,action:a.action,category:a.category,actor:a.actor,role:a.role,school:a.school,target:a.target,outcome:a.outcome,severity:a.severity,ipAddress:a.ipAddress,userAgent:a.userAgent,timestamp:new Date(a.createdAt)})));this.lastAuditQuery=query;}finally{if(request===this.auditRequest)this.auditLoading.set(false);}}

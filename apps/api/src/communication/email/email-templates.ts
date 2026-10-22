@@ -409,7 +409,7 @@ export function buildContactInquiryEmail(params: {
   subject: string;
   message: string;
 }): { subject: string; html: string; text: string } {
-  const emailSubject = `SyncAcademy Inquiry: ${params.subject}`;
+  const emailSubject = `SyncAcademy Inquiry: ${params.subject.replace(/[\r\n\u2028\u2029]+/g, ' ').trim()}`;
   const text = `New Contact Form Submission\n\nName: ${params.fullName}\nEmail: ${params.emailAddress}\nPhone: ${params.phoneNumber || 'Not provided'}\nSubject: ${params.subject}\n\nMessage:\n${params.message}`;
 
   const contentHtml = `

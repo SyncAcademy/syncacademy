@@ -34,6 +34,7 @@
   <select aria-label="Lead source" [ngModel]="sourceFilter()" (ngModelChange)="filter($event, 'source')">
     <option value="">All sources</option>
     <option value="website">Website</option>
+    <option value="website-demo-request">Website Demo Request</option>
     <option value="social">Social Media</option>
     <option value="friend-relative">Friend or Relative</option>
     <option value="referral">Referral</option>
@@ -41,6 +42,8 @@
     <option value="cold-outreach">Cold Outreach</option>
     <option value="other">Other</option>
   </select>
+  <label>From <input type="date" [ngModel]="store.leadFrom()" (ngModelChange)="store.leadFrom.set($event); store.leadPage.set(1); store.loadLeads()"></label>
+  <label>To <input type="date" [ngModel]="store.leadTo()" (ngModelChange)="store.leadTo.set($event); store.leadPage.set(1); store.loadLeads()"></label>
 </div>
 
 <section class="panel">
@@ -49,7 +52,7 @@
       <thead>
         <tr>
           <th>School</th>
-          <th>Contact</th>
+          <th>Contact</th><th>Headmaster email</th><th>Submitted</th>
           <th>Location</th>
           <th>Students</th>
           <th>Source</th>
@@ -62,21 +65,22 @@
         @for (l of filtered(); track l.id) {
           <tr>
             <td><strong>{{ l.schoolName }}</strong></td>
-            <td>{{ l.contactName }}<span class="cell-sub">{{ l.contactEmail }}</span></td>
+            <td>{{ l.contactName }}<span class="cell-sub">{{ l.contactEmail }} · {{ l.contactPhone }}</span></td><td>{{ l.headmasterEmail || 'Not provided' }}</td><td>{{ l.createdAt | date:'mediumDate' }}</td>
             <td>{{ l.location }}</td>
             <td>{{ l.studentCount | number }}</td>
             <td><span class="source-pill">{{ sourceLabel(l.source) }}</span></td>
             <td><span class="portal-pill" [attr.data-status]="l.status">{{ statusLabel(l.status) }}</span></td>
             <td class="notes-cell">{{ l.notes }}</td>
-            <td>{{ l.owner || 'Unassigned' }}<span class="cell-sub">{{ l.followUp || 'No follow-up set' }}</span></td><td><div class="row-actions"><button class="action-btn" (click)="openLead(l)">Edit</button>@if (l.status === 'won' && !l.convertedSchoolId) { <button class="action-btn" (click)="openConversion(l)">Create school</button> } @if (l.convertedSchoolId) { <a [href]="'/workspace?school=' + l.convertedSchoolId">View school</a> }</div></td>
+            <td>{{ l.owner || 'Unassigned' }}<span class="cell-sub">{{ l.followUp || 'No follow-up set' }}</span></td><td><div class="row-actions"><button class="action-btn" (click)="selected = l">Details</button><button class="action-btn" (click)="openLead(l)">Edit</button>@if (l.status === 'won' && !l.convertedSchoolId) { <button class="action-btn" (click)="openConversion(l)">Approve &amp; onboard</button> } @if (l.convertedSchoolId) { <a [href]="'/workspace?school=' + l.convertedSchoolId">View school</a> }</div></td>
           </tr>
         } @empty {
-          <tr><td colspan="9">No leads match your filters.</td></tr>
+          <tr><td colspan="11">No leads match your filters.</td></tr>
         }
       </tbody>
     </table>
   </div>
 </section>
+@if (selected; as lead) { <section class="panel" aria-label="Lead details"><div class="section-header"><h2>{{ lead.schoolName }}</h2><button class="action-btn" (click)="selected = null">Close</button></div><p><strong>School:</strong> {{ lead.schoolType || 'Unspecified' }} · {{ lead.location }}, {{ lead.region || lead.location }} · {{ lead.studentCount | number }} students</p><p><strong>Website:</strong> {{ lead.schoolWebsite || 'Not provided' }}</p><p><strong>Applicant:</strong> {{ lead.contactName }} · {{ lead.applicantPosition || 'Position not provided' }} · {{ lead.contactEmail }} · {{ lead.contactPhone }}</p><p><strong>Headmaster:</strong> {{ lead.headmasterName || 'Not provided' }} · {{ lead.headmasterEmail || 'Not provided' }} · {{ lead.headmasterPhone || 'No phone' }}</p><p><strong>Demo:</strong> {{ lead.preferredDemoMethod || 'No preference' }} · {{ statusLabel(lead.status) }}</p><p><strong>Request:</strong> {{ lead.requestMessage || 'None' }}</p><p><strong>Internal notes:</strong> {{ lead.notes || 'None' }}</p><p><strong>Assigned:</strong> {{ lead.owner || 'Unassigned' }} · <strong>Follow-up:</strong> {{ lead.followUp || 'Not set' }}</p><p><strong>Submitted:</strong> {{ lead.createdAt | date:'medium' }}</p><p><strong>Onboarding:</strong> {{ lead.convertedSchoolId ? 'School created' : 'Pending' }}</p><h3>Activity</h3><div class="filters"><label>Type <select [(ngModel)]="activityKind"><option value="note">Internal note</option><option value="contacted">Contact attempt</option><option value="demo-scheduled">Demo scheduled</option><option value="demo-completed">Demo completed</option></select></label><label>Scheduled time <input type="datetime-local" [(ngModel)]="activityWhen"></label><label>Details <input [(ngModel)]="activityNote" maxlength="2000"></label><button class="action-btn" [disabled]="busy || activityNote.trim().length < 2" (click)="addActivity()">Record activity</button></div>@for (item of lead.activities || []; track item.id) { <p><strong>{{ statusLabel(item.kind) }}</strong> · {{ item.createdAt | date:'medium' }}<span class="cell-sub">{{ item.note }} @if (item.scheduledAt) { · Scheduled {{ item.scheduledAt | date:'medium' }} }</span></p> } @empty { <p>No activity recorded yet.</p> }</section> }
 <div class="pagination-bar" role="navigation" aria-label="Leads pagination"><span>Page {{store.leadPage()}} of {{pageCount()}} · {{store.leadTotal()}} matching leads</span><div class="pagination-actions"><button class="action-btn" [disabled]="store.leadPage() <= 1" (click)="page(-1)">Previous</button><button class="action-btn" [disabled]="store.leadPage() >= pageCount()" (click)="page(1)">Next</button></div></div>
 
 @if (editor; as values) { <app-sa-editor [title]="convertingId ? 'Create school and invite Headmaster' : editingId ? 'Edit lead' : 'Add lead'" [description]="convertingId ? 'The contact will receive a Headmaster invitation. The new school starts active.' : 'Track this prospective school.'" [fields]="convertingId ? conversionFields : fields" [values]="values" [busy]="busy" [error]="error" (saved)="save($event)" (cancelled)="editor = null" /> }

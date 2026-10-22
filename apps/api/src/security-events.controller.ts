@@ -8,6 +8,10 @@ import {
   Query, 
   Req 
 } from '@nestjs/common';
+import { Post, Delete } from '@nestjs/common';
+import { isIP } from 'node:net';
+import { digest } from './security';
+import { config } from './config';
 import { Request } from 'express';
 import { z } from 'zod';
 import { PlatformService } from './platform.service';
@@ -40,6 +44,44 @@ export class SecurityEventsController {
     private readonly svc: PlatformService,
     private readonly securityService: SecurityEventsService,
   ) {}
+
+  @Get('platform/public-forms/activity')
+  async publicFormActivity(@Req() req: Request, @Query() query: unknown) {
+    await this.svc.administrator(req);
+    const q = parse(z.object({ page: z.coerce.number().int().min(1).default(1), form: z.enum(['contact', 'demo']).optional(), ip: z.string().max(45).optional() }).strict(), query);
+    if (q.ip && !isIP(q.ip)) throw new BadRequestException('Enter a valid IP address.');
+    const where = { category: 'PUBLIC_FORM', ...(q.ip ? { ipAddress: q.ip } : {}), ...(q.form ? { details: { path: ['form'], equals: q.form } } : {}) };
+    const [items, total] = await this.svc.db.$transaction([this.svc.db.securityEvent.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (q.page - 1) * 25, take: 25 }), this.svc.db.securityEvent.count({ where })]);
+    const blocks = await this.svc.db.publicFormBlock.findMany({ where: { expiresAt: { gt: new Date() } } });
+    return { items: items.map(item => ({ ...item, blockedUntil: blocks.find(block => block.ipHash === digest('public-form-ip:' + item.ipAddress))?.expiresAt ?? null })), total };
+  }
+
+  @Post('platform/public-forms/blocks')
+  async blockPublicFormIp(@Req() req: Request, @Body() body: unknown) {
+    const actor = await this.svc.administrator(req);
+    const b = parse(z.object({ ip: z.string().refine(value => !!isIP(value), 'Enter a valid IP address.'), reason: z.string().trim().min(5).max(500) }).strict(), body);
+    const ipHash = digest('public-form-ip:' + b.ip);
+    const expiresAt = new Date(Date.now() + config.PUBLIC_FORM_BLOCK_HOURS * 3600000);
+    await this.svc.atomic(async tx => {
+      await tx.publicFormBlock.upsert({ where: { ipHash }, create: { ipHash, expiresAt }, update: { expiresAt } });
+      await tx.securityEvent.create({ data: { category: 'PUBLIC_FORM', severity: 'MEDIUM', eventType: 'PUBLIC_FORM_MANUAL_BLOCK', actorId: actor.id, ipAddress: b.ip, details: { reason: b.reason, blockExpiresAt: expiresAt.toISOString() } } });
+      await tx.auditEvent.create({ data: { actorId: actor.id, action: 'PUBLIC_FORM_IP_BLOCKED', target: ipHash } });
+    });
+    return { expiresAt };
+  }
+
+  @Delete('platform/public-forms/blocks')
+  async unblockPublicFormIp(@Req() req: Request, @Body() body: unknown) {
+    const actor = await this.svc.administrator(req);
+    const b = parse(z.object({ ip: z.string().refine(value => !!isIP(value), 'Enter a valid IP address.'), reason: z.string().trim().min(5).max(500) }).strict(), body);
+    const ipHash = digest('public-form-ip:' + b.ip);
+    await this.svc.atomic(async tx => {
+      await tx.publicFormBlock.deleteMany({ where: { ipHash } });
+      await tx.securityEvent.create({ data: { category: 'PUBLIC_FORM', eventType: 'PUBLIC_FORM_MANUAL_UNBLOCK', actorId: actor.id, ipAddress: b.ip, details: { reason: b.reason } } });
+      await tx.auditEvent.create({ data: { actorId: actor.id, action: 'PUBLIC_FORM_IP_UNBLOCKED', target: ipHash } });
+    });
+    return { message: 'IP restriction removed.' };
+  }
 
   /**
    * Super Admin: View platform-wide security telemetry

@@ -4,6 +4,11 @@ import { HttpErrorResponse } from '@angular/common/http';
 export function requestErrorMessage(error: unknown): string {
   if (!(error instanceof HttpErrorResponse)) return 'Something went wrong. Please try again.';
   if (error.status === 0) return 'Cannot reach the server. Check your connection and try again.';
+  if (error.status === 429) {
+    const seconds = Number(error.headers.get('Retry-After'));
+    const wait = Number.isFinite(seconds) && seconds > 0 ? ` Please try again in ${seconds >= 3600 ? Math.ceil(seconds / 3600) + ' hours' : Math.ceil(seconds / 60) + ' minutes'}.` : ' Please try again later.';
+    return 'You have reached the request limit.' + wait;
+  }
   if (error.status >= 500) return 'The service is temporarily unavailable. Please try again.';
   const message = error.error?.message;
   if (typeof message !== 'string' || !message.trim()) return 'The request failed. Try again.';

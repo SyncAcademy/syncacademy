@@ -4,6 +4,10 @@ import { Request, Response } from 'express';
 import { Prisma, Role } from '@prisma/client';
 import { z } from 'zod';
 import { PlatformService } from './platform.service';
+import { PublicFormProtectionService } from './public-form-protection.service';
+import { buildContactInquiryEmail, escapeHtml } from './communication/email/email-templates';
+import { encrypt } from './security';
+import { config } from './config';
 import { AuditCategory, AuditLogService, AuditSource, auditCategories } from './audit-log.service';
 import { termsForYear, termsInput, validateTerms } from './academic-terms';
 
@@ -25,11 +29,20 @@ const registrars: Role[] = ['HEADMASTER', 'REGISTRAR'];
 const academics: Role[] = ['HEADMASTER', 'ACADEMIC'];
 const leadFields = z.object({ schoolName: name, contactName: name, contactEmail: email,
   contactPhone: z.string().trim().max(40).default(''), location: name,
-  source: z.enum(['website', 'referral', 'social', 'event', 'cold-outreach', 'friend-relative', 'other']),
+  source: z.enum(['website', 'website-demo-request', 'referral', 'social', 'event', 'cold-outreach', 'friend-relative', 'other']),
   status: z.enum(['new', 'contacted', 'demo-scheduled', 'demo-done', 'negotiation', 'won', 'lost']),
   studentCount: z.coerce.number().int().min(0).max(1000000),
   notes: z.string().trim().max(2000).default(''), owner: z.string().trim().max(150).default(''),
-  followUp: z.union([date, z.literal('')]).default('') }).strict();
+  followUp: z.union([date, z.literal('')]).default(''),
+  region: z.string().trim().max(150).default(''), schoolType: z.string().trim().max(40).default(''), schoolWebsite: z.string().trim().max(300).default(''), applicantPosition: z.string().trim().max(150).default(''),
+  headmasterName: z.string().trim().max(150).default(''), headmasterEmail: z.union([email, z.literal('')]).default(''), headmasterPhone: z.string().trim().max(40).default(''),
+  preferredDemoMethod: z.string().trim().max(40).default(''), requestMessage: z.string().trim().max(2000).default('') }).strict();
+const demoFields = z.object({ schoolName: name, schoolType: z.enum(['Primary', 'Secondary', 'Combined']), location: name, region: name,
+  studentCount: z.number().int().min(0).max(1000000).optional(), schoolWebsite: z.union([z.literal(''), z.string().trim().url().max(300).refine(value => /^https?:\/\//i.test(value), 'Use an http or https website address.')]).default(''),
+  contactName: name, applicantPosition: name, contactEmail: email, contactPhone: z.string().trim().min(7).max(40).regex(/^\+?[0-9() .-]+$/),
+  headmasterName: name, headmasterEmail: email, headmasterPhone: z.union([z.literal(''), z.string().trim().min(7).max(40).regex(/^\+?[0-9() .-]+$/)]).default(''),
+  preferredDemoMethod: z.enum(['', 'Online Demo', 'On-Site Demo']).default(''), requestMessage: z.string().trim().max(2000).default(''),
+  consent: z.literal(true), websiteField: z.literal('').default('') }).strict();
 const listPage = z.coerce.number().int().min(1).max(100000).default(1);
 const listSize = z.coerce.number().int().min(1).max(100).default(25);
 const auditQuerySchema = z.object({
@@ -50,7 +63,7 @@ const auditQuerySchema = z.object({
 });
 @Controller('api/v1')
 export class ApiController {
-  constructor(private readonly svc: PlatformService, private readonly auditLog: AuditLogService) {}
+  constructor(private readonly svc: PlatformService, private readonly auditLog: AuditLogService, private readonly publicForms: PublicFormProtectionService) {}
   @Get('health/live') live() { return { status: 'ok' }; }
   @Get('health/ready') async ready() { await this.svc.db.$queryRaw`SELECT 1`; return { status: 'ready' }; }
   @Get('platform/summary') async platformSummary(@Req() req: Request) {
@@ -66,10 +79,10 @@ export class ApiController {
   }
   @Get('platform/leads') async platformLeads(@Req() req: Request, @Query() query: unknown) {
     await this.svc.administrator(req);
-    const q = parse(z.object({ page: listPage, pageSize: listSize, q: z.string().trim().max(200).default(''), status: z.string().max(40).default(''), source: z.string().max(40).default('') }).strict(), query);
-    const where: Prisma.PlatformLeadWhereInput = { ...(q.q ? { OR: [{ schoolName: { contains: q.q, mode: 'insensitive' } }, { contactName: { contains: q.q, mode: 'insensitive' } }, { contactEmail: { contains: q.q, mode: 'insensitive' } }, { location: { contains: q.q, mode: 'insensitive' } }] } : {}), ...(q.status ? { status: q.status } : {}), ...(q.source ? { source: q.source } : {}) };
+    const q = parse(z.object({ page: listPage, pageSize: listSize, q: z.string().trim().max(200).default(''), status: z.string().max(40).default(''), source: z.string().max(40).default(''), from: date.optional(), to: date.optional() }).strict(), query);
+    const where: Prisma.PlatformLeadWhereInput = { ...(q.q ? { OR: [{ schoolName: { contains: q.q, mode: 'insensitive' } }, { contactName: { contains: q.q, mode: 'insensitive' } }, { contactEmail: { contains: q.q, mode: 'insensitive' } }, { location: { contains: q.q, mode: 'insensitive' } }] } : {}), ...(q.status ? { status: q.status } : {}), ...(q.source ? { source: q.source } : {}), ...(q.from || q.to ? { createdAt: { ...(q.from ? { gte: new Date(q.from) } : {}), ...(q.to ? { lt: new Date(Date.parse(q.to) + 86400000) } : {}) } } : {}) };
     const [items, total, groups] = await this.svc.db.$transaction([
-      this.svc.db.platformLead.findMany({ where, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
+      this.svc.db.platformLead.findMany({ where, include: { activities: { orderBy: { createdAt: 'desc' }, take: 20 } }, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
       this.svc.db.platformLead.count({ where }),
       this.svc.db.platformLead.groupBy({ by: ['status'], _count: true, orderBy: { status: 'asc' } }),
     ]);
@@ -79,6 +92,7 @@ export class ApiController {
     const actor = await this.svc.administrator(req); const b = parse(leadFields, body);
     return this.svc.idempotent(actor.id + ':platform-lead', key(req), b, async tx => {
       const lead = await tx.platformLead.create({ data: b });
+      await tx.platformLeadActivity.create({ data: { leadId: lead.id, actorId: actor.id, kind: 'created' } });
       await tx.auditEvent.create({ data: { actorId: actor.id, action: 'PLATFORM_LEAD_CREATED', target: lead.id } });
       return lead;
     });
@@ -90,6 +104,7 @@ export class ApiController {
       if (!prior) throw new BadRequestException('Lead not found.');
       if (prior.convertedSchoolId && (b.status !== 'won' || b.schoolName !== prior.schoolName || b.contactEmail !== prior.contactEmail)) throw new ConflictException('A converted lead cannot change its school, contact email or stage.');
       const lead = await tx.platformLead.update({ where: { id: leadId }, data: b });
+      await tx.platformLeadActivity.create({ data: { leadId, actorId: actor.id, kind: prior.status === b.status ? 'updated' : 'stage-changed', note: prior.status === b.status ? '' : `${prior.status} to ${b.status}` } });
       await tx.auditEvent.create({ data: { actorId: actor.id, action: 'PLATFORM_LEAD_UPDATED', target: lead.id } });
       return lead;
     });
@@ -101,11 +116,26 @@ export class ApiController {
       const lead = await tx.platformLead.findUnique({ where: { id: leadId } });
       if (!lead || lead.status !== 'won' || lead.convertedSchoolId) throw new ConflictException('Only an unconverted won lead can become a school.');
       if (await tx.school.findUnique({ where: { code: b.code } })) throw new ConflictException('School code is already in use.');
-      const school = await tx.school.create({ data: { name: lead.schoolName, code: b.code, region: lead.location, phone: lead.contactPhone, email: lead.contactEmail } });
-      const invitation = await this.svc.createInvitation(tx, actor.id, school.id, { name: lead.contactName, email: lead.contactEmail, role: 'HEADMASTER', expiresInMinutes: b.expiresInMinutes });
+      if (await tx.school.findFirst({ where: { name: { equals: lead.schoolName, mode: 'insensitive' }, region: { equals: lead.region || lead.location, mode: 'insensitive' } } })) throw new ConflictException('A school with this name and region already exists. Review the school directory before converting.');
+      const school = await tx.school.create({ data: { name: lead.schoolName, code: b.code, region: lead.region || lead.location, schoolType: lead.schoolType || null, address: lead.location, website: lead.schoolWebsite || null, phone: lead.contactPhone, email: lead.contactEmail } });
+      const invitation = await this.svc.createInvitation(tx, actor.id, school.id, { name: lead.headmasterName || lead.contactName, email: lead.headmasterEmail || lead.contactEmail, role: 'HEADMASTER', expiresInMinutes: b.expiresInMinutes, welcomeSchool: true });
       await tx.platformLead.update({ where: { id: leadId }, data: { convertedSchoolId: school.id } });
+      await tx.platformLeadActivity.create({ data: { leadId, actorId: actor.id, kind: 'converted', note: `School ${school.code} created` } });
       await tx.auditEvent.create({ data: { actorId: actor.id, schoolId: school.id, action: 'PLATFORM_LEAD_CONVERTED', target: leadId } });
       return { school, invitation };
+    });
+  }
+  @Post('platform/leads/:leadId/activities') async addLeadActivity(@Req() req: Request, @Param('leadId') leadId: string, @Body() body: unknown) {
+    const actor = await this.svc.administrator(req); parse(uuid, leadId);
+    const b = parse(z.object({ kind: z.enum(['note', 'contacted', 'demo-scheduled', 'demo-completed']), note: z.string().trim().min(2).max(2000), scheduledAt: z.string().datetime().optional() }).strict(), body);
+    return this.svc.atomic(async tx => {
+      const lead = await tx.platformLead.findUnique({ where: { id: leadId } });
+      if (!lead) throw new BadRequestException('Lead not found.');
+      const activity = await tx.platformLeadActivity.create({ data: { leadId, actorId: actor.id, kind: b.kind, note: b.note, scheduledAt: b.scheduledAt ? new Date(b.scheduledAt) : null } });
+      const stage = b.kind === 'contacted' ? 'contacted' : b.kind === 'demo-scheduled' ? 'demo-scheduled' : b.kind === 'demo-completed' ? 'demo-done' : undefined;
+      if (stage && !lead.convertedSchoolId && lead.status !== stage) await tx.platformLead.update({ where: { id: leadId }, data: { status: stage } });
+      await tx.auditEvent.create({ data: { actorId: actor.id, action: 'PLATFORM_LEAD_ACTIVITY_ADDED', target: leadId } });
+      return activity;
     });
   }
   @Get('platform/settings') async platformSettings(@Req() req: Request) {
@@ -658,15 +688,11 @@ export class ApiController {
     const b = parse(z.object({
       fullName: z.string().trim().min(2).max(100),
       emailAddress: email,
-      phoneNumber: z.string().trim().max(30).optional(),
+      phoneNumber: z.union([z.literal(''), z.string().trim().min(7).max(30).regex(/^\+?[0-9() .-]+$/)]).optional(),
       subject: z.string().trim().max(100),
-      message: z.string().trim().min(10).max(2000)
+      message: z.string().trim().min(10).max(2000),
+      websiteField: z.literal('').default('')
     }).strict(), body);
-
-    await this.svc.rate('contact:' + b.emailAddress, 3, 86400);
-    await this.svc.rate('contact-ip:' + req.ip, 10, 86400);
-
-    const { buildContactInquiryEmail } = await import('./communication/email/email-templates');
     const mail = buildContactInquiryEmail({
       fullName: b.fullName,
       emailAddress: b.emailAddress,
@@ -674,22 +700,32 @@ export class ApiController {
       subject: b.subject,
       message: b.message,
     });
-    const { encrypt } = await import('./security');
-    const { config } = await import('./config');
     const settings = await this.svc.db.platformSetting.findUnique({ where: { id: 1 }, select: { supportEmail: true } });
     const recipient = config.CONTACT_NOTIFICATION_EMAIL || settings?.supportEmail?.trim() || config.MAIL_FROM;
-
-    await this.svc.db.outbox.create({
-      data: {
-        payload: encrypt(JSON.stringify({
-          to: recipient,
-          subject: mail.subject,
-          text: mail.text,
-          html: mail.html,
-        }))
-      }
+    await this.publicForms.submit('contact', b.emailAddress, req.ip ?? req.socket.remoteAddress ?? 'unknown', async tx => {
+      await tx.outbox.create({ data: { payload: encrypt(JSON.stringify({ to: recipient, subject: mail.subject, text: mail.text, html: mail.html })) } });
     });
-
     return { message: 'Thank you for reaching out! Your message has been sent successfully.' };
+  }
+
+  @Post('demo-requests') async demoRequest(@Req() req: Request, @Body() body: unknown) {
+    const b = parse(demoFields, body);
+    const settings = await this.svc.db.platformSetting.findUnique({ where: { id: 1 }, select: { supportEmail: true } });
+    const recipient = config.CONTACT_NOTIFICATION_EMAIL || settings?.supportEmail?.trim() || config.MAIL_FROM;
+    await this.publicForms.submit('demo', b.contactEmail, req.ip ?? req.socket.remoteAddress ?? 'unknown', async tx => {
+      const duplicate = await tx.platformLead.findFirst({ where: { source: 'website-demo-request', contactEmail: b.contactEmail, schoolName: { equals: b.schoolName, mode: 'insensitive' }, createdAt: { gte: new Date(Date.now() - 86400000) } } });
+      if (duplicate) return;
+      const lead = await tx.platformLead.create({ data: { schoolName: b.schoolName, schoolType: b.schoolType, location: b.location, region: b.region, studentCount: b.studentCount ?? 0,
+        schoolWebsite: b.schoolWebsite, contactName: b.contactName, applicantPosition: b.applicantPosition, contactEmail: b.contactEmail, contactPhone: b.contactPhone,
+        headmasterName: b.headmasterName, headmasterEmail: b.headmasterEmail, headmasterPhone: b.headmasterPhone,
+        preferredDemoMethod: b.preferredDemoMethod, requestMessage: b.requestMessage, source: 'website-demo-request', status: 'new' } });
+      await tx.platformLeadActivity.create({ data: { leadId: lead.id, kind: 'website-submitted' } });
+      const text = `Hello ${b.contactName},\n\nYour demo request for ${b.schoolName} has been received. The SyncAcademy team will review it and contact you.\n\nSyncAcademy`;
+      await tx.outbox.create({ data: { payload: encrypt(JSON.stringify({ to: b.contactEmail, subject: 'SyncAcademy demo request received', text,
+        html: `<p>Hello ${escapeHtml(b.contactName)},</p><p>Your demo request for <strong>${escapeHtml(b.schoolName)}</strong> has been received. Our team will review it and contact you.</p><p>SyncAcademy</p>` })) } });
+      const internal = buildContactInquiryEmail({ fullName: b.contactName, emailAddress: b.contactEmail, phoneNumber: b.contactPhone, subject: `Demo request: ${b.schoolName}`, message: `School: ${b.schoolName}\nRegion: ${b.region}\nHeadmaster: ${b.headmasterName} (${b.headmasterEmail})\n${b.requestMessage}` });
+      await tx.outbox.create({ data: { payload: encrypt(JSON.stringify({ to: recipient, subject: internal.subject, text: internal.text, html: internal.html })) } });
+    });
+    return { message: 'Your demo request has been received. Our team will contact you.' };
   }
 }

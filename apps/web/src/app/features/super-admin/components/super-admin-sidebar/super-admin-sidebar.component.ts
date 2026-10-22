@@ -62,6 +62,7 @@ export class SuperAdminSidebarComponent {
       items: [
         { title: 'System Health', route: '/super-admin/system', icon: 'health' },
         { title: 'Audit Log', route: '/super-admin/audit-log', icon: 'notifications' },
+        { title: 'Public Form Security', route: '/super-admin/public-form-security', icon: 'notifications' },
         { title: 'Platform Settings', route: '/super-admin/settings', icon: 'settings' },
       ],
     },

@@ -49,6 +49,7 @@ export class SaLeadsPage {
   sourceLabel(source: string): string {
     const labels: Record<string, string> = {
       website: 'Website',
+      'website-demo-request': 'Website Demo Request',
       referral: 'Referral',
       social: 'Social Media',
       event: 'Event',
@@ -65,12 +66,19 @@ export class SaLeadsPage {
   error = '';
   notice = '';
   editor: Record<string, any> | null = null;
+  selected: PlatformLead | null = null;
+  activityKind = 'note'; activityNote = ''; activityWhen = '';
+  async addActivity(): Promise<void> { if (!this.selected || this.busy || this.activityNote.trim().length < 2) return; this.busy = true; this.error = ''; try { const id = this.selected.id; await this.store.auth.request('POST', `platform/leads/${id}/activities`, { kind: this.activityKind, note: this.activityNote.trim(), ...(this.activityWhen ? { scheduledAt: new Date(this.activityWhen).toISOString() } : {}) }); await this.store.loadLeads(); this.selected = this.store.leads().find(lead => lead.id === id) ?? null; this.activityNote = ''; this.activityWhen = ''; this.notice = 'Activity recorded.'; } catch (e) { this.error = this.store.auth.error(e); } finally { this.busy = false; } }
   fields: EditorField[] = [
     { key: 'schoolName', label: 'School name', required: true }, { key: 'contactName', label: 'Contact name', required: true },
+    { key: 'schoolType', label: 'School type' }, { key: 'region', label: 'Region' }, { key: 'schoolWebsite', label: 'School website' }, { key: 'applicantPosition', label: 'Applicant position' },
+    { key: 'headmasterName', label: 'Headmaster name' }, { key: 'headmasterEmail', label: 'Headmaster email', type: 'email' }, { key: 'headmasterPhone', label: 'Headmaster phone', type: 'tel' },
+    { key: 'preferredDemoMethod', label: 'Preferred demo method' }, { key: 'requestMessage', label: 'Request message' },
     { key: 'contactEmail', label: 'Email', type: 'email', required: true }, { key: 'contactPhone', label: 'Phone', type: 'tel' },
     { key: 'location', label: 'Region', required: true }, { key: 'studentCount', label: 'Estimated students', type: 'number', min: 0, required: true },
     { key: 'source', label: 'Source', choices: [
       { value: 'website', label: 'Website' },
+      { value: 'website-demo-request', label: 'Website Demo Request' },
       { value: 'social', label: 'Social Media' },
       { value: 'friend-relative', label: 'Friend or Relative' },
       { value: 'referral', label: 'Referral' },
@@ -82,7 +90,7 @@ export class SaLeadsPage {
     { key: 'owner', label: 'Follow-up owner' }, { key: 'followUp', label: 'Next follow-up', type: 'date' }, { key: 'notes', label: 'Notes' },
   ];
   conversionFields: EditorField[] = [{ key: 'code', label: 'Unique school code', required: true }, { key: 'expiresInMinutes', label: 'Headmaster invitation expires after', choices: [{value:'1440',label:'24 hours'},{value:'2880',label:'48 hours'},{value:'10080',label:'7 days'}], required: true }];
-  openLead(lead?: PlatformLead): void { this.error='';this.convertingId='';this.editingId = lead?.id || ''; this.editor = lead ? { schoolName:lead.schoolName,contactName:lead.contactName,contactEmail:lead.contactEmail,contactPhone:lead.contactPhone,location:lead.location,studentCount:lead.studentCount,source:lead.source,status:lead.status,owner:lead.owner,followUp:lead.followUp,notes:lead.notes } : { source: 'website', status: 'new', studentCount: 0, owner: '', followUp:'',notes: '',contactPhone:'' }; }
+  openLead(lead?: PlatformLead): void { this.error='';this.convertingId='';this.editingId = lead?.id || ''; this.editor = lead ? { schoolName:lead.schoolName,contactName:lead.contactName,contactEmail:lead.contactEmail,contactPhone:lead.contactPhone,location:lead.location,region:lead.region,schoolType:lead.schoolType,schoolWebsite:lead.schoolWebsite,applicantPosition:lead.applicantPosition,headmasterName:lead.headmasterName,headmasterEmail:lead.headmasterEmail,headmasterPhone:lead.headmasterPhone,preferredDemoMethod:lead.preferredDemoMethod,requestMessage:lead.requestMessage,studentCount:lead.studentCount,source:lead.source,status:lead.status,owner:lead.owner,followUp:lead.followUp,notes:lead.notes } : { source: 'website', status: 'new', studentCount: 0, owner: '', followUp:'',notes: '',contactPhone:'' }; }
   openConversion(lead: PlatformLead): void {this.error='';this.convertingId=lead.id;this.editor={code:'',expiresInMinutes:'2880'};}
   async save(values: Record<string, any>): Promise<void> { if(this.busy)return;this.busy=true;this.error='';try{if(this.convertingId){await this.store.convertLead(this.convertingId,values['code'],Number(values['expiresInMinutes']));this.notice='School created and Headmaster invitation queued.';}else{await this.store.saveLead(values,this.editingId||undefined);this.notice=this.editingId?'Lead updated.':'Lead added.';}this.editor=null;}catch(e){this.error=this.store.auth.error(e);}finally{this.busy=false;} }
   constructor() {
