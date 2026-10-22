@@ -90,11 +90,6 @@ export function renderEmailLayout(options: BaseEmailOptions): string {
         <!-- EMAIL CARD (MAX 600px) -->
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; background-color: #FFFFFF; border-radius: 12px; overflow: hidden; border: 1px solid #E2E8F0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);">
           
-          <!-- TOP ORANGE BRAND ACCENT LINE -->
-          <tr>
-            <td style="background-color: #E87E24; height: 5px; font-size: 1px; line-height: 1px;">&nbsp;</td>
-          </tr>
-
           <!-- HEADER: BRAND LOGO & BADGE -->
           <tr>
             <td style="padding: 28px 36px 20px 36px; border-bottom: 1px solid #F1F5F9;">
@@ -462,4 +457,36 @@ export function buildContactInquiryEmail(params: {
   });
 
   return { subject: emailSubject, html, text };
+}
+
+export function buildDemoRequestAcknowledgementEmail(params: {
+  contactName: string;
+  schoolName: string;
+}): { subject: string; html: string; text: string } {
+  const subject = 'SyncAcademy demo request received';
+  const text = `Hello ${params.contactName},\n\nYour demo request for ${params.schoolName} has been received. The SyncAcademy team will review it and contact you.\n\nSyncAcademy`;
+  const contentHtml = `
+    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #E87E24; margin-bottom: 6px;">
+      Request received
+    </div>
+    <h1 style="margin: 0 0 16px 0; font-size: 22px; font-weight: 800; color: #0F172A; line-height: 1.3;">
+      Thank you for your interest
+    </h1>
+    <p style="margin: 0 0 16px 0; font-size: 15px; color: #475569; line-height: 1.6;">
+      Hello <strong>${escapeHtml(params.contactName)}</strong>,
+    </p>
+    <p style="margin: 0; font-size: 15px; color: #475569; line-height: 1.6;">
+      Your demo request for <strong>${escapeHtml(params.schoolName)}</strong> has been received. The SyncAcademy team will review it and contact you.
+    </p>
+  `;
+  const html = renderEmailLayout({
+    title: subject,
+    previewText: `Your SyncAcademy demo request for ${params.schoolName} has been received.`,
+    badgeText: 'Demo Request',
+    badgeType: 'info',
+    logoSrc: `cid:${SYNCACADEMY_LOGO_CID}`,
+    contentHtml,
+  });
+
+  return { subject, html, text };
 }

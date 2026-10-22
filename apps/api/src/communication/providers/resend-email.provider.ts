@@ -61,6 +61,7 @@ export class ResendEmailProvider implements EmailProvider {
             filename: att.filename,
             content,
             path: att.path,
+            content_id: att.cid,
           };
         });
       }

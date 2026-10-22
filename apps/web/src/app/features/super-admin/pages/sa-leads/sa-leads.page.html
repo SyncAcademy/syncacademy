@@ -104,7 +104,7 @@
             <td data-label="Status"><span class="portal-pill" [attr.data-status]="l.status">{{ statusLabel(l.status) }}</span></td>
             <td data-label="Notes" class="notes-cell">{{ l.notes || 'No notes' }}</td>
             <td data-label="Follow-up">{{ l.owner || 'Unassigned' }}<span class="cell-sub">{{ l.followUp || 'No follow-up set' }}</span></td>
-            <td data-label="Actions"><div class="row-actions"><button class="action-btn" type="button" (click)="selected = l">Details</button><button class="action-btn" type="button" (click)="openLead(l)">Edit</button>@if (l.status === 'won' && !l.convertedSchoolId) { <button class="action-btn" type="button" (click)="openConversion(l)">Approve &amp; onboard</button> } @if (l.convertedSchoolId) { <a [href]="'/workspace?school=' + l.convertedSchoolId">View school</a> }</div></td>
+            <td data-label="Actions" class="actions-cell"><div class="row-actions"><button class="action-btn" type="button" (click)="openDetails(l)">Details</button><button class="action-btn" type="button" (click)="openLead(l)">Edit</button>@if (l.status === 'won' && !l.convertedSchoolId) { <button class="action-btn" type="button" (click)="openConversion(l)">Approve &amp; onboard</button> } @if (l.convertedSchoolId) { <a [href]="'/workspace?school=' + l.convertedSchoolId">View school</a> }</div></td>
           </tr>
         } @empty {
           <tr class="empty-row"><td colspan="11"><div class="empty-state"><strong>No leads found</strong><span>Try changing your search or filters.</span></div></td></tr>
@@ -114,7 +114,123 @@
   </div>
 </section>
 
-@if (selected; as lead) { <section class="panel" aria-label="Lead details"><div class="section-header"><h2>{{ lead.schoolName }}</h2><button class="action-btn" (click)="selected = null">Close</button></div><p><strong>School:</strong> {{ lead.schoolType || 'Unspecified' }} · {{ lead.location }}, {{ lead.region || lead.location }} · {{ lead.studentCount | number }} students</p><p><strong>Website:</strong> {{ lead.schoolWebsite || 'Not provided' }}</p><p><strong>Applicant:</strong> {{ lead.contactName }} · {{ lead.applicantPosition || 'Position not provided' }} · {{ lead.contactEmail }} · {{ lead.contactPhone }}</p><p><strong>Headmaster:</strong> {{ lead.headmasterName || 'Not provided' }} · {{ lead.headmasterEmail || 'Not provided' }} · {{ lead.headmasterPhone || 'No phone' }}</p><p><strong>Demo:</strong> {{ lead.preferredDemoMethod || 'No preference' }} · {{ statusLabel(lead.status) }}</p><p><strong>Request:</strong> {{ lead.requestMessage || 'None' }}</p><p><strong>Internal notes:</strong> {{ lead.notes || 'None' }}</p><p><strong>Assigned:</strong> {{ lead.owner || 'Unassigned' }} · <strong>Follow-up:</strong> {{ lead.followUp || 'Not set' }}</p><p><strong>Submitted:</strong> {{ lead.createdAt | date:'medium' }}</p><p><strong>Onboarding:</strong> {{ lead.convertedSchoolId ? 'School created' : 'Pending' }}</p><h3>Activity</h3><div class="filters"><label>Type <select [(ngModel)]="activityKind"><option value="note">Internal note</option><option value="contacted">Contact attempt</option><option value="demo-scheduled">Demo scheduled</option><option value="demo-completed">Demo completed</option></select></label><label>Scheduled time <input type="datetime-local" [(ngModel)]="activityWhen"></label><label>Details <input [(ngModel)]="activityNote" maxlength="2000"></label><button class="action-btn" [disabled]="busy || activityNote.trim().length < 2" (click)="addActivity()">Record activity</button></div>@for (item of lead.activities || []; track item.id) { <p><strong>{{ statusLabel(item.kind) }}</strong> · {{ item.createdAt | date:'medium' }}<span class="cell-sub">{{ item.note }} @if (item.scheduledAt) { · Scheduled {{ item.scheduledAt | date:'medium' }} }</span></p> } @empty { <p>No activity recorded yet.</p> }</section> }
+@if (selected; as lead) {
+  <div class="details-backdrop" (click)="closeDetails()">
+    <aside class="details-drawer" role="dialog" aria-modal="true" aria-labelledby="lead-drawer-title" tabindex="-1" (click)="$event.stopPropagation()">
+      <header class="drawer-header">
+        <div class="drawer-heading">
+          <p class="eyebrow">Lead details</p>
+          <h2 id="lead-drawer-title">{{ lead.schoolName }}</h2>
+          <p class="drawer-subtitle">{{ lead.schoolType || 'School type not provided' }} · {{ lead.location || 'Location not provided' }}@if (lead.region && lead.region !== lead.location) {, {{ lead.region }} }</p>
+          <span class="portal-pill drawer-status" [attr.data-status]="lead.status">{{ statusLabel(lead.status) }}</span>
+        </div>
+        <button class="drawer-close" type="button" aria-label="Close lead details" (click)="closeDetails()">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" /></svg>
+        </button>
+      </header>
+
+      <div class="drawer-content">
+        <section class="detail-section" aria-labelledby="school-information-title">
+          <h3 id="school-information-title">School Information</h3>
+          <dl class="detail-grid">
+            <div class="detail-item"><dt>School name</dt><dd>{{ lead.schoolName }}</dd></div>
+            <div class="detail-item"><dt>School type</dt><dd>{{ lead.schoolType || 'Not provided' }}</dd></div>
+            <div class="detail-item"><dt>Location</dt><dd>{{ lead.location || 'Not provided' }}@if (lead.region && lead.region !== lead.location) {, {{ lead.region }} }</dd></div>
+            <div class="detail-item"><dt>Student population</dt><dd>{{ lead.studentCount | number }}</dd></div>
+            <div class="detail-item detail-item--wide"><dt>Website</dt><dd class="detail-value-wrap">{{ lead.schoolWebsite || 'Not provided' }}</dd></div>
+          </dl>
+        </section>
+
+        <section class="detail-section" aria-labelledby="contact-information-title">
+          <h3 id="contact-information-title">Contact Information</h3>
+          <div class="contact-group">
+            <h4>Applicant</h4>
+            <dl class="detail-grid">
+              <div class="detail-item"><dt>Name</dt><dd>{{ lead.contactName }}</dd></div>
+              <div class="detail-item"><dt>Role</dt><dd>{{ lead.applicantPosition || 'Not provided' }}</dd></div>
+              <div class="detail-item"><dt>Email</dt><dd class="detail-value-wrap">{{ lead.contactEmail || 'Not provided' }}</dd></div>
+              <div class="detail-item"><dt>Phone</dt><dd>{{ lead.contactPhone || 'Not provided' }}</dd></div>
+            </dl>
+          </div>
+          <div class="contact-group">
+            <h4>Headmaster</h4>
+            <dl class="detail-grid">
+              <div class="detail-item"><dt>Name</dt><dd>{{ lead.headmasterName || 'Not provided' }}</dd></div>
+              <div class="detail-item"><dt>Email</dt><dd class="detail-value-wrap">{{ lead.headmasterEmail || 'Not provided' }}</dd></div>
+              <div class="detail-item"><dt>Phone</dt><dd>{{ lead.headmasterPhone || 'Not provided' }}</dd></div>
+            </dl>
+          </div>
+        </section>
+
+        <section class="detail-section" aria-labelledby="demo-information-title">
+          <h3 id="demo-information-title">Demo Request</h3>
+          <dl class="detail-grid">
+            <div class="detail-item"><dt>Demo type</dt><dd>{{ lead.preferredDemoMethod || 'No preference provided' }}</dd></div>
+            <div class="detail-item"><dt>Demo status</dt><dd>{{ statusLabel(lead.status) }}</dd></div>
+            <div class="detail-item"><dt>Submitted</dt><dd>{{ lead.createdAt | date:'medium' }}</dd></div>
+            <div class="detail-item detail-item--wide"><dt>Request message</dt><dd class="request-message">{{ lead.requestMessage || 'No message provided.' }}</dd></div>
+          </dl>
+        </section>
+
+        <section class="detail-section" aria-labelledby="lead-management-title">
+          <h3 id="lead-management-title">Lead Management</h3>
+          <dl class="detail-grid">
+            <div class="detail-item"><dt>Assigned staff member</dt><dd>{{ lead.owner || 'Not assigned' }}</dd></div>
+            <div class="detail-item"><dt>Next follow-up</dt><dd>{{ lead.followUp ? (lead.followUp | date:'mediumDate') : 'Not scheduled' }}</dd></div>
+            <div class="detail-item"><dt>Onboarding status</dt><dd>{{ lead.convertedSchoolId ? 'School created' : 'Pending' }}</dd></div>
+            <div class="detail-item detail-item--wide"><dt>Internal notes</dt><dd class="request-message">{{ lead.notes || 'No internal notes.' }}</dd></div>
+          </dl>
+        </section>
+
+        <section class="detail-section activity-section" aria-labelledby="lead-activity-title">
+          <div class="activity-heading">
+            <div><h3 id="lead-activity-title">Activity</h3><p>Record a follow-up or add an internal note.</p></div>
+          </div>
+          @if (error) { <p class="drawer-error" role="alert">{{ error }}</p> }
+          <div class="activity-form">
+            <label class="field">
+              <span>Activity type</span>
+              <select [(ngModel)]="activityKind">
+                <option value="note">Internal note</option>
+                <option value="contacted">Contact attempt</option>
+                <option value="demo-scheduled">Demo scheduled</option>
+                <option value="demo-completed">Demo completed</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Scheduled date and time</span>
+              <input type="datetime-local" [(ngModel)]="activityWhen">
+            </label>
+            <label class="field activity-details-field">
+              <span>Activity details</span>
+              <textarea [(ngModel)]="activityNote" maxlength="2000" rows="3" placeholder="Add details for this activity"></textarea>
+            </label>
+            <button class="action-btn action-btn--primary record-activity-button" type="button" [disabled]="busy || activityNote.trim().length < 2" (click)="addActivity()">{{ busy ? 'Recording...' : 'Record Activity' }}</button>
+          </div>
+
+          <div class="activity-history">
+            <h4>Activity history</h4>
+            @for (item of lead.activities || []; track item.id) {
+              <article class="activity-entry">
+                <span class="activity-marker" aria-hidden="true"></span>
+                <div class="activity-entry-content">
+                  <div class="activity-entry-heading">
+                    <strong>{{ statusLabel(item.kind) }}</strong>
+                    <time [attr.datetime]="item.createdAt">{{ item.createdAt | date:'medium' }}</time>
+                  </div>
+                  <p>{{ item.note }}</p>
+                  @if (item.scheduledAt) { <span class="activity-scheduled">Scheduled {{ item.scheduledAt | date:'medium' }}</span> }
+                </div>
+              </article>
+            } @empty {
+              <p class="activity-empty">No activity recorded yet.</p>
+            }
+          </div>
+        </section>
+      </div>
+    </aside>
+  </div>
+}
 <nav class="pagination-bar" role="navigation" aria-label="Leads pagination"><span>Page {{store.leadPage()}} of {{pageCount()}} · {{store.leadTotal()}} matching leads</span><div class="pagination-actions"><button class="action-btn" [disabled]="store.leadPage() <= 1" (click)="page(-1)">Previous</button><button class="action-btn" [disabled]="store.leadPage() >= pageCount()" (click)="page(1)">Next</button></div></nav>
 
 @if (editor; as values) { <app-sa-editor [title]="convertingId ? 'Create school and invite Headmaster' : editingId ? 'Edit lead' : 'Add lead'" [description]="convertingId ? 'The contact will receive a Headmaster invitation. The new school starts active.' : 'Track this prospective school.'" [fields]="convertingId ? conversionFields : fields" [values]="values" [busy]="busy" [error]="error" (saved)="save($event)" (cancelled)="editor = null" /> }

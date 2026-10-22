@@ -8,6 +8,7 @@ const {
   buildInvitationEmail,
   buildPasswordResetEmail,
   buildContactInquiryEmail,
+  buildDemoRequestAcknowledgementEmail,
   SYNCACADEMY_LOGO_CID,
   escapeHtml
 } = require('../dist/communication/email/email-templates');
@@ -51,6 +52,7 @@ test('buildInvitationEmail uses one clear activation message for school invites'
   assert.match(result.html, /#E87E24/);
   assert.match(result.html, new RegExp(`src="cid:${SYNCACADEMY_LOGO_CID}"`));
   assert.match(result.html, /alt="SyncAcademy"/);
+  assert.doesNotMatch(result.html, /height: 5px/);
   assert.match(result.html, /Welcome to SyncAcademy/);
   assert.match(
     result.html,
@@ -106,6 +108,7 @@ test('buildPasswordResetEmail generates valid HTML and backwards-compatible text
   assert.match(result.html, /https:\/\/syncacademy\.test\/auth\/reset#token=reset_token_xyz_789/);
   assert.match(result.html, /#E87E24/);
   assert.match(result.html, new RegExp(`src="cid:${SYNCACADEMY_LOGO_CID}"`));
+  assert.doesNotMatch(result.html, /height: 5px/);
 });
 
 test('buildContactInquiryEmail generates valid HTML and text', () => {
@@ -125,4 +128,19 @@ test('buildContactInquiryEmail generates valid HTML and text', () => {
   assert.match(result.html, /Hello, we would like to register 500 students\./);
   assert.match(result.html, /#E87E24/);
   assert.match(result.html, new RegExp(`src="cid:${SYNCACADEMY_LOGO_CID}"`));
+  assert.doesNotMatch(result.html, /height: 5px/);
+});
+
+test('buildDemoRequestAcknowledgementEmail uses the shared logo and preserves the request message', () => {
+  const result = buildDemoRequestAcknowledgementEmail({
+    contactName: 'Amina Mushi',
+    schoolName: 'Mlimani Primary School',
+  });
+
+  assert.equal(result.subject, 'SyncAcademy demo request received');
+  assert.match(result.text, /Your demo request for Mlimani Primary School has been received/);
+  assert.match(result.html, /Hello <strong>Amina Mushi<\/strong>/);
+  assert.match(result.html, /Mlimani Primary School/);
+  assert.match(result.html, new RegExp(`src="cid:${SYNCACADEMY_LOGO_CID}"`));
+  assert.doesNotMatch(result.html, /height: 5px/);
 });

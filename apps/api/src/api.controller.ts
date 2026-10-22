@@ -5,7 +5,7 @@ import { Prisma, Role } from '@prisma/client';
 import { z } from 'zod';
 import { PlatformService } from './platform.service';
 import { PublicFormProtectionService } from './public-form-protection.service';
-import { buildContactInquiryEmail, escapeHtml } from './communication/email/email-templates';
+import { buildContactInquiryEmail, buildDemoRequestAcknowledgementEmail, escapeHtml } from './communication/email/email-templates';
 import { encrypt } from './security';
 import { config } from './config';
 import { AuditCategory, AuditLogService, AuditSource, auditCategories } from './audit-log.service';
@@ -720,9 +720,8 @@ export class ApiController {
         headmasterName: b.headmasterName, headmasterEmail: b.headmasterEmail, headmasterPhone: b.headmasterPhone,
         preferredDemoMethod: b.preferredDemoMethod, requestMessage: b.requestMessage, source: 'website-demo-request', status: 'new' } });
       await tx.platformLeadActivity.create({ data: { leadId: lead.id, kind: 'website-submitted' } });
-      const text = `Hello ${b.contactName},\n\nYour demo request for ${b.schoolName} has been received. The SyncAcademy team will review it and contact you.\n\nSyncAcademy`;
-      await tx.outbox.create({ data: { payload: encrypt(JSON.stringify({ to: b.contactEmail, subject: 'SyncAcademy demo request received', text,
-        html: `<p>Hello ${escapeHtml(b.contactName)},</p><p>Your demo request for <strong>${escapeHtml(b.schoolName)}</strong> has been received. Our team will review it and contact you.</p><p>SyncAcademy</p>` })) } });
+      const acknowledgement = buildDemoRequestAcknowledgementEmail({ contactName: b.contactName, schoolName: b.schoolName });
+      await tx.outbox.create({ data: { payload: encrypt(JSON.stringify({ to: b.contactEmail, subject: acknowledgement.subject, text: acknowledgement.text, html: acknowledgement.html })) } });
       const internal = buildContactInquiryEmail({ fullName: b.contactName, emailAddress: b.contactEmail, phoneNumber: b.contactPhone, subject: `Demo request: ${b.schoolName}`, message: `School: ${b.schoolName}\nRegion: ${b.region}\nHeadmaster: ${b.headmasterName} (${b.headmasterEmail})\n${b.requestMessage}` });
       await tx.outbox.create({ data: { payload: encrypt(JSON.stringify({ to: recipient, subject: internal.subject, text: internal.text, html: internal.html })) } });
     });

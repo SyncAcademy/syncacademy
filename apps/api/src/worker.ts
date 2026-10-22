@@ -1,6 +1,7 @@
 import { hostname } from 'node:os';
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PrismaClient, CommunicationChannel, DeliveryStatus } from '@prisma/client';
 import { config } from './config';
@@ -241,18 +242,22 @@ async function main() {
             }
           } else {
             // EMAIL channel
-            const emailAttachments = payload.attachments || (job.invitationId || job.resetId ? [{
-              filename: 'syncacademy-logo.png',
-              path: resolve(process.cwd(), 'src/communication/email/syncacademy-logo.png'),
-              cid: SYNCACADEMY_LOGO_CID,
-            }] : undefined);
+            const emailAttachments = [...(payload.attachments || [])];
+            if (payload.html?.includes(`cid:${SYNCACADEMY_LOGO_CID}`)
+              && !emailAttachments.some((attachment: { cid?: string }) => attachment.cid === SYNCACADEMY_LOGO_CID)) {
+              emailAttachments.push({
+                filename: 'syncacademy-logo.png',
+                content: await readFile(resolve(process.cwd(), 'src/communication/email/syncacademy-logo.png')),
+                cid: SYNCACADEMY_LOGO_CID,
+              });
+            }
 
             result = await emailProvider.send({
               to: payload.to || payload.recipient,
               subject: payload.subject,
               text: payload.body || payload.text,
               html: payload.html,
-              attachments: emailAttachments,
+              attachments: emailAttachments.length ? emailAttachments : undefined,
               reference: job.id,
             });
           }

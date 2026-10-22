@@ -44,6 +44,39 @@ test('ResendEmailProvider - sends in mock mode with structured message result', 
   assert.ok(res.providerMessageId.startsWith('resend-mock-'));
 });
 
+test('ResendEmailProvider - sends inline image attachments with content IDs', async () => {
+  const provider = new ResendEmailProvider({
+    apiKey: 'test-api-key',
+    defaultFrom: 'notifications@syncacademy.co.tz',
+  });
+  const originalFetch = global.fetch;
+  let sentPayload;
+  global.fetch = async (_url, options) => {
+    sentPayload = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ id: 'email-with-inline-logo' }) };
+  };
+
+  try {
+    const res = await provider.send({
+      to: 'contact@example.com',
+      subject: 'Contact form',
+      text: 'A contact request was received.',
+      html: '<img src="cid:syncacademy-logo" alt="SyncAcademy">',
+      attachments: [{
+        filename: 'syncacademy-logo.png',
+        content: Buffer.from('png-content'),
+        cid: 'syncacademy-logo',
+      }],
+    });
+
+    assert.equal(res.status, 'DELIVERED');
+    assert.equal(sentPayload.attachments[0].content_id, 'syncacademy-logo');
+    assert.equal(sentPayload.attachments[0].content, Buffer.from('png-content').toString('base64'));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('CommunicationService - phone normalization for Tanzanian formats', () => {
   assert.equal(normalizePhoneNumber('0712345678'), '255712345678');
   assert.equal(normalizePhoneNumber('+255712345678'), '255712345678');

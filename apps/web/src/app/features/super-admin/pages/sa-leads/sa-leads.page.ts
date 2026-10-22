@@ -1,6 +1,6 @@
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Component, inject, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, HostListener, OnDestroy, inject, computed } from '@angular/core';
+import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { SaEditorComponent, EditorField } from '../../components/sa-editor.component';
@@ -13,8 +13,9 @@ import { SuperAdminStore, PlatformLead } from '../../super-admin.store';
   templateUrl: './sa-leads.page.html',
   styleUrls: ['./sa-leads.page.scss', '../../sa-workflows.scss'],
 })
-export class SaLeadsPage {
+export class SaLeadsPage implements OnDestroy {
   store = inject(SuperAdminStore);
+  private readonly document = inject(DOCUMENT);
   readonly timeSince = this.store.timeSince.bind(this.store);
 
   search = this.store.leadSearch;
@@ -68,8 +69,53 @@ export class SaLeadsPage {
   notice = '';
   editor: Record<string, any> | null = null;
   selected: PlatformLead | null = null;
+  private previousBodyOverflow: string | null = null;
   activityKind = 'note'; activityNote = ''; activityWhen = '';
-  async addActivity(): Promise<void> { if (!this.selected || this.busy || this.activityNote.trim().length < 2) return; this.busy = true; this.error = ''; try { const id = this.selected.id; await this.store.auth.request('POST', `platform/leads/${id}/activities`, { kind: this.activityKind, note: this.activityNote.trim(), ...(this.activityWhen ? { scheduledAt: new Date(this.activityWhen).toISOString() } : {}) }); await this.store.loadLeads(); this.selected = this.store.leads().find(lead => lead.id === id) ?? null; this.activityNote = ''; this.activityWhen = ''; this.notice = 'Activity recorded.'; } catch (e) { this.error = this.store.auth.error(e); } finally { this.busy = false; } }
+  openDetails(lead: PlatformLead): void {
+    if (!this.selected) {
+      this.previousBodyOverflow = this.document.body.style.overflow;
+      this.document.body.style.overflow = 'hidden';
+    }
+    this.selected = lead;
+  }
+  closeDetails(): void {
+    this.selected = null;
+    if (this.previousBodyOverflow !== null) {
+      this.document.body.style.overflow = this.previousBodyOverflow;
+      this.previousBodyOverflow = null;
+    }
+  }
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.selected) this.closeDetails();
+  }
+  ngOnDestroy(): void {
+    this.closeDetails();
+  }
+  async addActivity(): Promise<void> {
+    if (!this.selected || this.busy || this.activityNote.trim().length < 2) return;
+    this.busy = true;
+    this.error = '';
+    try {
+      const id = this.selected.id;
+      await this.store.auth.request('POST', `platform/leads/${id}/activities`, {
+        kind: this.activityKind,
+        note: this.activityNote.trim(),
+        ...(this.activityWhen ? { scheduledAt: new Date(this.activityWhen).toISOString() } : {}),
+      });
+      await this.store.loadLeads();
+      const refreshedLead = this.store.leads().find(lead => lead.id === id);
+      if (refreshedLead) this.selected = refreshedLead;
+      else this.closeDetails();
+      this.activityNote = '';
+      this.activityWhen = '';
+      this.notice = 'Activity recorded.';
+    } catch (e) {
+      this.error = this.store.auth.error(e);
+    } finally {
+      this.busy = false;
+    }
+  }
   fields: EditorField[] = [
     { key: 'schoolName', label: 'School name', required: true }, { key: 'contactName', label: 'Contact name', required: true },
     { key: 'schoolType', label: 'School type' }, { key: 'region', label: 'Region' }, { key: 'schoolWebsite', label: 'School website' }, { key: 'applicantPosition', label: 'Applicant position' },
