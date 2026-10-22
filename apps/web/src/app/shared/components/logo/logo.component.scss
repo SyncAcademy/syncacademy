@@ -11,7 +11,7 @@
     justify-content: center;
     background-color: $primary-orange;
     border-radius: 8px;
-    
+
     svg {
       width: 60%;
       height: 60%;
@@ -73,5 +73,11 @@
     .logo-text {
       font-size: 1.5rem;
     }
+  }
+
+  &.sm .logo-icon.circle,
+  &.md .logo-icon.circle,
+  &.lg .logo-icon.circle {
+    border-radius: 50%;
   }
 }

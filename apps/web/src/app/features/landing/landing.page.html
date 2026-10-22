@@ -1,9 +1,12 @@
 <div class="landing-page">
-  <!-- Hero Section Wrapper with Background -->
-  <div id="home" class="hero-wrapper">
-    <nav class="floating-navbar" [class.mobile-nav-visible]="mobileNavOpen()">
+  <nav
+    class="floating-navbar"
+    [class.is-scrolled]="isScrolled()"
+    [class.mobile-nav-visible]="mobileNavOpen()"
+    aria-label="Main navigation"
+  >
       <div class="logo">
-        <app-logo variant="dark" size="md"></app-logo>
+        <app-logo variant="dark" size="md" iconShape="circle"></app-logo>
       </div>
       <div class="nav-links desktop-only">
         <a href="#home" class="active">Home</a>
@@ -346,6 +349,8 @@
       </div>
     </nav>
 
+  <!-- Hero Section Wrapper with Background -->
+  <div id="home" class="hero-wrapper">
     <!-- 2. Hero Section (Left Aligned) -->
     <header class="hero left-aligned">
       <div class="hero-content">
@@ -409,7 +414,16 @@
     class="stats-counter-strip"
     aria-label="Sync Academy platform metrics"
   >
-    <div class="stats-container">
+    <div
+      id="stats-carousel-track"
+      class="stats-container mobile-carousel-track"
+      data-carousel="stats"
+      role="region"
+      aria-label="Sync Academy platform metrics"
+      [attr.aria-roledescription]="isMobileCarousel() ? 'carousel' : null"
+      [attr.tabindex]="isMobileCarousel() ? 0 : null"
+      (keydown)="onCarouselKeydown($event, 'stats')"
+    >
       <div *ngFor="let stat of statCounters()" class="stat-card">
         <div class="stat-icon-wrap" [ngClass]="'stat-' + stat.id">
           <!-- schools icon -->
@@ -475,6 +489,18 @@
           <div class="stat-sublabel">{{ stat.sublabel }}</div>
         </div>
       </div>
+    </div>
+    <div class="carousel-pagination" role="group" aria-label="Choose a statistic">
+      <button
+        *ngFor="let index of carouselItems.stats"
+        type="button"
+        class="carousel-indicator"
+        [class.is-active]="activeCarouselIndexes().stats === index"
+        [attr.aria-pressed]="activeCarouselIndexes().stats === index"
+        [attr.aria-label]="'Show statistic ' + (index + 1) + ' of ' + carouselItems.stats.length"
+        aria-controls="stats-carousel-track"
+        (click)="selectCarouselCard('stats', index)"
+      ></button>
     </div>
   </section>
 
@@ -716,7 +742,16 @@
       </div>
     </div>
 
-    <div class="grid-4 staggered-card-grid">
+    <div
+      id="solutions-carousel-track"
+      class="grid-4 staggered-card-grid mobile-carousel-track"
+      data-carousel="solutions"
+      role="region"
+      aria-label="School solutions"
+      [attr.aria-roledescription]="isMobileCarousel() ? 'carousel' : null"
+      [attr.tabindex]="isMobileCarousel() ? 0 : null"
+      (keydown)="onCarouselKeydown($event, 'solutions')"
+    >
       <div class="card">
         <div class="icon-wrapper">
           <svg
@@ -807,6 +842,18 @@
         </p>
       </div>
     </div>
+    <div class="carousel-pagination" role="group" aria-label="Choose a school solution">
+      <button
+        *ngFor="let index of carouselItems.solutions"
+        type="button"
+        class="carousel-indicator"
+        [class.is-active]="activeCarouselIndexes().solutions === index"
+        [attr.aria-pressed]="activeCarouselIndexes().solutions === index"
+        [attr.aria-label]="'Show solution ' + (index + 1) + ' of ' + carouselItems.solutions.length"
+        aria-controls="solutions-carousel-track"
+        (click)="selectCarouselCard('solutions', index)"
+      ></button>
+    </div>
   </section>
 
   <!-- Functional Modules -->
@@ -818,7 +865,16 @@
       connected to school-wide metrics in real time.
     </p>
 
-    <div class="grid-4 functional-grid staggered-card-grid">
+    <div
+      id="features-carousel-track"
+      class="grid-4 functional-grid staggered-card-grid mobile-carousel-track"
+      data-carousel="features"
+      role="region"
+      aria-label="SyncAcademy features"
+      [attr.aria-roledescription]="isMobileCarousel() ? 'carousel' : null"
+      [attr.tabindex]="isMobileCarousel() ? 0 : null"
+      (keydown)="onCarouselKeydown($event, 'features')"
+    >
       <!-- 1. Student Management -->
       <div class="card">
         <div class="icon-wrapper">
@@ -1006,6 +1062,18 @@
           logbooks.
         </p>
       </div>
+    </div>
+    <div class="carousel-pagination" role="group" aria-label="Choose a feature">
+      <button
+        *ngFor="let index of carouselItems.features"
+        type="button"
+        class="carousel-indicator"
+        [class.is-active]="activeCarouselIndexes().features === index"
+        [attr.aria-pressed]="activeCarouselIndexes().features === index"
+        [attr.aria-label]="'Show feature ' + (index + 1) + ' of ' + carouselItems.features.length"
+        aria-controls="features-carousel-track"
+        (click)="selectCarouselCard('features', index)"
+      ></button>
     </div>
   </section>
 
@@ -1238,7 +1306,7 @@
   >
     <div class="about-inner">
       <div class="about-intro">
-        <span class="section-label about-reveal">ABOUT SYNC ACADEMY</span>
+        <span class="section-label about-reveal">ABOUT SYNCACADEMY</span>
         <h2 id="about-heading" class="about-heading about-reveal">
           Building <span class="about-highlight">Smarter Schools</span>,
           Together.
@@ -1260,7 +1328,16 @@
         </p>
       </div>
 
-      <div class="about-card-grid">
+      <div
+        id="about-carousel-track"
+        class="about-card-grid mobile-carousel-track"
+        data-carousel="about"
+        role="region"
+        aria-label="About SyncAcademy"
+        [attr.aria-roledescription]="isMobileCarousel() ? 'carousel' : null"
+        [attr.tabindex]="isMobileCarousel() ? 0 : null"
+        (keydown)="onCarouselKeydown($event, 'about')"
+      >
         <article class="about-card about-reveal">
           <span class="about-card-icon" aria-hidden="true"
             ><svg
@@ -1332,6 +1409,24 @@
           </p>
         </article>
       </div>
+      <div
+        class="carousel-pagination"
+        role="group"
+        aria-label="Choose an About card"
+      >
+        <button
+          *ngFor="let index of carouselItems.about"
+          type="button"
+          class="carousel-indicator"
+          [class.is-active]="activeCarouselIndexes().about === index"
+          [attr.aria-pressed]="activeCarouselIndexes().about === index"
+          [attr.aria-label]="
+            'Show About card ' + (index + 1) + ' of ' + carouselItems.about.length
+          "
+          aria-controls="about-carousel-track"
+          (click)="selectCarouselCard('about', index)"
+        ></button>
+      </div>
     </div>
   </section>
 
@@ -1345,7 +1440,16 @@
         clearance matrix custom-fitted for every actor in your institution.
       </p>
 
-      <div class="grid-3 security-grid">
+      <div
+        id="roles-carousel-track"
+        class="grid-3 security-grid mobile-carousel-track"
+        data-carousel="roles"
+        role="region"
+        aria-label="School roles and permissions"
+        [attr.aria-roledescription]="isMobileCarousel() ? 'carousel' : null"
+        [attr.tabindex]="isMobileCarousel() ? 0 : null"
+        (keydown)="onCarouselKeydown($event, 'roles')"
+      >
         <div class="card security-card">
           <div class="icon-wrapper">
             <svg
@@ -1481,6 +1585,18 @@
             remarks, submit classroom documents, and log homework plans.
           </p>
         </div>
+      </div>
+      <div class="carousel-pagination" role="group" aria-label="Choose a school role">
+        <button
+          *ngFor="let index of carouselItems.roles"
+          type="button"
+          class="carousel-indicator"
+          [class.is-active]="activeCarouselIndexes().roles === index"
+          [attr.aria-pressed]="activeCarouselIndexes().roles === index"
+          [attr.aria-label]="'Show role ' + (index + 1) + ' of ' + carouselItems.roles.length"
+          aria-controls="roles-carousel-track"
+          (click)="selectCarouselCard('roles', index)"
+        ></button>
       </div>
     </div>
   </section>

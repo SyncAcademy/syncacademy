@@ -1,5 +1,5 @@
 import { requestErrorMessage } from '../../core/services/request-error';
-import { Component, OnDestroy, OnInit, HostListener, signal, computed, AfterViewInit, ElementRef, ViewChild } from '@angular/core';
+import { Component, OnDestroy, OnInit, HostListener, signal, computed, AfterViewInit, ElementRef, ViewChild, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -16,6 +16,7 @@ export interface HeroSlide {
 
 export type SchoolRole = 'leadership' | 'teachers' | 'bursar';
 type MobileNavSection = 'home' | 'features' | 'solutions' | 'services' | 'about' | 'contact';
+type LandingCarouselId = 'stats' | 'solutions' | 'features' | 'roles' | 'about';
 
 export interface RoleInfo {
   id: SchoolRole;
@@ -53,6 +54,7 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
   showScrollTop = signal(false);
   mobileNavOpen = signal(false);
   activeMobileNav = signal<MobileNavSection>('home');
+  isMobileCarousel = signal(false);
   private readonly mobileNavSections: MobileNavSection[] = ['home', 'features', 'solutions', 'services', 'about', 'contact'];
   @ViewChild('mobileNavToggle') private mobileNavToggle?: ElementRef<HTMLButtonElement>;
   @ViewChild('mobileNav') private mobileNav?: ElementRef<HTMLElement>;
@@ -60,8 +62,14 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
   private previousDocumentOverflow: string | null = null;
   private observer: IntersectionObserver | null = null;
   private statsObserver: IntersectionObserver | null = null;
+  private readonly carouselObservers: IntersectionObserver[] = [];
+  private scrollFrame: number | null = null;
+  private statsCarouselTrack: HTMLElement | null = null;
   private countersAnimated = false;
+  private navbarCap: SVGSVGElement | null = null;
+  private reducedMotionQuery: MediaQueryList | null = null;
 
+  isScrolled = signal(false);
   readonly statCounters = signal<StatCounter[]>([
     { id: 'schools', label: 'Partner Schools', sublabel: 'Campuses in system', target: 7, current: 0, suffix: '+' },
     { id: 'students', label: 'Active Students', sublabel: 'Managed profiles', target: 3200, current: 0, suffix: '+' },
@@ -70,6 +78,20 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
   ]);
 
   readonly activeRole = signal<SchoolRole>('leadership');
+  readonly carouselItems = {
+    stats: Array.from({ length: 4 }, (_, index) => index),
+    solutions: Array.from({ length: 4 }, (_, index) => index),
+    features: Array.from({ length: 8 }, (_, index) => index),
+    roles: Array.from({ length: 6 }, (_, index) => index),
+    about: Array.from({ length: 3 }, (_, index) => index)
+  };
+  readonly activeCarouselIndexes = signal<Record<LandingCarouselId, number>>({
+    stats: 0,
+    solutions: 0,
+    features: 0,
+    roles: 0,
+    about: 0
+  });
 
   readonly roleDataMap: Record<SchoolRole, RoleInfo> = {
     leadership: {
@@ -167,7 +189,7 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
   contactStatus = signal<'idle' | 'submitting' | 'success' | 'error'>('idle');
   contactMessage = signal<string>('');
 
-  constructor(private el: ElementRef, private http: HttpClient) {}
+  constructor(private el: ElementRef, private http: HttpClient, private zone: NgZone) {}
 
   async submitContactForm() {
     if (this.contactStatus() === 'submitting') return;
@@ -188,19 +210,46 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit() {
+    this.statsCarouselTrack = this.el.nativeElement.querySelector('[data-carousel="stats"]');
+    if (this.statsCarouselTrack) {
+      this.zone.runOutsideAngular(() => {
+        this.statsCarouselTrack?.addEventListener('scroll', this.handleStatsCarouselScroll, { passive: true });
+      });
+    }
+
+    this.navbarCap = this.el.nativeElement.querySelector('.floating-navbar > .logo app-logo .logo-icon svg');
+    this.reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    this.reducedMotionQuery.addEventListener('change', this.handleMotionPreferenceChange);
+    if (this.navbarCap && !this.reducedMotionQuery.matches) {
+      this.navbarCap.style.transformOrigin = 'center';
+      this.navbarCap.style.willChange = 'transform';
+    }
+
     if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       this.el.nativeElement.querySelector('.landing-page')?.classList.add('landing-motion-ready');
     }
-    this.observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('is-visible');
-        }
-      });
-    }, { threshold: 0.1 });
+    if ('IntersectionObserver' in window) {
+      this.observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+          }
+        });
+      }, { threshold: 0.1 });
 
-    const elements = this.el.nativeElement.querySelectorAll('.scroll-animate, .staggered-card-grid, .about-reveal');
-    elements.forEach((el: Element) => this.observer?.observe(el));
+      const elements = this.el.nativeElement.querySelectorAll('.scroll-animate, .staggered-card-grid, .about-reveal');
+      elements.forEach((el: Element) => this.observer?.observe(el));
+      this.observeCarouselCards();
+    } else {
+      this.el.nativeElement
+        .querySelectorAll('.scroll-animate, .staggered-card-grid, .about-reveal')
+        .forEach((element: Element) => element.classList.add('is-visible'));
+    }
+
+    this.zone.runOutsideAngular(() => {
+      window.addEventListener('scroll', this.handleWindowScroll, { passive: true });
+      this.handleWindowScroll();
+    });
 
     // The landing page is loaded lazily, after the browser's first hash jump.
     requestAnimationFrame(() => {
@@ -211,7 +260,7 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
     });
 
     const statsEl = this.el.nativeElement.querySelector('.stats-counter-strip');
-    if (statsEl) {
+    if (statsEl && 'IntersectionObserver' in window) {
       this.statsObserver = new IntersectionObserver((entries) => {
         if (entries[0]?.isIntersecting) {
           this.animateCounters();
@@ -219,6 +268,8 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
         }
       }, { threshold: 0.15 });
       this.statsObserver.observe(statsEl);
+    } else if (statsEl) {
+      this.animateCounters();
     }
   }
 
@@ -265,20 +316,87 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
     requestAnimationFrame(frame);
   }
 
-  @HostListener('window:scroll', [])
-  onWindowScroll() {
-    this.showScrollTop.set(window.scrollY > 200);
-    const activationLine = 140;
-    let activeSection: MobileNavSection = 'home';
-    for (const section of this.mobileNavSections) {
-      const element = document.getElementById(section);
-      if (element && element.getBoundingClientRect().top <= activationLine) activeSection = section;
-    }
-    this.activeMobileNav.set(activeSection);
+  private readonly handleWindowScroll = (): void => {
+    if (this.scrollFrame !== null) return;
+    this.scrollFrame = window.requestAnimationFrame(() => {
+      this.scrollFrame = null;
+      const scrollY = window.scrollY;
+      const showScrollTop = scrollY > 200;
+      const isScrolled = scrollY > 64;
+      if (this.navbarCap && !this.reducedMotionQuery?.matches) {
+        this.navbarCap.style.transform = `rotate(${scrollY * 1.2}deg)`;
+      }
+      let activeSection: MobileNavSection = 'home';
+      for (const section of this.mobileNavSections) {
+        const element = document.getElementById(section);
+        if (element && element.getBoundingClientRect().top <= 140) activeSection = section;
+      }
+
+      if (
+        this.showScrollTop() !== showScrollTop ||
+        this.isScrolled() !== isScrolled ||
+        this.activeMobileNav() !== activeSection
+      ) {
+        this.zone.run(() => {
+          if (this.showScrollTop() !== showScrollTop) this.showScrollTop.set(showScrollTop);
+          if (this.isScrolled() !== isScrolled) this.isScrolled.set(isScrolled);
+          if (this.activeMobileNav() !== activeSection) this.activeMobileNav.set(activeSection);
+        });
+      }
+    });
+  };
+
+  selectCarouselCard(carouselId: LandingCarouselId, index: number): void {
+    const track = this.el.nativeElement.querySelector(`[data-carousel="${carouselId}"]`) as HTMLElement | null;
+    const firstCard = track?.firstElementChild as HTMLElement | null;
+    const card = track?.children.item(index) as HTMLElement | null;
+    if (!track || !firstCard || !card) return;
+
+    this.activeCarouselIndexes.update(active => ({ ...active, [carouselId]: index }));
+    const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 'instant'
+      : 'smooth';
+    track.scrollTo({ left: card.offsetLeft - firstCard.offsetLeft, behavior });
   }
 
+  onCarouselKeydown(event: KeyboardEvent, carouselId: LandingCarouselId): void {
+    if (!this.isMobileCarousel()) return;
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    const direction = event.key === 'ArrowRight' ? 1 : -1;
+    const activeIndex = this.activeCarouselIndexes()[carouselId];
+    const nextIndex = Math.max(0, Math.min(this.carouselItems[carouselId].length - 1, activeIndex + direction));
+    if (nextIndex === activeIndex) return;
+
+    event.preventDefault();
+    this.selectCarouselCard(carouselId, nextIndex);
+  }
+
+  private readonly handleStatsCarouselScroll = (): void => {
+    const track = this.statsCarouselTrack;
+    const firstCard = track?.firstElementChild as HTMLElement | null;
+    if (!track || !firstCard) return;
+
+    const firstCardOffset = firstCard.offsetLeft;
+    const activeIndex = Array.from(track.children).reduce((closestIndex, child, index, cards) => {
+      const closestCard = cards[closestIndex] as HTMLElement;
+      const card = child as HTMLElement;
+      const closestDistance = Math.abs(closestCard.offsetLeft - firstCardOffset - track.scrollLeft);
+      const distance = Math.abs(card.offsetLeft - firstCardOffset - track.scrollLeft);
+      return distance < closestDistance ? index : closestIndex;
+    }, 0);
+
+    if (this.activeCarouselIndexes().stats !== activeIndex) {
+      this.zone.run(() => {
+        this.activeCarouselIndexes.update(active => ({ ...active, stats: activeIndex }));
+      });
+    }
+  };
+
   scrollToTop(): void {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 'instant'
+      : 'smooth';
+    window.scrollTo({ top: 0, behavior });
   }
 
   toggleMobileNav(): void {
@@ -343,9 +461,13 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
   }
 
   @HostListener('window:resize')
-  onResize(): void { if (window.innerWidth > 1024) this.closeMobileNav(false); }
+  onResize(): void {
+    this.isMobileCarousel.set(window.matchMedia('(max-width: 767.98px)').matches);
+    if (window.innerWidth > 1024) this.closeMobileNav(false);
+  }
 
   ngOnInit() {
+    this.isMobileCarousel.set(window.matchMedia('(max-width: 767.98px)').matches);
     const initialSection = this.mobileNavSections.find(section => section === window.location.hash.slice(1));
     if (initialSection) this.activeMobileNav.set(initialSection);
     document.documentElement.classList.add('landing-route');
@@ -413,12 +535,23 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
 
   ngOnDestroy() {
     this.restoreBodyScrolling();
+    window.removeEventListener('scroll', this.handleWindowScroll);
+    this.reducedMotionQuery?.removeEventListener('change', this.handleMotionPreferenceChange);
+    this.navbarCap = null;
+    this.reducedMotionQuery = null;
+    if (this.scrollFrame !== null) {
+      window.cancelAnimationFrame(this.scrollFrame);
+      this.scrollFrame = null;
+    }
+    this.statsCarouselTrack?.removeEventListener('scroll', this.handleStatsCarouselScroll);
+    this.statsCarouselTrack = null;
     if (this.slideIntervalId) {
       clearInterval(this.slideIntervalId);
       this.slideIntervalId = null;
     }
     this.observer?.disconnect();
     this.statsObserver?.disconnect();
+    this.carouselObservers.forEach(observer => observer.disconnect());
     document.documentElement.classList.remove('landing-route');
     document.body.classList.remove('landing-route');
   }
@@ -432,5 +565,41 @@ export class LandingPage implements OnInit, OnDestroy, AfterViewInit {
       document.documentElement.style.overflow = this.previousDocumentOverflow;
       this.previousDocumentOverflow = null;
     }
+  }
+
+  private readonly handleMotionPreferenceChange = (event: MediaQueryListEvent): void => {
+    if (!this.navbarCap) return;
+    if (event.matches) {
+      this.navbarCap.style.removeProperty('transform');
+      this.navbarCap.style.removeProperty('will-change');
+      return;
+    }
+    this.navbarCap.style.willChange = 'transform';
+    this.handleWindowScroll();
+  };
+
+  private observeCarouselCards(): void {
+    this.zone.runOutsideAngular(() => {
+      const tracks = this.el.nativeElement.querySelectorAll('[data-carousel]') as NodeListOf<HTMLElement>;
+      tracks.forEach(track => {
+        const carouselId = track.dataset['carousel'] as LandingCarouselId;
+        if (carouselId === 'stats') return;
+        const observer = new IntersectionObserver(entries => {
+          const mostVisible = entries
+            .filter(entry => entry.isIntersecting && entry.intersectionRatio >= 0.65)
+            .sort((first, second) => second.intersectionRatio - first.intersectionRatio)[0];
+          if (!mostVisible) return;
+
+          const index = Array.prototype.indexOf.call(track.children, mostVisible.target);
+          if (index < 0 || this.activeCarouselIndexes()[carouselId] === index) return;
+          this.zone.run(() => {
+            this.activeCarouselIndexes.update(active => ({ ...active, [carouselId]: index }));
+          });
+        }, { root: track, threshold: [0, 0.65, 0.8, 1] });
+
+        Array.from(track.children).forEach((card: Element) => observer.observe(card));
+        this.carouselObservers.push(observer);
+      });
+    });
   }
 }
