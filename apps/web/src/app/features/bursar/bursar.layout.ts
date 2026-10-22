@@ -41,6 +41,7 @@ export class BursarLayout implements OnInit {
 
   pageTitle = signal<string>('');
   pageBreadcrumb = signal<string>('Bursar');
+  menuOpen = false;
   showScrollTop = signal(false);
 
   constructor(

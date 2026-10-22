@@ -48,7 +48,7 @@
       </svg>
     </div>
 
-    @if (auth.identity()?.platformAdmin) { <a class="sidebar__nav-item" routerLink="/super-admin/schools">Back to platform schools</a> }
+    @if (auth.identity()?.platformAdmin) { <a class="sidebar__nav-item" routerLink="/super-admin/schools" (click)="$event.preventDefault(); navigateTo('/super-admin/schools')"><span class="sidebar__nav-label">Back to platform schools</span></a> }
     <!-- Navigation Sections -->
     <div class="sidebar__nav">
       <div class="sidebar__section" *ngFor="let section of navSections">
@@ -66,7 +66,7 @@
               [attr.href]="'assets/icons/sidebar-icons.svg#icon-' + item.icon"
             ></use>
           </svg>
-          {{ item.title }}
+          <span class="sidebar__nav-label">{{ item.title }}</span>
         </a>
       </div>
     </div>

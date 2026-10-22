@@ -40,6 +40,7 @@ export class SuperAdminLayout implements OnInit {
 
   pageTitle = signal<string>('');
   pageBreadcrumb = signal<string>('Super Admin');
+  menuOpen = false;
   showScrollTop = signal(false);
   showNotifications = signal(false);
 

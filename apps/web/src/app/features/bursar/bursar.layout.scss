@@ -20,6 +20,15 @@ ion-menu {
   --background: #{$sidebar-bg};
 }
 
+@include mobile {
+  ion-menu {
+    --width: min(65vw, 320px);
+    --max-width: min(65vw, 320px);
+    --sidebar-size: min(65vw, 320px);
+    --height: 100dvh;
+  }
+}
+
 ion-split-pane {
   --side-width: var(--sidebar-size, #{$sidebar-width});
   --side-max-width: var(--sidebar-size, #{$sidebar-width});

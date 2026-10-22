@@ -417,6 +417,58 @@
   .mobile-nav-brand { margin-inline: -20px; }
 }
 
+@media (max-width: 767.98px) {
+  .mobile-nav {
+    width: min(65vw, 320px);
+    padding-inline: 12px;
+  }
+
+  .mobile-nav-header {
+    margin-bottom: 16px;
+    padding-right: 0;
+  }
+
+  .mobile-nav-links {
+    a,
+    .mobile-nav-sign-in {
+      grid-template-columns: 20px minmax(0, 1fr) 16px;
+      gap: 8px;
+      padding-inline: 8px;
+      font-size: 0.875rem;
+    }
+
+    a > svg,
+    .mobile-nav-sign-in > svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    a .mobile-nav-chevron,
+    .mobile-nav-sign-in .mobile-nav-chevron {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  .mobile-nav-account a {
+    grid-template-columns: 20px minmax(0, 1fr) 16px;
+    gap: 8px;
+    padding-inline: 8px;
+    font-size: 0.875rem;
+  }
+
+  .mobile-nav-account a > svg,
+  .mobile-nav-account a .mobile-nav-chevron {
+    width: 20px;
+    height: 20px;
+  }
+
+  .mobile-nav-brand {
+    margin-inline: -12px;
+    padding-inline: 12px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .floating-navbar .mobile-nav-toggle .hamburger-line,
   .mobile-nav-overlay,

@@ -51,6 +51,7 @@ export class HeadmasterLayout implements OnInit {
 
   pageTitle = signal<string>('');
   pageBreadcrumb = signal<string>('Headmaster');
+  menuOpen = false;
   showScrollTop = signal(false);
 
   constructor(

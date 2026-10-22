@@ -447,3 +447,36 @@ details[open] > summary::after {
 
 
 
+ion-menu-button.mobile-menu-btn .mobile-menu-btn__icon {
+  width: 24px;
+  height: 24px;
+  overflow: visible;
+  color: currentColor;
+}
+
+ion-menu-button.mobile-menu-btn .mobile-menu-btn__icon line {
+  transform-box: fill-box;
+  transform-origin: center;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+ion-menu-button.mobile-menu-btn.menu-open .mobile-menu-btn__icon line:first-child {
+  transform: translateY(6px) rotate(45deg);
+}
+
+ion-menu-button.mobile-menu-btn.menu-open .mobile-menu-btn__icon line:nth-child(2) {
+  opacity: 0;
+}
+
+ion-menu-button.mobile-menu-btn.menu-open .mobile-menu-btn__icon line:last-child {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ion-menu-button.mobile-menu-btn .mobile-menu-btn__icon line {
+    transition: none;
+  }
+}

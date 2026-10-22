@@ -34,3 +34,153 @@
     width: 100%;
   }
 }
+
+@mixin mobile-sidebar {
+  @include mobile {
+    :host {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .sidebar {
+      width: 100%;
+      max-width: 100%;
+      height: 100dvh;
+      max-height: 100dvh;
+    }
+
+    .sidebar__logo-area {
+      padding: calc(16px + env(safe-area-inset-top)) 10px 0;
+      margin-bottom: 12px;
+    }
+
+    .sidebar__logo {
+      gap: 8px;
+      max-width: 100%;
+    }
+
+    .sidebar__logo-icon {
+      width: 28px;
+      height: 28px;
+      flex: 0 0 28px;
+    }
+
+    .sidebar__logo-text {
+      min-width: 0;
+      gap: 2px;
+      overflow: hidden;
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+
+    .sidebar__logo-sync {
+      flex: 0 0 auto;
+    }
+
+    .sidebar__logo-academy {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar__scrollable {
+      padding-right: 10px;
+      padding-left: calc(10px + env(safe-area-inset-left));
+    }
+
+    .sidebar__campus-selector {
+      box-sizing: border-box;
+      min-width: 0;
+      gap: 8px;
+      padding: 8px;
+      margin-bottom: 20px;
+      font-size: 0.75rem;
+    }
+
+    .sidebar__campus-selector > span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar__campus-icon,
+    .sidebar__chevron {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+    }
+
+    .sidebar__section {
+      margin-bottom: 18px;
+    }
+
+    .sidebar__section-label {
+      box-sizing: border-box;
+      width: 100%;
+      padding-left: 8px;
+      font-size: 0.7rem;
+    }
+
+    .sidebar__nav-item {
+      min-width: 0;
+      gap: 8px;
+      overflow: hidden;
+      padding: 9px 8px;
+      font-size: 0.8125rem;
+      white-space: nowrap;
+    }
+
+    .sidebar__nav-label {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar__nav-icon {
+      width: 18px;
+      height: 18px;
+      flex-basis: 18px;
+    }
+
+    .sidebar__bottom {
+      padding: 12px 10px calc(12px + env(safe-area-inset-bottom));
+    }
+
+    .sidebar__user {
+      min-width: 0;
+      gap: 8px;
+    }
+
+    .sidebar__user-avatar {
+      flex: 0 0 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .sidebar__user-info {
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .sidebar__user-name,
+    .sidebar__user-role {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar__logout-btn {
+      box-sizing: border-box;
+      min-width: 0;
+      gap: 7px;
+      padding: 8px;
+      overflow: hidden;
+      font-size: 0.75rem;
+      white-space: nowrap;
+    }
+  }
+}

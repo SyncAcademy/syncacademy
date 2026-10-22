@@ -76,12 +76,12 @@
 }
 
 .demo-intro app-logo {
-  --logo-academy-color: #fff;
+  --logo-academy-color: #003366;
 }
 
 .eyebrow {
   margin: clamp(36px, 6vh, 64px) 0 0;
-  color: rgba(255, 255, 255, 0.88);
+  color: #fff;
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -90,7 +90,7 @@
 .demo-intro h1 {
   max-width: 560px;
   margin: 14px 0 18px;
-  color: #fff;
+  color: #003366;
   font-size: clamp(2rem, 3vw, 2.6rem);
   font-weight: 700;
   line-height: 1.2;
@@ -228,8 +228,13 @@
   flex-direction: row !important;
   align-items: flex-start;
   gap: 10px !important;
-  margin: 12px 0 24px !important;
+  margin: 12px 0 !important;
   line-height: 1.5;
+}
+
+.consent-error {
+  display: block;
+  margin: 0 0 12px;
 }
 
 .consent input {

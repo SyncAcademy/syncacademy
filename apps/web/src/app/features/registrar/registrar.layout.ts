@@ -41,6 +41,7 @@ export class RegistrarLayout implements OnInit {
 
   pageTitle = signal<string>('');
   pageBreadcrumb = signal<string>('Registrar');
+  menuOpen = false;
   showScrollTop = signal(false);
 
   constructor(

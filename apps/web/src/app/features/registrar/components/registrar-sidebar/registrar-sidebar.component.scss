@@ -1,4 +1,5 @@
 @use 'variables' as *;
+@use 'mixins' as *;
 
 :host {
   display: block;
@@ -248,3 +249,5 @@
     }
   }
 }
+
+@include mobile-sidebar;

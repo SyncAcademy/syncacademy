@@ -6,6 +6,8 @@
       menuId="bursar-menu"
       type="overlay"
       [swipeGesture]="true"
+      (ionWillOpen)="menuOpen = true"
+      (ionWillClose)="menuOpen = false"
     >
       <app-bursar-sidebar></app-bursar-sidebar>
     </ion-menu>
@@ -16,7 +18,18 @@
       <ion-header class="ion-no-border">
         <header class="bursar-header">
           <div class="bursar-header__left">
-            <ion-menu-button menu="bursar-menu" class="mobile-menu-btn"></ion-menu-button>
+            <ion-menu-button
+              menu="bursar-menu"
+              class="mobile-menu-btn"
+              [class.menu-open]="menuOpen"
+              [attr.aria-label]="menuOpen ? 'Close navigation menu' : 'Open navigation menu'"
+            >
+              <svg class="mobile-menu-btn__icon" viewBox="0 0 24 24" aria-hidden="true">
+                <line x1="4" y1="6" x2="20" y2="6"></line>
+                <line x1="4" y1="12" x2="20" y2="12"></line>
+                <line x1="4" y1="18" x2="20" y2="18"></line>
+              </svg>
+            </ion-menu-button>
             <div class="bursar-header__titles">
               <p class="bursar-header__breadcrumb">{{ pageBreadcrumb() }}</p>
               <h1 class="global-page-title">{{ pageTitle() }}</h1>

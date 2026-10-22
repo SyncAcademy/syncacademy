@@ -43,6 +43,7 @@ export class AcademicLayout implements OnInit {
 
   pageTitle = signal<string>('');
   pageBreadcrumb = signal<string>('Academic');
+  menuOpen = false;
   showScrollTop = signal(false);
 
   constructor(

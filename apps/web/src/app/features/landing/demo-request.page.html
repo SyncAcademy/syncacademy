@@ -48,7 +48,7 @@
           </div>
           <label>Message or special requirements<textarea formControlName="requestMessage" rows="4" maxlength="2000"></textarea></label>
           <div class="trap" aria-hidden="true"><label>Leave this field empty<input formControlName="websiteField" tabindex="-1" autocomplete="off"></label></div>
-          <label class="consent"><input type="checkbox" formControlName="consent"> I agree that SyncAcademy may contact me about this request. *</label><small *ngIf="invalid('consent')">Please confirm your consent.</small>
+          <label class="consent"><input type="checkbox" formControlName="consent"> I agree that SyncAcademy may contact me about this request. *</label><small class="consent-error" *ngIf="invalid('consent')" aria-live="polite">Please confirm your consent.</small>
           @if (error()) { <p class="error-banner" role="alert">{{ error() }}</p> }
           <button class="submit-button" type="submit" [disabled]="busy()">{{ busy() ? 'Submitting Request...' : 'Submit Demo Request' }}</button>
         </form>
