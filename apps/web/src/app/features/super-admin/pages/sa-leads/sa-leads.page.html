@@ -3,84 +3,118 @@
 @if (notice) { <p class="portal-notice" role="status">{{notice}}</p> }
 <div class="section-header">
   <div>
+    <p class="eyebrow">Platform oversight</p>
     <h2>Leads Pipeline</h2>
     <p>Track and manage prospective school signups.</p>
   </div>
-  <button class="action-btn action-btn--primary" (click)="openLead()">+ Add Lead</button>
+  <button class="action-btn action-btn--primary add-lead-button" type="button" (click)="openLead()">+ Add Lead</button>
 </div>
 
-<!-- Pipeline Funnel -->
-<div class="pipeline-funnel">
+<section class="pipeline-section" aria-label="Lead pipeline stages">
+  <div class="pipeline-funnel">
   @for (stage of pipelineSummary(); track stage.key) {
-    <button class="funnel-stage" [class.active]="statusFilter() === stage.key" (click)="filter(statusFilter() === stage.key ? '' : stage.key, 'status')">
+    <button class="funnel-stage" type="button" [class.active]="statusFilter() === stage.key" [attr.aria-pressed]="statusFilter() === stage.key" (click)="filter(statusFilter() === stage.key ? '' : stage.key, 'status')">
       <strong>{{ stage.count }}</strong>
       <span>{{ stage.label }}</span>
     </button>
   }
-</div>
+  </div>
+</section>
 
-<div class="filters">
-  <input aria-label="Search leads..." placeholder="Search leads..." [ngModel]="search()" (ngModelChange)="filter($event, 'search')" />
-  <select aria-label="Status" [ngModel]="statusFilter()" (ngModelChange)="filter($event, 'status')">
-    <option value="">All statuses</option>
-    <option value="new">New</option>
-    <option value="contacted">Contacted</option>
-    <option value="demo-scheduled">Demo Scheduled</option>
-    <option value="demo-done">Demo Done</option>
-    <option value="negotiation">Negotiation</option>
-    <option value="won">Won</option>
-    <option value="lost">Lost</option>
-  </select>
-  <select aria-label="Lead source" [ngModel]="sourceFilter()" (ngModelChange)="filter($event, 'source')">
-    <option value="">All sources</option>
-    <option value="website">Website</option>
-    <option value="website-demo-request">Website Demo Request</option>
-    <option value="social">Social Media</option>
-    <option value="friend-relative">Friend or Relative</option>
-    <option value="referral">Referral</option>
-    <option value="event">Event</option>
-    <option value="cold-outreach">Cold Outreach</option>
-    <option value="other">Other</option>
-  </select>
-  <label>From <input type="date" [ngModel]="store.leadFrom()" (ngModelChange)="store.leadFrom.set($event); store.leadPage.set(1); store.loadLeads()"></label>
-  <label>To <input type="date" [ngModel]="store.leadTo()" (ngModelChange)="store.leadTo.set($event); store.leadPage.set(1); store.loadLeads()"></label>
-</div>
+<section class="filter-panel" aria-label="Filter leads">
+  <div class="filter-heading">
+    <div>
+      <h3>Find a Lead</h3>
+      <p>Search and refine the schools in your pipeline.</p>
+    </div>
+    <button class="text-button" type="button" (click)="clearFilters()">Clear filters</button>
+  </div>
 
-<section class="panel">
-  <div class="table-scroll">
+  <div class="filters">
+    <label class="field field--search">
+      <span>Search leads</span>
+      <input type="search" aria-label="Search leads" placeholder="School, contact, email or location" [ngModel]="search()" (ngModelChange)="filter($event, 'search')" />
+    </label>
+    <label class="field">
+      <span>Status</span>
+      <select aria-label="Status" [ngModel]="statusFilter()" (ngModelChange)="filter($event, 'status')">
+        <option value="">All statuses</option>
+        <option value="new">New</option>
+        <option value="contacted">Contacted</option>
+        <option value="demo-scheduled">Demo Scheduled</option>
+        <option value="demo-done">Demo Done</option>
+        <option value="negotiation">Negotiation</option>
+        <option value="won">Won</option>
+        <option value="lost">Lost</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>Source</span>
+      <select aria-label="Lead source" [ngModel]="sourceFilter()" (ngModelChange)="filter($event, 'source')">
+        <option value="">All sources</option>
+        <option value="website">Website</option>
+        <option value="website-demo-request">Website Demo Request</option>
+        <option value="social">Social Media</option>
+        <option value="friend-relative">Friend or Relative</option>
+        <option value="referral">Referral</option>
+        <option value="event">Event</option>
+        <option value="cold-outreach">Cold Outreach</option>
+        <option value="other">Other</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>From</span>
+      <input type="date" [ngModel]="store.leadFrom()" (ngModelChange)="store.leadFrom.set($event); store.leadPage.set(1); store.loadLeads()" />
+    </label>
+    <label class="field">
+      <span>To</span>
+      <input type="date" [ngModel]="store.leadTo()" (ngModelChange)="store.leadTo.set($event); store.leadPage.set(1); store.loadLeads()" />
+    </label>
+  </div>
+</section>
+
+<section class="panel leads-panel" aria-label="Leads">
+  <div class="table-scroll" role="region" aria-label="Scrollable leads table" tabindex="0">
     <table>
       <thead>
         <tr>
-          <th>School</th>
-          <th>Contact</th><th>Headmaster email</th><th>Submitted</th>
-          <th>Location</th>
-          <th>Students</th>
-          <th>Source</th>
-          <th>Status</th>
-          <th>Notes</th>
-          <th>Follow-up</th><th>Actions</th>
+          <th scope="col">School</th>
+          <th scope="col">Contact</th>
+          <th scope="col">Headmaster email</th>
+          <th scope="col">Submitted</th>
+          <th scope="col">Location</th>
+          <th scope="col">Students</th>
+          <th scope="col">Source</th>
+          <th scope="col">Status</th>
+          <th scope="col">Notes</th>
+          <th scope="col">Follow-up</th>
+          <th scope="col">Actions</th>
         </tr>
       </thead>
       <tbody>
         @for (l of filtered(); track l.id) {
           <tr>
-            <td><strong>{{ l.schoolName }}</strong></td>
-            <td>{{ l.contactName }}<span class="cell-sub">{{ l.contactEmail }} · {{ l.contactPhone }}</span></td><td>{{ l.headmasterEmail || 'Not provided' }}</td><td>{{ l.createdAt | date:'mediumDate' }}</td>
-            <td>{{ l.location }}</td>
-            <td>{{ l.studentCount | number }}</td>
-            <td><span class="source-pill">{{ sourceLabel(l.source) }}</span></td>
-            <td><span class="portal-pill" [attr.data-status]="l.status">{{ statusLabel(l.status) }}</span></td>
-            <td class="notes-cell">{{ l.notes }}</td>
-            <td>{{ l.owner || 'Unassigned' }}<span class="cell-sub">{{ l.followUp || 'No follow-up set' }}</span></td><td><div class="row-actions"><button class="action-btn" (click)="selected = l">Details</button><button class="action-btn" (click)="openLead(l)">Edit</button>@if (l.status === 'won' && !l.convertedSchoolId) { <button class="action-btn" (click)="openConversion(l)">Approve &amp; onboard</button> } @if (l.convertedSchoolId) { <a [href]="'/workspace?school=' + l.convertedSchoolId">View school</a> }</div></td>
+            <td data-label="School"><strong>{{ l.schoolName }}</strong></td>
+            <td data-label="Contact">{{ l.contactName }}<span class="cell-sub">{{ l.contactEmail }} · {{ l.contactPhone }}</span></td>
+            <td data-label="Headmaster email">{{ l.headmasterEmail || 'Not provided' }}</td>
+            <td data-label="Submitted">{{ l.createdAt | date:'mediumDate' }}</td>
+            <td data-label="Location">{{ l.location }}</td>
+            <td data-label="Students">{{ l.studentCount | number }}</td>
+            <td data-label="Source"><span class="source-pill">{{ sourceLabel(l.source) }}</span></td>
+            <td data-label="Status"><span class="portal-pill" [attr.data-status]="l.status">{{ statusLabel(l.status) }}</span></td>
+            <td data-label="Notes" class="notes-cell">{{ l.notes || 'No notes' }}</td>
+            <td data-label="Follow-up">{{ l.owner || 'Unassigned' }}<span class="cell-sub">{{ l.followUp || 'No follow-up set' }}</span></td>
+            <td data-label="Actions"><div class="row-actions"><button class="action-btn" type="button" (click)="selected = l">Details</button><button class="action-btn" type="button" (click)="openLead(l)">Edit</button>@if (l.status === 'won' && !l.convertedSchoolId) { <button class="action-btn" type="button" (click)="openConversion(l)">Approve &amp; onboard</button> } @if (l.convertedSchoolId) { <a [href]="'/workspace?school=' + l.convertedSchoolId">View school</a> }</div></td>
           </tr>
         } @empty {
-          <tr><td colspan="11">No leads match your filters.</td></tr>
+          <tr class="empty-row"><td colspan="11"><div class="empty-state"><strong>No leads found</strong><span>Try changing your search or filters.</span></div></td></tr>
         }
       </tbody>
     </table>
   </div>
 </section>
+
 @if (selected; as lead) { <section class="panel" aria-label="Lead details"><div class="section-header"><h2>{{ lead.schoolName }}</h2><button class="action-btn" (click)="selected = null">Close</button></div><p><strong>School:</strong> {{ lead.schoolType || 'Unspecified' }} · {{ lead.location }}, {{ lead.region || lead.location }} · {{ lead.studentCount | number }} students</p><p><strong>Website:</strong> {{ lead.schoolWebsite || 'Not provided' }}</p><p><strong>Applicant:</strong> {{ lead.contactName }} · {{ lead.applicantPosition || 'Position not provided' }} · {{ lead.contactEmail }} · {{ lead.contactPhone }}</p><p><strong>Headmaster:</strong> {{ lead.headmasterName || 'Not provided' }} · {{ lead.headmasterEmail || 'Not provided' }} · {{ lead.headmasterPhone || 'No phone' }}</p><p><strong>Demo:</strong> {{ lead.preferredDemoMethod || 'No preference' }} · {{ statusLabel(lead.status) }}</p><p><strong>Request:</strong> {{ lead.requestMessage || 'None' }}</p><p><strong>Internal notes:</strong> {{ lead.notes || 'None' }}</p><p><strong>Assigned:</strong> {{ lead.owner || 'Unassigned' }} · <strong>Follow-up:</strong> {{ lead.followUp || 'Not set' }}</p><p><strong>Submitted:</strong> {{ lead.createdAt | date:'medium' }}</p><p><strong>Onboarding:</strong> {{ lead.convertedSchoolId ? 'School created' : 'Pending' }}</p><h3>Activity</h3><div class="filters"><label>Type <select [(ngModel)]="activityKind"><option value="note">Internal note</option><option value="contacted">Contact attempt</option><option value="demo-scheduled">Demo scheduled</option><option value="demo-completed">Demo completed</option></select></label><label>Scheduled time <input type="datetime-local" [(ngModel)]="activityWhen"></label><label>Details <input [(ngModel)]="activityNote" maxlength="2000"></label><button class="action-btn" [disabled]="busy || activityNote.trim().length < 2" (click)="addActivity()">Record activity</button></div>@for (item of lead.activities || []; track item.id) { <p><strong>{{ statusLabel(item.kind) }}</strong> · {{ item.createdAt | date:'medium' }}<span class="cell-sub">{{ item.note }} @if (item.scheduledAt) { · Scheduled {{ item.scheduledAt | date:'medium' }} }</span></p> } @empty { <p>No activity recorded yet.</p> }</section> }
-<div class="pagination-bar" role="navigation" aria-label="Leads pagination"><span>Page {{store.leadPage()}} of {{pageCount()}} · {{store.leadTotal()}} matching leads</span><div class="pagination-actions"><button class="action-btn" [disabled]="store.leadPage() <= 1" (click)="page(-1)">Previous</button><button class="action-btn" [disabled]="store.leadPage() >= pageCount()" (click)="page(1)">Next</button></div></div>
+<nav class="pagination-bar" role="navigation" aria-label="Leads pagination"><span>Page {{store.leadPage()}} of {{pageCount()}} · {{store.leadTotal()}} matching leads</span><div class="pagination-actions"><button class="action-btn" [disabled]="store.leadPage() <= 1" (click)="page(-1)">Previous</button><button class="action-btn" [disabled]="store.leadPage() >= pageCount()" (click)="page(1)">Next</button></div></nav>
 
 @if (editor; as values) { <app-sa-editor [title]="convertingId ? 'Create school and invite Headmaster' : editingId ? 'Edit lead' : 'Add lead'" [description]="convertingId ? 'The contact will receive a Headmaster invitation. The new school starts active.' : 'Track this prospective school.'" [fields]="convertingId ? conversionFields : fields" [values]="values" [busy]="busy" [error]="error" (saved)="save($event)" (cancelled)="editor = null" /> }

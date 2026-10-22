@@ -25,6 +25,7 @@ export class SaLeadsPage {
   readonly pageCount = computed(() => Math.max(1, Math.ceil(this.store.leadTotal() / 25)));
   private searchTimer?:ReturnType<typeof setTimeout>;
   filter(value:string,kind:'search'|'status'|'source'){(kind==='search'?this.search:kind==='status'?this.statusFilter:this.sourceFilter).set(value);this.store.leadPage.set(1);clearTimeout(this.searchTimer);this.searchTimer=setTimeout(()=>void this.store.loadLeads().catch(e=>this.error=this.store.auth.error(e)),kind==='search'?250:0);}
+  clearFilters(): void { clearTimeout(this.searchTimer); this.search.set(''); this.statusFilter.set(''); this.sourceFilter.set(''); this.store.leadFrom.set(''); this.store.leadTo.set(''); this.store.leadPage.set(1); void this.store.loadLeads().catch(e=>this.error=this.store.auth.error(e)); }
   async page(change:number){this.store.leadPage.update(page=>Math.max(1,page+change));try{await this.store.loadLeads();}catch(e){this.error=this.store.auth.error(e);}}
 
   readonly pipelineSummary = computed(() => {
