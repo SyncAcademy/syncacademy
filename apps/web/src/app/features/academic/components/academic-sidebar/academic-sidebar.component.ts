@@ -18,6 +18,8 @@ export class AcademicSidebarComponent {
     { label: 'DASHBOARD', items: [{ title: 'Overview', route: '/academic/dashboard', icon: 'overview' }] },
     { label: 'ACADEMIC WORK', items: [
       { title: 'Classes & Subjects', route: '/academic/classes-subjects', icon: 'academics' },
+      { title: 'Class Lists', route: '/academic/class-lists', icon: 'students' },
+      { title: 'Student Directory', route: '/academic/students', icon: 'students' },
       { title: 'Student Subjects', route: '/academic/student-subjects', icon: 'students' },
       { title: 'Teachers', route: '/academic/teachers', icon: 'teachers' },
       { title: 'Marks Review', route: '/academic/marks-review', icon: 'approvals' },
