@@ -155,29 +155,33 @@ Configure these variables in the production secret manager (never commit to Git)
 | `PORT` | Yes | `3000` |
 | `APP_ORIGIN` | Yes | `https://app.syncacademy.co.tz` |
 | `DATABASE_URL` | Yes | `postgresql://<user>:<pass>@<host>:5432/<db>?sslmode=require` |
-| `SESSION_SECRET` | Yes | Random 64-char hex string (`openssl rand -hex 32`) |
+| `SESSION_SECRET` | Yes | Random secret with at least 48 characters |
 | `DATA_ENCRYPTION_KEY` | Yes | Random 64-char hex string (`openssl rand -hex 32`) |
-| `COOKIE_SECURE` | Yes | `true` |
-| `SESSION_COOKIE_NAME` | No | `syncacademy_session` |
-| `SESSION_TTL_HOURS` | No | `168` |
+| `TRUST_PROXY_HOPS` | No | `0`; set only for a known proxy topology |
+| `TRUSTED_PROXY_CIDRS` | Required when proxy hops are trusted in production | Explicit comma-separated proxy CIDRs |
+| `REALTIME_TRANSPORT` | No | `postgres` for multi-instance Socket.IO invalidation |
+| `REALTIME_DATABASE_URL` | No | PostgreSQL URL used for realtime notifications when configured |
 | `SMTP_HOST` | Yes | Transactional email SMTP host |
 | `SMTP_PORT` | Yes | `587` or `465` |
-| `SMTP_SECURE` | No | `false` (587 STARTTLS) or `true` (465 TLS) |
-| `SMTP_USER` | Yes | Transactional email username |
-| `SMTP_PASS` | Yes | Transactional email password / API key |
-| `MAIL_FROM` | Yes | `no-reply@syncacademy.co.tz` |
-| `CONTACT_NOTIFICATION_EMAIL` | No | `support@syncacademy.co.tz` |
+| `SMTP_SECURE` | No | `false` for STARTTLS or `true` for TLS |
+| `SMTP_USER` | No | SMTP username when required by the provider |
+| `SMTP_PASSWORD` | No | SMTP password when required by the provider |
+| `MAIL_FROM` | Yes | Configured sender address |
+| `CONTACT_NOTIFICATION_EMAIL` | No | Configured public form notification recipient |
 | `WORKER_POLL_MS` | No | `5000` |
 | `MOCK_PAYMENT_PROVIDER` | No | `false`; set to `true` only for local development. Tests use the isolated mock provider automatically. Production rejects this setting and has no configured payment provider until a real gateway is integrated. |
+
+The administrator session cookie is fixed as `sa.sid`, HttpOnly and SameSite=Lax, and Secure in production. Platform administrators have a 15-minute idle limit and an 8-hour absolute limit; school-role session lifetime is separate. MFA secrets are encrypted with `DATA_ENCRYPTION_KEY`. This key must remain available and stable during deployment because existing encrypted values depend on it.
 
 ---
 
 ## 5. Release & Rollback Procedure
 
-1. **CI Gate (`.github/workflows/ci.yml`)**: Runs PostgreSQL 16 service container, `prisma:generate`, API tests, API build, and Web build.
-2. **Migration Step**: Run `npx prisma migrate deploy --schema apps/api/prisma/schema.prisma` before rolling out new API/worker containers.
-3. **Health Check**: Verify `GET /api/health` returns `200 OK` before shifting traffic.
-4. **Rollback**: Revert container image tag and Cloudflare Pages deployment to the previous green commit SHA.
+1. **CI Gate (`.github/workflows/ci.yml`)**: Runs PostgreSQL service tests, Prisma generation, API and web builds, and workflow checks.
+2. **Administrator authentication cutover**: Stop old API replicas before enabling administrator access on the new release; do not run old and new authentication versions together. Apply `npx prisma migrate deploy --schema apps/api/prisma/schema.prisma`, including the additive migration that revokes existing platform-admin sessions, then deploy all new API replicas before restoring traffic.
+3. **Health Check**: Verify `GET /api/v1/health/ready` returns `200 OK` before shifting traffic.
+4. **Administrator enrollment**: On first sign-in, complete authenticator enrollment and securely record the one-time recovery codes. Keep production HTTPS and the existing encryption key available. If all factors are lost, contact another active platform administrator; the application has no email-only reset or bypass.
+5. **Rollback**: Revert container image tag and Cloudflare Pages deployment to the previous green commit SHA only with administrator access disabled until the mandatory-MFA version is restored; the session-version migration is forward-only and old sessions remain revoked.
 
 ## 6. Current Implementation: System Health Verification and LAN Releases
 

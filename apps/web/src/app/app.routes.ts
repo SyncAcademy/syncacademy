@@ -10,6 +10,7 @@ export const routes:Routes=[
  {path:'r/:token',loadComponent:()=>import('./features/public/report-viewer.page').then(m=>m.ReportViewerPage)},
  {path:'auth/login',loadComponent:()=>import('./features/auth/pages/login/login.page').then(m=>m.LoginPage)},
  {path:'auth/sign-in/:role',loadComponent:()=>import('./features/auth/pages/login/login.page').then(m=>m.LoginPage)},
+ {path:'platform-access/login',loadComponent:()=>import('./features/platform-access/platform-admin-login.page').then(m=>m.PlatformAdminLoginPage)},
  ...['recover','reset','invitation','security'].map(mode=>({path:'auth/'+mode,loadComponent:auth,data:{mode}})),
  {path:'auth/register',redirectTo:'auth/invitation',pathMatch:'full'}, {path:'auth/forgot-password',redirectTo:'auth/recover',pathMatch:'full'}, {path:'auth',redirectTo:'auth/login',pathMatch:'full'},
  {path:'super-admin',canActivate:[authGuard],canActivateChild:[authGuard],data:{role:'SUPER_ADMIN'},loadChildren:()=>import('./features/super-admin/super-admin.routes').then(m=>m.SUPER_ADMIN_ROUTES)},

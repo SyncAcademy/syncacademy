@@ -1,0 +1,105 @@
+<app-auth-layout>
+  <section class="platform-auth" [attr.aria-busy]="busy()">
+    <app-logo variant="dark" size="md"></app-logo>
+    <div class="platform-auth__icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"></path>
+        <path d="m9 12 2 2 4-4"></path>
+      </svg>
+    </div>
+    <header class="platform-auth__header">
+      <h1>Platform Administration</h1>
+      @if (stage() === 'login') { <p>Sign in with your administrator account.</p> }
+      @if (stage() === 'password-change') { <p>Choose a new password before continuing with secure sign-in.</p> }
+      @if (stage() === 'enrollment') { <p>Set up an authenticator app to secure your administrator account.</p> }
+      @if (stage() === 'totp') { <p>Enter the six-digit code from your authenticator app.</p> }
+      @if (stage() === 'recovery-ack') { <p>Save your one-time recovery codes to finish sign-in.</p> }
+    </header>
+
+    @if (stage() === 'login') {
+      <form [formGroup]="passwordForm" (ngSubmit)="signIn()" class="platform-auth__form">
+        <label for="admin-email">Email address</label>
+        <input id="admin-email" type="email" formControlName="email" autocomplete="username" maxlength="254" required />
+        @if (passwordForm.controls.email.touched && passwordForm.controls.email.invalid) {
+          <p class="platform-auth__field-error">Enter a valid email address.</p>
+        }
+        <label for="admin-password">Password</label>
+        <div class="platform-auth__password">
+          <input id="admin-password" [type]="showPassword() ? 'text' : 'password'" formControlName="password" autocomplete="current-password" maxlength="128" required />
+          <button type="button" class="platform-auth__toggle" (click)="togglePassword()" [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'">
+            @if (showPassword()) { <span>Hide</span> } @else { <span>Show</span> }
+          </button>
+        </div>
+        @if (passwordForm.controls.password.touched && passwordForm.controls.password.invalid) {
+          <p class="platform-auth__field-error">Enter your password.</p>
+        }
+        <button class="platform-auth__submit" type="submit" [disabled]="passwordForm.invalid || busy()" [attr.aria-busy]="busy()">
+          {{ busy() ? 'Verifying…' : 'Continue securely' }}
+        </button>
+      </form>
+    }
+
+    @if (stage() === 'password-change') {
+      <form [formGroup]="replacementPasswordForm" (ngSubmit)="changePassword()" class="platform-auth__form">
+        <label for="admin-new-password">New password</label>
+        <input id="admin-new-password" type="password" formControlName="password" autocomplete="new-password" minlength="15" maxlength="128" required />
+        <label for="admin-confirm-password">Confirm new password</label>
+        <input id="admin-confirm-password" type="password" formControlName="confirm" autocomplete="new-password" maxlength="128" required />
+        <p class="platform-auth__hint">Use at least 15 characters. Your existing password policy is unchanged.</p>
+        <button class="platform-auth__submit" type="submit" [disabled]="replacementPasswordForm.invalid || busy()">Update password</button>
+      </form>
+    }
+
+    @if (stage() === 'enrollment') {
+      @if (setup(); as enrollment) {
+        <div class="platform-auth__setup">
+          <img [src]="enrollment.qr" alt="Authenticator app setup QR code" />
+          <p>Scan this QR code with your authenticator app, or enter the setup key manually.</p>
+          <code>{{ enrollment.secret }}</code>
+        </div>
+        <form [formGroup]="codeForm" (ngSubmit)="verify()" class="platform-auth__form">
+          <label for="setup-code">Six-digit verification code</label>
+          <input id="setup-code" type="text" inputmode="numeric" autocomplete="one-time-code" formControlName="code" pattern="[0-9]{6}" maxlength="6" required />
+          <button class="platform-auth__submit" type="submit" [disabled]="codeForm.invalid || busy()">Verify authenticator</button>
+        </form>
+      } @else {
+        <p role="status">Preparing your secure setup…</p>
+      }
+    }
+
+    @if (stage() === 'totp') {
+      @if (!recoveryMode()) {
+        <form [formGroup]="codeForm" (ngSubmit)="verify()" class="platform-auth__form">
+          <label for="totp-code">Authenticator code</label>
+          <input id="totp-code" type="text" inputmode="numeric" autocomplete="one-time-code" formControlName="code" pattern="[0-9]{6}" maxlength="6" required />
+          <button class="platform-auth__submit" type="submit" [disabled]="codeForm.invalid || busy()">Verify and sign in</button>
+        </form>
+        <button class="platform-auth__text-button" type="button" (click)="toggleRecovery()">Use a recovery code</button>
+      } @else {
+        <form [formGroup]="recoveryForm" (ngSubmit)="recover()" class="platform-auth__form">
+          <label for="recovery-code">One-time recovery code</label>
+          <input id="recovery-code" type="text" autocomplete="off" formControlName="code" minlength="20" maxlength="20" required />
+          <p class="platform-auth__hint">This code is consumed once and the account owner will be notified.</p>
+          <button class="platform-auth__submit" type="submit" [disabled]="recoveryForm.invalid || busy()">Use code and sign in</button>
+        </form>
+        <button class="platform-auth__text-button" type="button" (click)="toggleRecovery()">Use authenticator code</button>
+      }
+    }
+
+    @if (stage() === 'recovery-ack') {
+      <div class="platform-auth__codes">
+        <h2>Save your recovery codes</h2>
+        <p>Each code works once. Store them in a password manager. They cannot be displayed again.</p>
+        @if (recoveryCodes().length) {
+          <ul>@for (code of recoveryCodes(); track code) { <li><code>{{ code }}</code></li> }</ul>
+        } @else {
+          <p class="platform-auth__hint">Recovery codes were issued earlier in this challenge. If they were not saved, replace them after signing in using your current authenticator and password.</p>
+        }
+        <button class="platform-auth__submit" type="button" [disabled]="busy()" (click)="acknowledgeRecovery()">I saved my recovery codes</button>
+      </div>
+    }
+
+    @if (busy()) { <p class="platform-auth__status" role="status">Please wait while we verify your request.</p> }
+    @if (error()) { <p class="platform-auth__error" role="alert">{{ error() }}</p> }
+  </section>
+</app-auth-layout>

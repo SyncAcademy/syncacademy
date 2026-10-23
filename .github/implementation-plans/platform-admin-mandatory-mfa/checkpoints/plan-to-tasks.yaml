@@ -1,0 +1,186 @@
+# Plan-to-Tasks Traceability Checkpoint
+metadata:
+  generated: "2026-10-23"
+  source_plan: ".github/implementation-plans/platform-admin-mandatory-mfa/plan.md"
+  target_tasks: "Inline task breakdown in .github/implementation-plans/platform-admin-mandatory-mfa/plan.md"
+
+summary:
+  total_plan_items: 16
+  covered_plan_items: 16
+  missing_plan_items: 0
+  coverage_percentage: 100.0
+  total_tasks_generated: 17
+  orphan_tasks: 0
+  completed_tasks: 17
+  remaining_code_tasks: 0
+  execution_status: "complete; production staging checks remain a release gate"
+
+phases:
+  - phase_id: "Phase-1"
+    phase_name: "Setup and security contract"
+    items:
+      - item_id: "1.1"
+        description: "Record the confirmed runtime contract"
+        tasks: [{ task_id: "T001", description: "Record decisions and reconcile source-of-truth security contracts." }]
+        notes: "Decisions recorded in research.md."
+      - item_id: "1.2"
+        description: "Revoke pre-feature administrator sessions"
+        tasks: [{ task_id: "T002", description: "Add and rehearse one-time admin session-version migration." }]
+        notes: ""
+      - item_id: "1.3"
+        description: "Define restricted challenge/session state"
+        tasks: [{ task_id: "T003", description: "Define pending-admin challenge state separate from authenticated sessions." }]
+        notes: ""
+  - phase_id: "Phase-2"
+    phase_name: "User story 1 — Private administrator entry and password step"
+    items:
+      - item_id: "2.1"
+        description: "Remove public administrator discovery"
+        tasks: [{ task_id: "T004", description: "Remove SUPER_ADMIN from public UI/API role selection." }]
+        notes: ""
+      - item_id: "2.2"
+        description: "Add dedicated administrator login screen and route"
+        tasks: [{ task_id: "T005", description: "Add the unlinked dedicated Angular route and branded login UI." }]
+        notes: ""
+      - item_id: "2.3"
+        description: "Implement isolated administrator password verification"
+        tasks: [{ task_id: "T006", description: "Add isolated admin credential endpoint that issues only a restricted challenge." }]
+        notes: "Versioned /api/v1 endpoint selected."
+  - phase_id: "Phase-3"
+    phase_name: "User story 2 — Mandatory TOTP and first enrollment"
+    items:
+      - item_id: "3.1"
+        description: "Implement account-bound TOTP enrollment"
+        tasks: [{ task_id: "T007", description: "Implement encrypted, challenge-bound enrollment using existing TOTP/QR primitives." }]
+        notes: ""
+      - item_id: "3.2"
+        description: "Complete TOTP sign-in only after atomic verification"
+        tasks: [{ task_id: "T008", description: "Implement atomic replay prevention and final authenticated session creation." }]
+        notes: "15-minute idle and 8-hour absolute policy selected."
+      - item_id: "3.3"
+        description: "Complete enrollment only after recovery-code acknowledgment"
+        tasks: [{ task_id: "T009", description: "Implement UI states and require acknowledgment before finalizing the session." }]
+        notes: ""
+  - phase_id: "Phase-4"
+    phase_name: "User story 3 — Recovery and authenticator replacement"
+    items:
+      - item_id: "4.1"
+        description: "Implement password-plus-recovery-code sign-in and notification"
+        tasks: [{ task_id: "T010", description: "Consume recovery hashes once and issue audit/email notification." }]
+        notes: ""
+      - item_id: "4.2"
+        description: "Implement the selected authenticator replacement and lost-factor policy"
+        tasks: [{ task_id: "T011", description: "Require fresh password and current TOTP or unused recovery code; verify replacement, rotate recovery codes, notify, audit, and revoke sessions." }]
+        notes: "No automatic or email-only all-factor-loss bypass."
+  - phase_id: "Phase-5"
+    phase_name: "User story 4 — MFA assurance on every privileged path"
+    items:
+      - item_id: "5.1"
+        description: "Enforce admin assurance centrally across REST and realtime"
+        tasks: [{ task_id: "T012", description: "Enforce current MFA-assured platform identity on all REST and Socket.IO paths." }]
+        notes: ""
+      - item_id: "5.2"
+        description: "Preserve session, CSRF, logout, and account-status controls"
+        tasks: [{ task_id: "T013", description: "Apply approved admin session lifecycle and preserve school auth/password policy." }]
+        notes: "Preserve same-origin checks; apply the selected platform session limits."
+  - phase_id: "Phase-6"
+    phase_name: "Cross-cutting security, verification, and rollout"
+    items:
+      - item_id: "6.1"
+        description: "Add complete security audit and abuse controls"
+        tasks: [{ task_id: "T014", description: "Cover auth/MFA event audit, redaction, and abuse controls." }]
+        notes: ""
+      - item_id: "6.2"
+        description: "Document configuration and deployment order"
+        tasks: [{ task_id: "T015", description: "Document key/environment configuration and safe rollout." }]
+        notes: ""
+      - item_id: "6.3"
+        description: "Verify attack cases and school-auth regression"
+        tasks:
+          - { task_id: "T016", description: "Extend isolated-PostgreSQL auth, security, audit, and realtime tests." }
+          - { task_id: "T017", description: "Add frontend public/private route checks and run CI-equivalent validation." }
+        notes: ""
+
+missing_plan_items: []
+orphan_tasks: []
+upstream_trace:
+  - plan_item: "1.1"
+    source_requirements: ["REQ-003", "REQ-008", "REQ-009", "REQ-014"]
+    tasks: ["T001"]
+    full_trace: "REQ-003,REQ-008,REQ-009,REQ-014 → Phase-1.1 → T001"
+  - plan_item: "1.2"
+    source_requirements: ["REQ-008", "REQ-009"]
+    tasks: ["T002"]
+    full_trace: "REQ-008,REQ-009 → Phase-1.2 → T002"
+  - plan_item: "1.3"
+    source_requirements: ["REQ-004", "REQ-005", "REQ-008", "REQ-009"]
+    tasks: ["T003"]
+    full_trace: "REQ-004,REQ-005,REQ-008,REQ-009 → Phase-1.3 → T003"
+  - plan_item: "2.1"
+    source_requirements: ["REQ-001", "REQ-003", "REQ-013"]
+    tasks: ["T004"]
+    full_trace: "REQ-001,REQ-003,REQ-013 → Phase-2.1 → T004"
+  - plan_item: "2.2"
+    source_requirements: ["REQ-002", "REQ-001"]
+    tasks: ["T005"]
+    full_trace: "REQ-002,REQ-001 → Phase-2.2 → T005"
+  - plan_item: "2.3"
+    source_requirements: ["REQ-003", "REQ-004", "REQ-010", "REQ-012"]
+    tasks: ["T006"]
+    full_trace: "REQ-003,REQ-004,REQ-010,REQ-012 → Phase-2.3 → T006"
+  - plan_item: "3.1"
+    source_requirements: ["REQ-004", "REQ-005", "REQ-006", "REQ-010"]
+    tasks: ["T007"]
+    full_trace: "REQ-004,REQ-005,REQ-006,REQ-010 → Phase-3.1 → T007"
+  - plan_item: "3.2"
+    source_requirements: ["REQ-004", "REQ-006", "REQ-008", "REQ-009"]
+    tasks: ["T008"]
+    full_trace: "REQ-004,REQ-006,REQ-008,REQ-009 → Phase-3.2 → T008"
+  - plan_item: "3.3"
+    source_requirements: ["REQ-005", "REQ-006", "REQ-009"]
+    tasks: ["T009"]
+    full_trace: "REQ-005,REQ-006,REQ-009 → Phase-3.3 → T009"
+  - plan_item: "4.1"
+    source_requirements: ["REQ-007", "REQ-010", "REQ-011"]
+    tasks: ["T010"]
+    full_trace: "REQ-007,REQ-010,REQ-011 → Phase-4.1 → T010"
+  - plan_item: "4.2"
+    source_requirements: ["REQ-007", "REQ-008", "REQ-011"]
+    tasks: ["T011"]
+    full_trace: "REQ-007,REQ-008,REQ-011 → Phase-4.2 → T011"
+  - plan_item: "5.1"
+    source_requirements: ["REQ-003", "REQ-008", "REQ-009", "REQ-013"]
+    tasks: ["T012"]
+    full_trace: "REQ-003,REQ-008,REQ-009,REQ-013 → Phase-5.1 → T012"
+  - plan_item: "5.2"
+    source_requirements: ["REQ-008", "REQ-009", "REQ-012", "REQ-013", "REQ-014"]
+    tasks: ["T013"]
+    full_trace: "REQ-008,REQ-009,REQ-012,REQ-013,REQ-014 → Phase-5.2 → T013"
+  - plan_item: "6.1"
+    source_requirements: ["REQ-010", "REQ-011", "REQ-014"]
+    tasks: ["T014"]
+    full_trace: "REQ-010,REQ-011,REQ-014 → Phase-6.1 → T014"
+  - plan_item: "6.2"
+    source_requirements: ["REQ-006", "REQ-009", "REQ-014"]
+    tasks: ["T015"]
+    full_trace: "REQ-006,REQ-009,REQ-014 → Phase-6.2 → T015"
+  - plan_item: "6.3"
+    source_requirements: ["REQ-001", "REQ-002", "REQ-003", "REQ-004", "REQ-005", "REQ-006", "REQ-007", "REQ-008", "REQ-009", "REQ-010", "REQ-011", "REQ-012", "REQ-013", "REQ-014", "REQ-015"]
+    tasks: ["T016", "T017"]
+    full_trace: "REQ-001..REQ-015 → Phase-6.3 → T016,T017"
+
+validation:
+  passed: true
+  errors: []
+  warnings: []
+
+verification:
+  completed_on: "2026-10-23"
+  checks:
+    - "Prisma client generation and API TypeScript build passed."
+    - "PostgreSQL auth integration suite passed 43/43 tests on syncacademy_auth_test."
+    - "Migration verification confirmed platform-admin sessionVersion increments without changing school-only versions; test transaction rolled back."
+    - "API security-hardening passed 3/3, audit-log passed 5/5, and monitoring passed 2/2."
+    - "Web production build, TypeScript check, and all nine portal workflow checks passed."
+  production_release_gates:
+    - "Stage migration and verify HTTPS/Secure cookies, proxy trust, and no mixed old/new API replicas before administrator traffic is restored."

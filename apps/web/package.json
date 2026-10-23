@@ -17,6 +17,7 @@
     "test:class-teacher": "node scripts/check-class-teacher.mjs",
     "test:school-setup": "node scripts/check-school-setup.mjs",
     "test:super-admin": "node scripts/check-super-admin.mjs",
+    "test:platform-admin-auth": "node scripts/check-platform-admin-auth.mjs",
     "test:preloader": "node scripts/check-preloader.mjs",
     "test:monitoring": "node scripts/check-monitoring-browser.mjs"
   },

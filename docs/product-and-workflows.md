@@ -39,7 +39,7 @@ SyncAcademy separates **Global User Identity** (`User`) from **Tenant Authorizat
 
 | Role Enum | Role Title | Primary Portal Route | Core Responsibilities |
 |---|---|---|---|
-| `SUPER_ADMIN` | Platform Super Administrator | `/super-admin` | Onboard/suspend schools, convert leads, invite school admins, manage platform SMTP settings, and audit platform activity. |
+| `SUPER_ADMIN` | Platform Super Administrator | `/super-admin` after `/platform-access/login` | Sign in through the separate, manually entered administrator route with password and mandatory authenticator verification; then onboard/suspend schools, convert leads, invite school admins, manage platform SMTP settings, and audit platform activity. |
 | `SCHOOL_ADMIN` | School Administrator / Director | `/school-setup`, `/academic` | Configure school profile, academic years, terms, levels, classes, subjects, grading scales, staff invitations, and teacher assignments. |
 | `HEAD_TEACHER` | Headmaster / Principal | `/headmaster`, `/academic` | Executive oversight across academics, admissions, and finance; final approval (`HEADMASTER_APPROVED`) and publication of report cards; approval of fee adjustments. |
 | `REGISTRAR` | Admissions & Records Officer | `/registrar` | Manage applications, student admissions, CSV/Excel imports, guardian records, class enrollments, promotions, transfers, and certificates. |
@@ -66,6 +66,7 @@ SyncAcademy separates **Global User Identity** (`User`) from **Tenant Authorizat
 ## 4. End-to-End Portal Workflows
 
 ### 4.1 Super Admin Portal (`/super-admin`)
+- **Platform administrator sign-in**: The school-role login does not offer `SUPER_ADMIN`. Administrators use `/platform-access/login` directly, verify with an authenticator app, and acknowledge recovery codes during first enrollment. There is no remember-device option or public link to this route. An administrator session expires after 15 minutes of inactivity or 8 hours total.
 - **Current public demo intake**: Visitors use `/request-demo` to submit school, applicant, and designated Headmaster details. The request enters the existing Leads Pipeline as `new` with source `website-demo-request`; submission creates no school or account. A Super Admin progresses the lead to `won`, reviews its details, and converts it to a school with a single-use Headmaster invitation. Existing manually entered leads continue to use their contact as the invitation recipient when no separate Headmaster is recorded.
 - **Current public form security**: Contact and demo submissions share rolling email and IP limits. Super Admins inspect public form events and manage temporary IP restrictions in Public Form Security.
 - **School Onboarding & Leads Conversion**: Register a school or convert a won lead into an active `School` tenant and queue a single-use Headmaster invitation in one transaction.

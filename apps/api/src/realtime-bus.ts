@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { config } from './config';
 import { Database } from './database/database.service';
 
-export type Invalidation = { scope: 'platform' } | { scope: 'school'; schoolId: string; area: 'school' | 'academic'; yearId?: string };
+export type Invalidation = { scope: 'platform'; userId?: string } | { scope: 'school'; schoolId: string; area: 'school' | 'academic'; yearId?: string };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Metadata-only application event adapter. Each instance reauthorizes local sockets.
@@ -48,7 +48,7 @@ export class RealtimeBus implements OnModuleInit, OnModuleDestroy {
       try {
         const payload = JSON.parse(message.payload), event = payload.event;
         if (payload.instance === this.instance) return;
-        if (event?.scope === 'platform') this.deliver({ scope: 'platform' });
+        if (event?.scope === 'platform' && (event.userId === undefined || typeof event.userId === 'string')) this.deliver({ scope: 'platform', userId: event.userId });
         else if (event?.scope === 'school' && typeof event.schoolId === 'string' && uuid.test(event.schoolId) && ['school','academic'].includes(event.area)
           && (event.yearId === undefined || typeof event.yearId === 'string' && uuid.test(event.yearId))) {
           this.deliver({ scope: 'school', schoolId: event.schoolId, area: event.area, yearId: event.yearId });

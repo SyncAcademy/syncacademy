@@ -1,0 +1,148 @@
+# Spec-to-Plan Traceability Checkpoint
+metadata:
+  generated: "2026-10-23"
+  source_spec: "User-provided security audit and recovery specification"
+  target_plan: ".github/implementation-plans/platform-admin-mandatory-mfa/plan.md"
+
+summary:
+  total_requirements: 15
+  covered_requirements: 15
+  missing_requirements: 0
+  coverage_percentage: 100.0
+
+requirements:
+  - req_id: "REQ-001"
+    req_description: "Remove administrator entry from public role selection, navigation, sitemap, and public API role choices."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-2"
+      phase_name: "Private administrator entry and password step"
+      items: [{ item_id: "2.1", description: "Remove public administrator discovery" }, { item_id: "2.2", description: "Add dedicated administrator login screen and route" }]
+    notes: ""
+  - req_id: "REQ-002"
+    req_description: "Provide a dedicated manually entered administrator login and MFA/enrollment UI."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-2/Phase-3"
+      phase_name: "Dedicated UI and TOTP enrollment"
+      items: [{ item_id: "2.2", description: "Add dedicated administrator login screen and route" }, { item_id: "3.3", description: "Complete enrollment only after recovery-code acknowledgment" }]
+    notes: ""
+  - req_id: "REQ-003"
+    req_description: "Isolate admin password authentication and accept only enabled platform administrators."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-2"
+      phase_name: "Private administrator entry and password step"
+      items: [{ item_id: "2.3", description: "Implement isolated administrator password verification" }, { item_id: "5.1", description: "Enforce admin assurance centrally across REST and realtime" }]
+    notes: "Confirmed: use the active /api/v1 namespace."
+  - req_id: "REQ-004"
+    req_description: "Require TOTP for every new administrator login; deny password-only and trusted-device access."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-3"
+      phase_name: "Mandatory TOTP and first enrollment"
+      items: [{ item_id: "3.1", description: "Implement account-bound TOTP enrollment" }, { item_id: "3.2", description: "Complete TOTP sign-in only after atomic verification" }]
+    notes: ""
+  - req_id: "REQ-005"
+    req_description: "Require authenticated first enrollment, code confirmation, one-time recovery display, and acknowledgment."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-3"
+      phase_name: "Mandatory TOTP and first enrollment"
+      items: [{ item_id: "1.3", description: "Define restricted challenge/session state" }, { item_id: "3.1", description: "Implement account-bound TOTP enrollment" }, { item_id: "3.3", description: "Complete enrollment only after recovery-code acknowledgment" }]
+    notes: ""
+  - req_id: "REQ-006"
+    req_description: "Encrypt TOTP secrets, hash recovery codes, prevent replay/concurrent reuse, and limit attempts."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-3/Phase-4/Phase-6"
+      phase_name: "MFA secret and recovery security"
+      items: [{ item_id: "3.1", description: "Implement account-bound TOTP enrollment" }, { item_id: "3.2", description: "Complete TOTP sign-in only after atomic verification" }, { item_id: "6.1", description: "Add complete security audit and abuse controls" }]
+    notes: "Confirmed: reuse the existing AES-256-GCM DATA_ENCRYPTION_KEY."
+  - req_id: "REQ-007"
+    req_description: "Provide single-use recovery, notification, and owner-approved reset/replacement."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-4"
+      phase_name: "Recovery and authenticator replacement"
+      items: [{ item_id: "4.1", description: "Implement password-plus-recovery-code sign-in and notification" }, { item_id: "4.2", description: "Implement only the owner-approved reset/replacement workflow" }]
+    notes: "Confirmed: replacement requires fresh password plus current TOTP or unused recovery code; all-factor loss has no application bypass."
+  - req_id: "REQ-008"
+    req_description: "Require an MFA-assured platform session across every privileged REST and realtime path."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-5"
+      phase_name: "MFA assurance on every privileged path"
+      items: [{ item_id: "5.1", description: "Enforce admin assurance centrally across REST and realtime" }]
+    notes: ""
+  - req_id: "REQ-009"
+    req_description: "Separate pending challenges, rotate/expire/revoke sessions, and invalidate legacy admin sessions."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-1/Phase-5"
+      phase_name: "Security contract and privileged path enforcement"
+      items: [{ item_id: "1.2", description: "Revoke pre-feature administrator sessions" }, { item_id: "1.3", description: "Define restricted challenge/session state" }, { item_id: "5.2", description: "Preserve session, CSRF, logout, and account-status controls" }]
+    notes: "Session lifetimes require owner approval."
+  - req_id: "REQ-010"
+    req_description: "Apply IP/account abuse controls, generic errors, and challenge/replay protections."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-2/Phase-6"
+      phase_name: "Admin login and cross-cutting security"
+      items: [{ item_id: "2.3", description: "Implement isolated administrator password verification" }, { item_id: "6.1", description: "Add complete security audit and abuse controls" }]
+    notes: ""
+  - req_id: "REQ-011"
+    req_description: "Audit auth/MFA/recovery events without storing secrets."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-4/Phase-6"
+      phase_name: "Recovery and cross-cutting security"
+      items: [{ item_id: "4.1", description: "Implement password-plus-recovery-code sign-in and notification" }, { item_id: "6.1", description: "Add complete security audit and abuse controls" }]
+    notes: ""
+  - req_id: "REQ-012"
+    req_description: "Preserve the existing administrator password policy and password verifier."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-2/Phase-5"
+      phase_name: "Authentication and session enforcement"
+      items: [{ item_id: "2.3", description: "Implement isolated administrator password verification" }, { item_id: "5.2", description: "Preserve session, CSRF, logout, and account-status controls" }]
+    notes: ""
+  - req_id: "REQ-013"
+    req_description: "Preserve school staff authentication and school-specific authorization."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-2/Phase-5/Phase-6"
+      phase_name: "Public role preservation and regression gate"
+      items: [{ item_id: "2.1", description: "Remove public administrator discovery" }, { item_id: "5.1", description: "Enforce admin assurance centrally across REST and realtime" }, { item_id: "6.3", description: "Verify attack cases and school-auth regression" }]
+    notes: ""
+  - req_id: "REQ-014"
+    req_description: "Use secure deployment configuration, production HTTPS, and no production bypass."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-1/Phase-6"
+      phase_name: "Security contract and rollout"
+      items: [{ item_id: "1.1", description: "Record the confirmed runtime contract" }, { item_id: "6.2", description: "Document configuration and deployment order" }]
+    notes: ""
+  - req_id: "REQ-015"
+    req_description: "Pass automated security, regression, and build tests."
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase-6"
+      phase_name: "Cross-cutting verification"
+      items: [{ item_id: "6.3", description: "Verify attack cases and school-auth regression" }]
+    notes: ""
+
+missing_requirements: []
+orphan_plan_items: []
+validation:
+  passed: true
+  errors: []
+  warnings: []
+
+execution:
+  status: complete
+  completed_on: "2026-10-23"
+  evidence: "43/43 isolated PostgreSQL auth tests, focused API security/audit/monitoring tests, API and web builds, web typecheck, and all portal checks passed."
+  remaining_release_validation:
+    - "Stage the forward-only session-version migration and confirm HTTPS, Secure cookies, proxy trust, and replacement of all old API replicas before restoring administrator traffic."
+

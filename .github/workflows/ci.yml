@@ -97,6 +97,7 @@ jobs:
           npm run test:class-teacher --workspace=apps/web
           npm run test:school-setup --workspace=apps/web
           npm run test:super-admin --workspace=apps/web
+          npm run test:platform-admin-auth --workspace=apps/web
 
       - name: Run Frontend state & concurrency verification scripts
         run: |

@@ -24,7 +24,6 @@ import { LogoComponent } from '@shared/components/logo/logo.component';
 })
 export class LoginPage {
   readonly roleOptions = [
-    { value: 'SUPER_ADMIN', label: 'Platform administrator', detail: 'Manage schools and platform access.' },
     { value: 'HEADMASTER', label: 'Headmaster', detail: 'Lead your school and manage staff.' },
     { value: 'REGISTRAR', label: 'Registrar', detail: 'Manage admissions and student records.' },
     { value: 'ACADEMIC', label: 'Academic officer', detail: 'Oversee classes and academic progress.' },

@@ -3,7 +3,9 @@ const assert = require("node:assert/strict");
 const { spawn, spawnSync } = require("node:child_process");
 const { PrismaClient } = require("@prisma/client");
 const { authenticator } = require("otplib");
+const { io } = require("socket.io-client");
 const { randomUUID } = require("node:crypto");
+const { readFileSync } = require("node:fs");
 const path = require("node:path");
 require("dotenv").config({
   path: path.resolve(__dirname, "../../../.env"),
@@ -16,6 +18,7 @@ process.env.REALTIME_DATABASE_URL = url.toString();
 process.env.NODE_ENV = "test";
 process.env.PORT = "3101";
 process.env.REALTIME_TRANSPORT = "postgres";
+process.env.TRUSTED_PROXY_CIDRS = "";
 if (new URL(process.env.DATABASE_URL).pathname !== "/syncacademy_auth_test")
   throw new Error("Tests require isolated database");
 const db = new PrismaClient();
@@ -24,6 +27,7 @@ const {
   passwordMatches,
   encrypt,
   decrypt,
+  digest,
 } = require("../dist/security");
 const origin = process.env.APP_ORIGIN;
 const base = "http://localhost:3101/api/v1/";
@@ -32,6 +36,7 @@ let api;
 function client() {
   let cookie = "";
   return {
+    get cookie() { return cookie; },
     async call(method, route, body, headers = {}) {
       if (method === 'POST' && route === 'invitations/accept' && body) body = { acceptedTerms: true, acknowledgedPrivacy: true, ...body };
       const response = await fetch(base + route, {
@@ -62,7 +67,17 @@ function client() {
         rememberMe: false,
       });
     },
+    async platformLogin(email, password = strongPassword) {
+      return this.call("POST", "auth/platform/login", { email, password });
+    },
   };
+}
+async function waitForNextTotpStep() {
+  await new Promise((resolve) => setTimeout(resolve, 30000 - (Date.now() % 30000) + 50));
+}
+function sessionId(client) {
+  const value = decodeURIComponent(client.cookie.match(/sa\.sid=([^;]+)/)?.[1] || "");
+  return value.slice(2, value.lastIndexOf("."));
 }
 async function fixture(email, role, schoolId) {
   const user = await db.user.create({
@@ -87,8 +102,10 @@ async function invitationToken(id) {
 
 test(
   "PostgreSQL authentication and school workflow",
-  { timeout: 300000 },
+  { timeout: 600000 },
   async (t) => {
+    const isolated = await db.$queryRaw`SELECT current_database() AS name`;
+    assert.equal(isolated[0]?.name, "syncacademy_auth_test", "Authentication tests must connect only to the isolated database");
     const migrate = spawnSync(
       process.execPath,
       [
@@ -105,6 +122,15 @@ test(
     await db.$executeRawUnsafe(
       'TRUNCATE TABLE "PublicFormAttempt", "PublicFormBlock", "PlatformLeadActivity", "RegistryEvent", "Admission", "session", "Outbox", "Idempotency", "RateBucket", "AuditEvent", "Invitation", "PasswordReset", "TeachingAssignment", "Enrollment", "Student", "Classroom", "AcademicYear", "Membership", "School", "User" CASCADE',
     );
+    const legacyAdmin = await db.user.create({ data: { email: "legacy-version@example.test", name: "Legacy admin", passwordHash: await passwordHash(strongPassword), platformAdmin: true, sessionVersion: 6 } });
+    const legacySchoolUser = await db.user.create({ data: { email: "school-version@example.test", name: "School user", passwordHash: await passwordHash(strongPassword), sessionVersion: 6 } });
+    const migrationSql = readFileSync(path.resolve(__dirname, "../prisma/migrations/202610230001_platform_admin_mfa_session_revoke/migration.sql"), "utf8");
+    await db.$executeRawUnsafe(migrationSql);
+    assert.equal((await db.user.findUniqueOrThrow({ where: { id: legacyAdmin.id } })).sessionVersion, 7);
+    assert.equal((await db.user.findUniqueOrThrow({ where: { id: legacySchoolUser.id } })).sessionVersion, 6);
+    await db.user.deleteMany({ where: { id: { in: [legacyAdmin.id, legacySchoolUser.id] } } });
+    const appliedMigration = await db.$queryRaw`SELECT COUNT(*)::int AS count FROM "_prisma_migrations" WHERE migration_name = '202610230001_platform_admin_mfa_session_revoke' AND finished_at IS NOT NULL`;
+    assert.equal(appliedMigration[0]?.count, 1);
     api = spawn(
       process.execPath,
       [path.resolve(__dirname, "../dist/main.js")],
@@ -132,9 +158,14 @@ test(
           mustChangePassword: true,
         },
       });
+      let adminPassword = strongPassword;
+      let recoveryCodes = [];
+      let secondAdmin;
+      let secondAdminClient;
+      let secondRecoveryCodes = [];
       const c = client();
       await t.test(
-        "anonymous access and cross-origin writes rejected",
+        "same-origin checks reject missing, null, cross-origin and malformed writes",
         async () => {
           assert.equal((await c.call("GET", "schools")).status, 401);
           assert.equal(
@@ -148,87 +179,115 @@ test(
             ).status,
             403,
           );
+          for (const headers of [
+            { "X-Requested-With": "SyncAcademy", "Content-Type": "application/json" },
+            { Origin: "null", "X-Requested-With": "SyncAcademy", "Content-Type": "application/json" },
+            { Origin: origin, "Content-Type": "application/json" },
+            { Origin: origin, "X-Requested-With": "wrong", "Content-Type": "application/json" },
+            { Origin: origin, "X-Requested-With": "SyncAcademy", "Content-Type": "text/plain" },
+          ]) {
+            const response = await fetch(base + "auth/platform/login", {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ email: admin.email, password: strongPassword }),
+            });
+            assert.equal(response.status, 403);
+          }
+          const crossOriginRead = await fetch(base + "auth/me", { headers: { Origin: "https://attacker.example" } });
+          assert.equal(crossOriginRead.headers.get("access-control-allow-origin"), null);
+          assert.equal((await crossOriginRead.json()).statusCode, 401);
+          const forwarded = await client().call("POST", "auth/platform/login", { email: "proxy-test@example.test", password: strongPassword }, { "X-Forwarded-For": "198.51.100.99" });
+          assert.equal(forwarded.status, 401);
+          assert.equal(await db.rateBucket.count({ where: { key: digest("platform-login-fail-ip:198.51.100.99") } }), 0, "untrusted X-Forwarded-For must not override the request IP");
+          const legacyRole = await c.call("POST", "auth/login", { email: admin.email, password: strongPassword, role: "SUPER_ADMIN" });
+          assert.equal(legacyRole.status, 400);
         },
       );
       await t.test(
-        "login rotates session and requires password replacement and MFA",
+        "platform password verification is a restricted challenge and first enrollment is verified",
         async () => {
-          const signed = await c.login(
-            admin.email,
-            strongPassword,
-            "SUPER_ADMIN",
-          );
+          const unknown = await client().platformLogin("missing@example.test", strongPassword);
+          const badPassword = await client().platformLogin(admin.email, strongPassword + "-wrong");
+          assert.equal(unknown.status, 401);
+          assert.equal(badPassword.status, 401);
+          assert.equal(unknown.body.message, badPassword.body.message);
+          const schoolOnly = await db.user.create({
+            data: { email: "school-only@example.test", name: "School only", passwordHash: await passwordHash(strongPassword) },
+          });
+          assert.equal((await client().platformLogin(schoolOnly.email)).status, 401);
+          const signed = await c.platformLogin(admin.email);
           assert.equal(signed.status, 201);
-          assert.equal(signed.body.mustChangePassword, true);
-          assert.equal(signed.body.selectedRole, "SUPER_ADMIN");
+          assert.equal(signed.body.stage, "password-change");
+          assert.equal(signed.body.id, undefined);
           assert.match(signed.headers.get("set-cookie"), /HttpOnly/i);
-          assert.equal((await c.call("GET", "schools")).status, 403);
-          const changed = await c.call("POST", "auth/change-password", {
-            currentPassword: strongPassword,
-            password: strongPassword + "-new",
-          });
+          assert.equal((await c.call("GET", "auth/me")).status, 401);
+          assert.equal((await c.call("GET", "platform/summary")).status, 401);
+          assert.equal((await c.call("GET", "schools")).status, 401);
+          const changed = await c.call("POST", "auth/platform/password", { password: strongPassword + "-new" });
           assert.equal(changed.status, 201);
-          assert.equal(changed.body.mustChangePassword, false);
-          assert.equal((await c.call("GET", "schools")).status, 403);
-        },
-      );
-      let recoveryCodes = [];
-      await t.test(
-        "MFA setup, one-time codes and replay protection",
-        async () => {
-          const setup = await c.call("POST", "auth/mfa/setup", {});
-          assert.equal(setup.status, 201);
-          const code = authenticator.generate(setup.body.secret);
-          const verified = await c.call("POST", "auth/mfa/verify", {
-            code,
-            setup: true,
-          });
+          adminPassword += "-new";
+          assert.equal(changed.body.stage, "enrollment");
+          assert.ok(changed.body.secret);
+          assert.ok(changed.body.qr.startsWith("data:image/png;base64,"));
+          const enrollmentSecret = changed.body.secret;
+          const verified = await c.call("POST", "auth/platform/verify", { code: authenticator.generate(enrollmentSecret) });
           assert.equal(verified.status, 201);
+          assert.equal(verified.body.stage, "recovery-ack");
           recoveryCodes = verified.body.recoveryCodes;
           assert.equal(recoveryCodes.length, 8);
-          assert.equal((await c.call("GET", "schools")).status, 200);
-          const second = client();
-          assert.equal(
-            (
-              await second.login(
-                admin.email,
-                strongPassword + "-new",
-                "SUPER_ADMIN",
-              )
-            ).body.needsMfa,
-            true,
-          );
-          assert.equal(
-            (
-              await second.call("POST", "auth/mfa/verify", {
-                code,
-                setup: false,
-              })
-            ).status,
-            401,
-          );
-          assert.equal(
-            (
-              await second.call("POST", "auth/mfa/recovery", {
-                code: recoveryCodes[0],
-              })
-            ).status,
-            201,
-          );
-          const third = client();
-          await third.login(
-            admin.email,
-            strongPassword + "-new",
-            "SUPER_ADMIN",
-          );
-          assert.equal(
-            (
-              await third.call("POST", "auth/mfa/recovery", {
-                code: recoveryCodes[0],
-              })
-            ).status,
-            401,
-          );
+          assert.equal((await c.call("GET", "auth/me")).status, 401);
+          assert.equal((await c.call("GET", "platform/summary")).status, 401);
+          const enrolled = await db.user.findUniqueOrThrow({ where: { id: admin.id } });
+          assert.equal(decrypt(enrolled.mfaSecret), enrollmentSecret);
+          assert.ok(enrolled.mfaRecovery.every((hash) => !recoveryCodes.includes(hash)));
+          assert.equal(enrolled.mfaRecovery.length, 8);
+          const priorChallengeCookie = signed.cookie;
+          const completed = await c.call("POST", "auth/platform/acknowledge-recovery", {});
+          assert.equal(completed.status, 201);
+          assert.equal(completed.body.platformAdmin, true);
+          assert.notEqual(c.cookie, priorChallengeCookie, "MFA completion must rotate the challenge session");
+          assert.equal((await c.call("GET", "platform/summary")).status, 200);
+          assert.equal((await c.call("POST", "auth/mfa/setup", {})).status, 403);
+        },
+      );
+      await t.test(
+        "new administrator logins require TOTP and recovery codes are consumed atomically once",
+        async () => {
+          const totp = authenticator.generateSecret();
+          const adminRecord = await db.user.findUniqueOrThrow({ where: { id: admin.id } });
+          const code = authenticator.generate(decrypt(adminRecord.mfaSecret));
+          const pending = client();
+          assert.equal((await pending.platformLogin(admin.email, adminPassword)).body.stage, "totp");
+          assert.equal((await pending.call("GET", "platform/summary")).status, 401);
+          const wrong = authenticator.generate(totp);
+          assert.equal((await pending.call("POST", "auth/platform/verify", { code: wrong })).status, 401);
+          await waitForNextTotpStep();
+          const validCode = authenticator.generate(decrypt(adminRecord.mfaSecret));
+          const verified = await pending.call("POST", "auth/platform/verify", { code: validCode });
+          assert.equal(verified.status, 201);
+          assert.equal(verified.body.platformAdmin, true);
+          const concurrentA = client();
+          const concurrentB = client();
+          assert.equal((await concurrentA.platformLogin(admin.email, adminPassword)).body.stage, "totp");
+          assert.equal((await concurrentB.platformLogin(admin.email, adminPassword)).body.stage, "totp");
+          await waitForNextTotpStep();
+          const replayCode = authenticator.generate(decrypt(adminRecord.mfaSecret));
+          const results = await Promise.all([
+            concurrentA.call("POST", "auth/platform/verify", { code: replayCode }),
+            concurrentB.call("POST", "auth/platform/verify", { code: replayCode }),
+          ]);
+          assert.deepEqual(results.map((result) => result.status).sort(), [201, 401]);
+          const recoveryLogin = client();
+          assert.equal((await recoveryLogin.platformLogin(admin.email, adminPassword)).body.stage, "totp");
+          const recovered = await recoveryLogin.call("POST", "auth/platform/recovery", { code: recoveryCodes[0] });
+          assert.equal(recovered.status, 201);
+          assert.equal(recovered.body.platformAdmin, true);
+          const repeatedRecovery = client();
+          assert.equal((await repeatedRecovery.platformLogin(admin.email, adminPassword)).body.stage, "totp");
+          assert.equal((await repeatedRecovery.call("POST", "auth/platform/recovery", { code: recoveryCodes[0] })).status, 401);
+          const notices = await db.outbox.findMany({ where: { payload: { not: "" } }, select: { payload: true } });
+          assert.ok(notices.some((job) => JSON.parse(decrypt(job.payload)).text.includes("recovery code was used")));
+          assert.ok(await db.auditEvent.count({ where: { actorId: admin.id, action: 'PLATFORM_ADMIN_RECOVERY_CODE_USED' } }) > 0);
         },
       );
       await t.test(
@@ -294,7 +353,7 @@ test(
             password: strongPassword,
           });
           assert.equal(accepted.status, 201);
-          const secondAdmin = await db.user.findUniqueOrThrow({
+          secondAdmin = await db.user.findUniqueOrThrow({
             where: { email: "second-admin@example.test" },
           });
           assert.equal(secondAdmin.platformAdmin, true);
@@ -302,13 +361,17 @@ test(
             await db.membership.count({ where: { userId: secondAdmin.id } }),
             0,
           );
-          const login = await recipient.login(
-            "second-admin@example.test",
-            strongPassword,
-            "SUPER_ADMIN",
-          );
+          const login = await recipient.platformLogin("second-admin@example.test", strongPassword);
           assert.equal(login.status, 201);
-          assert.equal(login.body.needsMfaSetup, true);
+          assert.equal(login.body.stage, "enrollment");
+          const enrollment = await recipient.call("POST", "auth/platform/verify", { code: authenticator.generate(login.body.secret) });
+          assert.equal(enrollment.status, 201);
+          assert.equal(enrollment.body.stage, "recovery-ack");
+          secondRecoveryCodes = enrollment.body.recoveryCodes;
+          const activated = await recipient.call("POST", "auth/platform/acknowledge-recovery", {});
+          assert.equal(activated.status, 201);
+          assert.equal(activated.body.platformAdmin, true);
+          secondAdminClient = recipient;
           assert.equal(
             (
               await c.call("POST", "invitations/accept", {
@@ -374,6 +437,108 @@ test(
         );
         assert.equal(b.status, 201);
         schoolB = b.body.school;
+      });
+      await t.test("disabled administrator lifecycle revokes account-wide sessions, challenges and sockets", async () => {
+        assert.ok(secondAdmin && secondAdminClient);
+        await db.membership.create({ data: { schoolId: schoolA.id, userId: secondAdmin.id, role: "HEADMASTER" } });
+        const schoolSession = client();
+        assert.equal((await schoolSession.login(secondAdmin.email, strongPassword, "HEADMASTER")).status, 201);
+        assert.equal((await schoolSession.call("GET", `schools/${schoolA.id}/workspace`)).status, 200);
+        assert.equal((await schoolSession.call("GET", "platform/summary")).status, 403);
+        const legacyRoleSession = client();
+        assert.equal((await legacyRoleSession.login(secondAdmin.email, strongPassword, "HEADMASTER")).status, 201);
+        const legacySid = sessionId(legacyRoleSession);
+        const legacyRows = await db.$queryRaw`SELECT sess FROM "session" WHERE sid = ${legacySid}`;
+        const legacyData = typeof legacyRows[0].sess === "string" ? JSON.parse(legacyRows[0].sess) : legacyRows[0].sess;
+        legacyData.selectedRole = "SUPER_ADMIN";
+        legacyData.mfaVerified = true;
+        delete legacyData.platformMfaAssured;
+        await db.$executeRaw`UPDATE "session" SET sess = ${JSON.stringify(legacyData)}::json WHERE sid = ${legacySid}`;
+        assert.equal((await legacyRoleSession.call("GET", "platform/summary")).status, 401);
+
+        const idleSession = client();
+        assert.equal((await idleSession.platformLogin(secondAdmin.email, strongPassword)).body.stage, "totp");
+        const idleRecovery = await idleSession.call("POST", "auth/platform/recovery", { code: secondRecoveryCodes[0] });
+        assert.equal(idleRecovery.status, 201);
+        const sid = sessionId(idleSession);
+        const initialRows = await db.$queryRaw`SELECT sess FROM "session" WHERE sid = ${sid}`;
+        const initialSession = typeof initialRows[0].sess === "string" ? JSON.parse(initialRows[0].sess) : initialRows[0].sess;
+        const lastActivityAt = initialSession.lastActivityAt;
+        assert.ok(lastActivityAt > 0);
+        await idleSession.call("GET", "system-health");
+        const polledRows = await db.$queryRaw`SELECT sess FROM "session" WHERE sid = ${sid}`;
+        const polledSession = typeof polledRows[0].sess === "string" ? JSON.parse(polledRows[0].sess) : polledRows[0].sess;
+        assert.equal(polledSession.lastActivityAt, lastActivityAt, "polling must not slide administrator inactivity");
+        initialSession.lastActivityAt = Date.now() - 16 * 60000;
+        await db.$executeRaw`UPDATE "session" SET sess = ${JSON.stringify(initialSession)}::json WHERE sid = ${sid}`;
+        assert.equal((await idleSession.call("GET", "platform/summary")).status, 401);
+
+        const expired = client();
+        assert.equal((await expired.platformLogin(secondAdmin.email, strongPassword)).body.stage, "totp");
+        const expiredSid = sessionId(expired);
+        const expiredRows = await db.$queryRaw`SELECT sess FROM "session" WHERE sid = ${expiredSid}`;
+        const expiredSession = typeof expiredRows[0].sess === "string" ? JSON.parse(expiredRows[0].sess) : expiredRows[0].sess;
+        expiredSession.platformChallenge.expiresAt = Date.now() - 1;
+        await db.$executeRaw`UPDATE "session" SET sess = ${JSON.stringify(expiredSession)}::json WHERE sid = ${expiredSid}`;
+        assert.equal((await expired.call("POST", "auth/platform/recovery", { code: secondRecoveryCodes[1] })).status, 401);
+
+        const pending = client();
+        assert.equal((await pending.platformLogin(secondAdmin.email, strongPassword)).body.stage, "totp");
+        const socket = io("http://localhost:3101", {
+          path: "/socket.io",
+          transports: ["websocket"],
+          auth: { scope: "platform" },
+          extraHeaders: { Origin: origin, Cookie: secondAdminClient.cookie },
+          reconnection: false,
+        });
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("Platform socket did not connect")), 5000);
+          socket.once("connect", () => { clearTimeout(timeout); resolve(); });
+          socket.once("connect_error", (error) => { clearTimeout(timeout); reject(error); });
+        });
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("Platform socket was not authorized")), 5000);
+          socket.once("platform:ready", () => { clearTimeout(timeout); resolve(); });
+          socket.once("disconnect", reason => { clearTimeout(timeout); reject(new Error("Platform socket authorization failed: " + reason + ": " + logs.slice(-1000))); });
+        });
+        const socketDisconnected = new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("Disabled administrator socket remained connected: " + logs.slice(-1500))), 5000);
+          socket.once("disconnect", () => { clearTimeout(timeout); resolve(); });
+        });
+        assert.equal((await secondAdminClient.call("GET", "platform/summary")).status, 200);
+        const beforeDisable = await db.user.findUniqueOrThrow({ where: { id: secondAdmin.id } });
+        const disabled = await c.call("PATCH", `platform/admins/${secondAdmin.id}`, { enabled: false });
+        assert.equal(disabled.status, 200, JSON.stringify(disabled.body));
+        const afterDisable = await db.user.findUniqueOrThrow({ where: { id: secondAdmin.id } });
+        assert.equal(afterDisable.enabled, false);
+        assert.equal(afterDisable.platformAdmin, true);
+        assert.equal(afterDisable.sessionVersion, beforeDisable.sessionVersion + 1);
+        assert.equal((await secondAdminClient.call("GET", "platform/summary")).status, 401);
+        assert.equal((await schoolSession.call("GET", `schools/${schoolA.id}/workspace`)).status, 401);
+        assert.equal((await pending.call("POST", "auth/platform/recovery", { code: secondRecoveryCodes[1] })).status, 401);
+        assert.equal((await client().platformLogin(secondAdmin.email, strongPassword)).status, 401);
+        await socketDisconnected;
+        socket.close();
+        assert.ok(await db.auditEvent.count({ where: { actorId: admin.id, action: "PLATFORM_ADMIN_DISABLED", target: secondAdmin.id } }) > 0);
+        assert.ok(await db.auditEvent.count({ where: { action: "PLATFORM_ADMIN_SESSIONS_REVOKED", target: `${secondAdmin.id}:account-wide-access-change` } }) > 0);
+
+        const beforeEnableVersion = afterDisable.sessionVersion;
+        const enabled = await c.call("PATCH", `platform/admins/${secondAdmin.id}`, { enabled: true });
+        assert.equal(enabled.status, 200);
+        const afterEnable = await db.user.findUniqueOrThrow({ where: { id: secondAdmin.id } });
+        assert.equal(afterEnable.enabled, true);
+        assert.equal(afterEnable.platformAdmin, true);
+        assert.equal(afterEnable.sessionVersion, beforeEnableVersion + 1);
+        assert.equal((await secondAdminClient.call("GET", "platform/summary")).status, 401);
+        const freshAdmin = client();
+        assert.equal((await freshAdmin.platformLogin(secondAdmin.email, strongPassword)).body.stage, "totp");
+        assert.equal((await freshAdmin.call("GET", "platform/summary")).status, 401);
+        assert.equal((await freshAdmin.call("POST", "auth/platform/recovery", { code: secondRecoveryCodes[1] })).status, 201);
+        assert.equal((await freshAdmin.call("GET", "platform/summary")).status, 200);
+        secondAdminClient = freshAdmin;
+        const reenabledSchool = client();
+        assert.equal((await reenabledSchool.login(secondAdmin.email, strongPassword, "HEADMASTER")).status, 201);
+        assert.equal((await reenabledSchool.call("GET", `schools/${schoolA.id}/workspace`)).status, 200);
       });
       await t.test(
         "Super Admin can invite every supported school role",
@@ -1382,7 +1547,7 @@ test(
         assert.equal(results.filter(result => result.status === 201).length, 3);
         assert.equal(results.filter(result => result.status === 429).length, 2);
       });
-      await require('./realtime-platform.cjs')({ t, db, client, fixture, admin: c });
+      await require('./realtime-platform.cjs')({ t, db, client, fixture, admin: c, adminPassword, recoveryCodes, strongPassword });
       await t.test(
         "password recovery works for every supported role",
         async () => {
@@ -1470,6 +1635,15 @@ test(
                 400,
                 account.role,
               );
+              assert.equal((await r.login(account.email, nextPassword, "SUPER_ADMIN")).status, 400);
+              const challenge = await r.platformLogin(account.email, nextPassword);
+              assert.equal(challenge.status, 201);
+              assert.equal(challenge.body.stage, "totp");
+              assert.equal((await r.call("GET", "platform/summary")).status, 401);
+              await waitForNextTotpStep();
+              const signedIn = await r.call("POST", "auth/platform/verify", { code: authenticator.generate(decrypt(updated.mfaSecret)) });
+              assert.equal(signedIn.status, 201);
+              assert.equal(signedIn.body.platformAdmin, true);
             }
             if (account.role === "TEACHER") {
               await db.membership.updateMany({
@@ -1477,12 +1651,14 @@ test(
                 data: { active: true },
               });
             }
-            assert.equal(
-              (await client().login(account.email, nextPassword, account.role))
-                .status,
-              201,
-              account.role,
-            );
+            if (account.role !== "SUPER_ADMIN") {
+              assert.equal(
+                (await client().login(account.email, nextPassword, account.role))
+                  .status,
+                201,
+                account.role,
+              );
+            }
           }
           assert.equal((await registrar.call("GET", "auth/me")).status, 401);
         },
@@ -1614,6 +1790,31 @@ test(
       await t.test("logout revokes session", async () => {
         assert.equal((await head.call("POST", "auth/logout", {})).status, 201);
         assert.equal((await head.call("GET", "auth/me")).status, 401);
+      });
+      await t.test("administrator password and MFA challenges stop after five failures", async () => {
+        const passwordLocked = await db.user.create({
+          data: { email: "password-locked@example.test", name: "Password locked", passwordHash: await passwordHash(strongPassword), platformAdmin: true },
+        });
+        for (let attempt = 0; attempt < 5; attempt++) {
+          assert.equal((await client().platformLogin(passwordLocked.email, strongPassword + "-wrong")).status, 401);
+        }
+        assert.equal((await client().platformLogin(passwordLocked.email, strongPassword)).status, 429);
+
+        const secret = authenticator.generateSecret();
+        const mfaLocked = await db.user.create({
+          data: { email: "mfa-locked@example.test", name: "MFA locked", passwordHash: await passwordHash(strongPassword), platformAdmin: true, mfaSecret: encrypt(secret) },
+        });
+        const challenge = client();
+        assert.equal((await challenge.platformLogin(mfaLocked.email, strongPassword)).body.stage, "totp");
+        let invalidCode = authenticator.generate(authenticator.generateSecret());
+        while (authenticator.check(invalidCode, secret)) invalidCode = authenticator.generate(authenticator.generateSecret());
+        for (let attempt = 0; attempt < 5; attempt++) {
+          assert.equal((await challenge.call("POST", "auth/platform/verify", { code: invalidCode })).status, 401);
+        }
+        assert.equal((await challenge.call("GET", "auth/platform/challenge")).status, 401);
+        const anotherChallenge = client();
+        assert.equal((await anotherChallenge.platformLogin(mfaLocked.email, strongPassword)).status, 201);
+        assert.equal((await anotherChallenge.call("POST", "auth/platform/verify", { code: invalidCode })).status, 429);
       });
       await t.test(
         "rate limiting rejects repeated recovery attempts",

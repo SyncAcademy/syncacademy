@@ -5,6 +5,7 @@ import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 import { Database } from './database/database.service';
 import { AuditLogService } from './audit-log.service';
+import { RealtimeBus } from './realtime-bus';
 import { config } from './config';
 import { decrypt, digest, encrypt, passwordHash, passwordMatches, randomToken } from './security';
 import { buildInvitationEmail, buildPasswordResetEmail } from './communication/email/email-templates';
@@ -22,7 +23,7 @@ const invitationExpiryLabel = (minutes: number) => {
 @Injectable()
 export class PlatformService {
   private dummyHash = passwordHash(randomToken());
-  constructor(readonly db: Database, private readonly auditLog: AuditLogService) {}
+  constructor(readonly db: Database, private readonly auditLog: AuditLogService, private readonly realtime: RealtimeBus) {}
   async atomic<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try { return await this.db.$transaction(work, { isolationLevel: 'Serializable', timeout: 15000 }); }
@@ -39,34 +40,48 @@ export class PlatformService {
     const rows = await this.db.$queryRaw<{ count: number }[]>`INSERT INTO "RateBucket" (key, count, "expiresAt") VALUES (${digest(key)}, 1, ${expires}) ON CONFLICT (key) DO UPDATE SET count = CASE WHEN "RateBucket"."expiresAt" < NOW() THEN 1 ELSE "RateBucket".count + 1 END, "expiresAt" = CASE WHEN "RateBucket"."expiresAt" < NOW() THEN EXCLUDED."expiresAt" ELSE "RateBucket"."expiresAt" END RETURNING count`;
     if (rows[0].count > max) throw new HttpException('Too many attempts. Try again later.', 429);
   }
+  private async checkFailures(key: string, max: number) {
+    const rows = await this.db.$queryRaw<{ count: number }[]>`SELECT count FROM "RateBucket" WHERE key = ${digest(key)} AND "expiresAt" > NOW()`;
+    if ((rows[0]?.count ?? 0) >= max) throw new HttpException('Too many attempts. Try again later.', 429);
+  }
+  private async recordFailure(key: string, max = 5) { await this.rate(key, max, 900); }
   async user(req: Request, ready = true): Promise<User> {
     const id = req.session.userId;
-    if (!id || !req.session.selectedRole || !req.session.issuedAt || Date.now() - req.session.issuedAt > 7 * 86400000) throw new UnauthorizedException('Please sign in again and choose a role.');
+    const platformSession = req.session.selectedRole === 'SUPER_ADMIN';
+    const now = Date.now();
+    if (!id || !req.session.selectedRole || !req.session.issuedAt || now - req.session.issuedAt > (platformSession ? 8 : 168) * 3600000) throw new UnauthorizedException('Please sign in again and choose a role.');
     const user = await this.db.user.findUnique({ where: { id } });
-    if (!user?.enabled || user.sessionVersion !== req.session.version) throw new UnauthorizedException('Your session has ended. Please sign in again.');
-    if (ready && (user.mustChangePassword || (user.platformAdmin && !user.mfaSecret) || (user.mfaSecret && !req.session.mfaVerified))) throw new ForbiddenException('Complete your account security setup before continuing.');
+    if (user?.enabled !== true || user.sessionVersion !== req.session.version) throw new UnauthorizedException('Your session has ended. Please sign in again.');
+    if (platformSession && (!user.platformAdmin || req.session.platformMfaAssured !== true || !req.session.mfaVerified)) throw new UnauthorizedException('Please sign in again and verify your authenticator.');
+    if (platformSession && now - (req.session.lastActivityAt ?? req.session.issuedAt) > 15 * 60000) throw new UnauthorizedException('Your administrator session expired due to inactivity. Sign in again.');
+    if (ready && (user.mustChangePassword || (platformSession && !user.mfaSecret))) throw new ForbiddenException('Complete your account security setup before continuing.');
+    if (platformSession && typeof req.path === 'string' && req.headers['x-platform-activity'] === '1' && !req.path.startsWith('/api/v1/system-health')) {
+      req.session.lastActivityAt = now;
+      await new Promise<void>((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
+    }
     return user;
   }
-  async session(req: Request, user: User, mfaVerified: boolean, remember = false, selectedRole = req.session.selectedRole) {
+  async session(req: Request, user: User, mfaVerified: boolean, remember = false, selectedRole = req.session.selectedRole, platformMfaAssured = false) {
     await new Promise<void>((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
-    req.session.userId = user.id; req.session.version = user.sessionVersion; req.session.selectedRole = selectedRole; req.session.mfaVerified = mfaVerified; req.session.issuedAt = Date.now();
+    const issuedAt = Date.now();
+    req.session.userId = user.id; req.session.version = user.sessionVersion; req.session.selectedRole = selectedRole; req.session.mfaVerified = mfaVerified; req.session.platformMfaAssured = platformMfaAssured; req.session.platformMfaAt = platformMfaAssured ? issuedAt : undefined; req.session.lastActivityAt = platformMfaAssured ? issuedAt : undefined; req.session.issuedAt = issuedAt;
     req.session.cookie.maxAge = remember ? 7 * 86400000 : 8 * 3600000;
     await new Promise<void>((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
   }
   async me(req: Request) {
     const user = await this.user(req, false);
     const selectedRole = req.session.selectedRole!;
-    const needsMfa = !!user.mfaSecret && !req.session.mfaVerified;
-    const memberships = needsMfa || selectedRole === 'SUPER_ADMIN' ? [] : await this.db.membership.findMany({ where: { userId: user.id, role: selectedRole as Role, active: true, school: { active: true } }, include: { school: { select: { id: true, name: true } } }, orderBy: { createdAt: 'asc' } });
-    return { id: user.id, name: user.name, email: user.email, selectedRole, platformAdmin: user.platformAdmin && selectedRole === 'SUPER_ADMIN', mustChangePassword: user.mustChangePassword, needsMfa, needsMfaSetup: user.platformAdmin && !user.mfaSecret, mfaEnabled: !!user.mfaSecret, memberships: memberships.map(m => ({ id: m.id, role: m.role, school: m.school })) };
+    const platformSession = selectedRole === 'SUPER_ADMIN';
+    const needsMfa = platformSession && !!user.mfaSecret && !req.session.platformMfaAssured;
+    const memberships = needsMfa || platformSession ? [] : await this.db.membership.findMany({ where: { userId: user.id, role: selectedRole as Role, active: true, school: { active: true } }, include: { school: { select: { id: true, name: true } } }, orderBy: { createdAt: 'asc' } });
+    return { id: user.id, name: user.name, email: user.email, selectedRole, platformAdmin: user.platformAdmin && platformSession && req.session.platformMfaAssured === true, mustChangePassword: user.mustChangePassword, needsMfa, needsMfaSetup: platformSession && user.platformAdmin && !user.mfaSecret, mfaEnabled: !!user.mfaSecret, memberships: memberships.map(m => ({ id: m.id, role: m.role, school: m.school })) };
   }
   async login(req: Request, data: { email: string; password: string; role: Role | 'SUPER_ADMIN'; rememberMe: boolean }) {
+    if (data.role === 'SUPER_ADMIN') throw new UnauthorizedException('Sign-in failed. Check your email, password, or access for the selected role.');
     await this.rate('login-ip:' + req.ip, 30, 900); await this.rate('login-email:' + data.email, 10, 900);
     const user = await this.db.user.findUnique({ where: { email: data.email } });
     const valid = await passwordMatches(user?.passwordHash || await this.dummyHash, data.password);
-    const hasRole = user && data.role === 'SUPER_ADMIN'
-      ? user.platformAdmin
-      : user && !!await this.db.membership.findFirst({ where: { userId: user.id, role: data.role as Role, active: true, school: { active: true } }, select: { id: true } });
+    const hasRole = user && !!await this.db.membership.findFirst({ where: { userId: user.id, role: data.role as Role, active: true, school: { active: true } }, select: { id: true } });
     if (!user?.enabled || !valid || !hasRole) {
       await this.auditLog.recordSecurityEvent({
         actorId: user?.id,
@@ -79,11 +94,372 @@ export class PlatformService {
       });
       throw new UnauthorizedException('Sign-in failed. Check your email, password, or access for the selected role.');
     }
-    await this.session(req, user, false, data.rememberMe, data.role);
+    await this.session(req, user, false, data.rememberMe, data.role, false);
     await this.db.auditEvent.create({ data: { actorId: user.id, action: 'PASSWORD_VERIFIED', target: user.id } });
     return this.me(req);
   }
-  async logout(req: Request) { await new Promise<void>((resolve, reject) => req.session.destroy(error => error ? reject(error) : resolve())); return { message: 'Signed out.' }; }
+  private async platformAuthEvent(req: Request, eventType: string, actorId?: string | null, severity = 'MEDIUM', details: Record<string, unknown> = {}) {
+    await this.auditLog.recordSecurityEvent({ actorId, category: 'AUTHENTICATION', eventType, severity, ipAddress: req.ip, userAgent: req.get('user-agent')?.slice(0, 500), details });
+  }
+  private async queuePlatformNotice(tx: Prisma.TransactionClient, email: string, subject: string, message: string) {
+    await tx.outbox.create({ data: { payload: encrypt(JSON.stringify({ to: email, subject, text: message, html: `<p>${message}</p>` })) } });
+  }
+  private async saveSession(req: Request) {
+    await new Promise<void>((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
+  }
+  private async beginPlatformChallenge(req: Request, user: User) {
+    await new Promise<void>((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
+    const challenge: NonNullable<Request['session']['platformChallenge']> = {
+      id: randomToken(), userId: user.id, version: user.sessionVersion,
+      stage: user.mustChangePassword ? 'password-change' : user.mfaSecret ? 'totp' : 'enrollment',
+      expiresAt: Date.now() + 5 * 60000, attempts: 0,
+      ...(!user.mustChangePassword && !user.mfaSecret ? { encryptedSecret: encrypt(authenticator.generateSecret()) } : {}),
+    };
+    req.session.platformChallenge = challenge;
+    req.session.cookie.maxAge = 5 * 60000;
+    await this.saveSession(req);
+    return this.platformChallengeResponse(challenge, user.email);
+  }
+  private async platformChallengeResponse(challenge: NonNullable<Request['session']['platformChallenge']>, email: string) {
+    if (challenge.stage !== 'enrollment' || !challenge.encryptedSecret) return { stage: challenge.stage };
+    const secret = decrypt(challenge.encryptedSecret);
+    const uri = authenticator.keyuri(email, 'SyncAcademy', secret);
+    return { stage: challenge.stage, secret, qr: await QRCode.toDataURL(uri) };
+  }
+  async platformLogin(req: Request, data: { email: string; password: string }) {
+    const normalizedEmail = data.email.trim().toLowerCase();
+    await this.checkFailures('platform-login-fail-ip:' + req.ip, 30);
+    await this.checkFailures('platform-login-fail-account:' + normalizedEmail, 5);
+    const user = await this.db.user.findUnique({ where: { email: normalizedEmail } });
+    const valid = await passwordMatches(user?.passwordHash || await this.dummyHash, data.password);
+    if (user?.enabled !== true || user.platformAdmin !== true || !valid) {
+      await this.recordFailure('platform-login-fail-ip:' + req.ip, 30);
+      await this.recordFailure('platform-login-fail-account:' + normalizedEmail);
+      await this.platformAuthEvent(req, 'PLATFORM_ADMIN_LOGIN_FAILED', user?.id, 'MEDIUM', { reason: 'credentials_or_status_invalid' });
+      throw new UnauthorizedException('Sign-in failed. Check your credentials or account access.');
+    }
+    const challenge = await this.beginPlatformChallenge(req, user);
+    await this.platformAuthEvent(req, 'PLATFORM_ADMIN_PASSWORD_VERIFIED', user.id, 'LOW', { challengeStage: challenge.stage });
+    return challenge;
+  }
+  private async platformChallenge(req: Request, stages: NonNullable<Request['session']['platformChallenge']>['stage'][] = []) {
+    const challenge = req.session.platformChallenge;
+    if (!challenge || challenge.expiresAt <= Date.now() || stages.length && !stages.includes(challenge.stage)) {
+      delete req.session.platformChallenge;
+      await this.saveSession(req);
+      throw new UnauthorizedException('This sign-in challenge is invalid or expired. Start again.');
+    }
+    const user = await this.db.user.findUnique({ where: { id: challenge.userId } });
+    if (user?.enabled !== true || user.platformAdmin !== true || user.sessionVersion !== challenge.version) {
+      delete req.session.platformChallenge;
+      await this.saveSession(req);
+      throw new UnauthorizedException('This sign-in challenge is invalid or expired. Start again.');
+    }
+    return { challenge, user };
+  }
+  private async ratePlatformChallenge(req: Request, challenge: NonNullable<Request['session']['platformChallenge']>) {
+    await this.checkFailures('platform-challenge-fail-ip:' + req.ip, 30);
+    await this.checkFailures('platform-challenge-fail-account:' + challenge.userId, 5);
+    await this.rate('platform-challenge-id:' + challenge.id, 10, 900);
+  }
+  private async failPlatformChallenge(req: Request, challenge: NonNullable<Request['session']['platformChallenge']>, userId: string, eventType: string) {
+    challenge.attempts += 1;
+    if (challenge.attempts >= 5) delete req.session.platformChallenge;
+    await this.saveSession(req);
+    await this.recordFailure('platform-challenge-fail-ip:' + req.ip, 30);
+    await this.recordFailure('platform-challenge-fail-account:' + challenge.userId);
+    await this.platformAuthEvent(req, eventType, userId, 'MEDIUM', { failedAttempts: challenge.attempts });
+    throw new UnauthorizedException('Verification failed. Start again or use another valid factor.');
+  }
+  async platformChallengeStatus(req: Request) {
+    const { challenge, user } = await this.platformChallenge(req);
+    return this.platformChallengeResponse(challenge, user.email);
+  }
+  async changePlatformPassword(req: Request, password: string) {
+    const { challenge, user } = await this.platformChallenge(req, ['password-change']);
+    await this.ratePlatformChallenge(req, challenge);
+    const hash = await passwordHash(password);
+    const updated = await this.atomic(async tx => {
+      const changed = await tx.user.updateMany({
+        where: { id: user.id, platformAdmin: true, enabled: true, mustChangePassword: true, sessionVersion: challenge.version },
+        data: { passwordHash: hash, mustChangePassword: false, sessionVersion: { increment: 1 } },
+      });
+      if (!changed.count) throw new UnauthorizedException('This sign-in challenge is invalid or expired. Start again.');
+      await tx.passwordReset.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'PASSWORD_CHANGED', target: user.id } });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'PLATFORM_ADMIN_SESSIONS_REVOKED', target: `${user.id}:account-wide-password-change` } });
+      return tx.user.findUniqueOrThrow({ where: { id: user.id } });
+    });
+    challenge.version = updated.sessionVersion;
+    challenge.stage = updated.mfaSecret ? 'totp' : 'enrollment';
+    challenge.encryptedSecret = updated.mfaSecret ? undefined : encrypt(authenticator.generateSecret());
+    await this.saveSession(req);
+    await this.platformAuthEvent(req, 'PLATFORM_ADMIN_PASSWORD_CHANGED', user.id, 'MEDIUM', { sessionsRevoked: true, accountWide: true });
+    return this.platformChallengeResponse(challenge, updated.email);
+  }
+  async verifyPlatformMfa(req: Request, code: string) {
+    const { challenge, user } = await this.platformChallenge(req, ['enrollment', 'totp']);
+    await this.ratePlatformChallenge(req, challenge);
+    const setup = challenge.stage === 'enrollment';
+    const stored = setup ? challenge.encryptedSecret : user.mfaSecret;
+    if (!stored || setup && user.mfaSecret) throw new UnauthorizedException('This sign-in challenge is invalid or expired. Start again.');
+    const checker = authenticator.clone();
+    checker.options = { window: 1 };
+    const delta = checker.checkDelta(code, decrypt(stored));
+    if (delta === null) return this.failPlatformChallenge(req, challenge, user.id, 'PLATFORM_ADMIN_MFA_FAILED');
+    const step = Math.floor(Date.now() / 30000) + delta;
+    if (setup) {
+      const recoveryCodes = Array.from({ length: 8 }, () => randomToken().slice(0, 20));
+      const updated = await this.atomic(async tx => {
+        const result = await tx.user.updateMany({
+          where: { id: user.id, platformAdmin: true, enabled: true, sessionVersion: challenge.version, mfaSecret: null, mfaLastStep: { lt: BigInt(step) } },
+          data: { mfaSecret: stored, mfaLastStep: BigInt(step), mfaRecovery: recoveryCodes.map(digest), sessionVersion: { increment: 1 } },
+        });
+        if (!result.count) return null;
+        const fresh = await tx.user.findUniqueOrThrow({ where: { id: user.id } });
+        await tx.auditEvent.create({ data: { actorId: user.id, action: 'PLATFORM_ADMIN_MFA_ENROLLED', target: user.id } });
+        await tx.auditEvent.create({ data: { actorId: user.id, action: 'PLATFORM_ADMIN_SESSIONS_REVOKED', target: `${user.id}:account-wide-mfa-enrollment` } });
+        return fresh;
+      });
+      if (!updated) return this.failPlatformChallenge(req, challenge, user.id, 'PLATFORM_ADMIN_MFA_FAILED');
+      challenge.version = updated.sessionVersion;
+      challenge.stage = 'recovery-ack';
+      delete challenge.encryptedSecret;
+      await this.saveSession(req);
+      await this.platformAuthEvent(req, 'PLATFORM_ADMIN_MFA_ENROLLED', user.id, 'HIGH', { sessionsRevoked: true, accountWide: true });
+      return { stage: challenge.stage, recoveryCodes };
+    }
+    const updated = await this.atomic(async tx => {
+      const changed = await tx.user.updateMany({
+        where: { id: user.id, platformAdmin: true, enabled: true, sessionVersion: challenge.version, mfaSecret: user.mfaSecret, mfaLastStep: { lt: BigInt(step) } },
+        data: { mfaLastStep: BigInt(step) },
+      });
+      if (!changed.count) return null;
+      const fresh = await tx.user.findUniqueOrThrow({ where: { id: user.id } });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'PLATFORM_ADMIN_LOGIN', target: user.id } });
+      return fresh;
+    });
+    if (!updated) return this.failPlatformChallenge(req, challenge, user.id, 'PLATFORM_ADMIN_MFA_FAILED');
+    await this.platformAuthEvent(req, 'PLATFORM_ADMIN_LOGIN_SUCCEEDED', user.id, 'LOW', { factor: 'totp' });
+    await this.session(req, updated, true, false, 'SUPER_ADMIN', true);
+    return this.me(req);
+  }
+  async recoverPlatformLogin(req: Request, code: string) {
+    const { challenge, user } = await this.platformChallenge(req, ['totp']);
+    await this.ratePlatformChallenge(req, challenge);
+    const hash = digest(code);
+    const updated = await this.atomic(async tx => {
+      const fresh = await tx.user.findUniqueOrThrow({ where: { id: user.id } });
+      if (fresh.enabled !== true || fresh.platformAdmin !== true || fresh.sessionVersion !== challenge.version || !fresh.mfaSecret || !fresh.mfaRecovery.includes(hash)) return null;
+      const changed = await tx.user.updateMany({
+        where: { id: fresh.id, platformAdmin: true, enabled: true, sessionVersion: challenge.version, mfaRecovery: { has: hash } },
+        data: { mfaRecovery: { set: fresh.mfaRecovery.filter(value => value !== hash) } },
+      });
+      if (!changed.count) return null;
+      await tx.auditEvent.create({ data: { actorId: fresh.id, action: 'PLATFORM_ADMIN_RECOVERY_CODE_USED', target: fresh.id } });
+      await this.queuePlatformNotice(tx, fresh.email, 'SyncAcademy administrator recovery code used', 'A recovery code was used to sign in to your SyncAcademy platform administrator account. If this was not you, contact another active platform administrator.');
+      return tx.user.findUniqueOrThrow({ where: { id: fresh.id } });
+    });
+    if (!updated) return this.failPlatformChallenge(req, challenge, user.id, 'PLATFORM_ADMIN_RECOVERY_FAILED');
+    await this.platformAuthEvent(req, 'PLATFORM_ADMIN_RECOVERY_CODE_USED', user.id, 'HIGH', { notified: true });
+    await this.session(req, updated, true, false, 'SUPER_ADMIN', true);
+    return this.me(req);
+  }
+  async acknowledgePlatformRecovery(req: Request) {
+    const { challenge, user } = await this.platformChallenge(req, ['recovery-ack']);
+    await this.ratePlatformChallenge(req, challenge);
+    const fresh = await this.db.user.findFirst({ where: { id: user.id, platformAdmin: true, enabled: true, sessionVersion: challenge.version, mfaSecret: { not: null } } });
+    if (!fresh) throw new UnauthorizedException('This sign-in challenge is invalid or expired. Start again.');
+    await this.session(req, fresh, true, false, 'SUPER_ADMIN', true);
+    await this.db.auditEvent.create({ data: { actorId: fresh.id, action: 'PLATFORM_ADMIN_LOGIN', target: fresh.id } });
+    await this.platformAuthEvent(req, 'PLATFORM_ADMIN_LOGIN_SUCCEEDED', fresh.id, 'LOW', { factor: 'enrollment' });
+    return this.me(req);
+  }
+  private async replacementChallenge(req: Request, stage: NonNullable<Request['session']['platformReplacement']>['stage'][] = []) {
+    const challenge = req.session.platformReplacement;
+    const now = Date.now();
+    if (!challenge || challenge.expiresAt <= now || stage.length && !stage.includes(challenge.stage)) {
+      delete req.session.platformReplacement;
+      await this.saveSession(req);
+      throw new UnauthorizedException('Authenticator replacement is invalid or expired. Start again.');
+    }
+    const user = await this.db.user.findUnique({ where: { id: challenge.userId } });
+    if (user?.enabled !== true || user.platformAdmin !== true || user.sessionVersion !== challenge.version || req.session.userId !== user.id || req.session.platformMfaAssured !== true) {
+      delete req.session.platformReplacement;
+      await this.saveSession(req);
+      throw new UnauthorizedException('Authenticator replacement is invalid or expired. Start again.');
+    }
+    return { challenge, user };
+  }
+  private async ratePlatformReplacement(req: Request, challenge: NonNullable<Request['session']['platformReplacement']>) {
+    await this.checkFailures('platform-replacement-fail-ip:' + req.ip, 30);
+    await this.checkFailures('platform-replacement-fail-account:' + challenge.userId, 5);
+    await this.rate('platform-replacement-id:' + challenge.id, 10, 900);
+  }
+  async startPlatformAuthenticatorReplacement(req: Request, password: string, factor: string) {
+    const user = await this.administrator(req);
+    await this.checkFailures('platform-replacement-fail-ip:' + req.ip, 30);
+    await this.checkFailures('platform-replacement-fail-account:' + user.id, 5);
+    if (!await passwordMatches(user.passwordHash, password)) {
+      await this.recordFailure('platform-replacement-fail-ip:' + req.ip, 30);
+      await this.recordFailure('platform-replacement-fail-account:' + user.id);
+      await this.platformAuthEvent(req, 'PLATFORM_ADMIN_REPLACEMENT_AUTH_FAILED', user.id, 'HIGH', { reason: 'password_invalid' });
+      throw new UnauthorizedException('Verification failed. Check your password and current authenticator or recovery code.');
+    }
+    let recoveryUsed = false;
+    let step: number | undefined;
+    if (/^\d{6}$/.test(factor) && user.mfaSecret) {
+      const checker = authenticator.clone();
+      checker.options = { window: 1 };
+      const delta = checker.checkDelta(factor, decrypt(user.mfaSecret));
+      if (delta !== null) step = Math.floor(Date.now() / 30000) + delta;
+    } else if (/^[A-Za-z0-9_-]{20}$/.test(factor)) {
+      recoveryUsed = true;
+    }
+    if (step === undefined && !recoveryUsed) {
+      await this.recordFailure('platform-replacement-fail-ip:' + req.ip, 30);
+      await this.recordFailure('platform-replacement-fail-account:' + user.id);
+      await this.platformAuthEvent(req, 'PLATFORM_ADMIN_REPLACEMENT_AUTH_FAILED', user.id, 'HIGH', { reason: 'factor_invalid' });
+      throw new UnauthorizedException('Verification failed. Check your password and current authenticator or recovery code.');
+    }
+    const confirmed = await this.atomic(async tx => {
+      const fresh = await tx.user.findUniqueOrThrow({ where: { id: user.id } });
+      if (fresh.enabled !== true || fresh.platformAdmin !== true || fresh.sessionVersion !== req.session.version || !fresh.mfaSecret) return false;
+      if (step !== undefined) {
+        const changed = await tx.user.updateMany({
+          where: { id: user.id, platformAdmin: true, enabled: true, sessionVersion: user.sessionVersion, mfaLastStep: { lt: BigInt(step) } },
+          data: { mfaLastStep: BigInt(step) },
+        });
+        if (!changed.count) return false;
+      } else {
+        const hash = digest(factor);
+        if (!fresh.mfaRecovery.includes(hash)) return false;
+        const changed = await tx.user.updateMany({
+          where: { id: user.id, platformAdmin: true, enabled: true, sessionVersion: user.sessionVersion, mfaRecovery: { has: hash } },
+          data: { mfaRecovery: { set: fresh.mfaRecovery.filter(value => value !== hash) } },
+        });
+        if (!changed.count) return false;
+        await tx.auditEvent.create({ data: { actorId: user.id, action: 'PLATFORM_ADMIN_RECOVERY_CODE_USED', target: user.id } });
+        await this.queuePlatformNotice(tx, fresh.email, 'SyncAcademy administrator recovery code used', 'A recovery code was used to authenticate an authenticator replacement for your SyncAcademy administrator account. If this was not you, contact another active platform administrator.');
+      }
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'PLATFORM_ADMIN_REPLACEMENT_STARTED', target: user.id } });
+      return true;
+    });
+    if (!confirmed) {
+      await this.recordFailure('platform-replacement-fail-ip:' + req.ip, 30);
+      await this.recordFailure('platform-replacement-fail-account:' + user.id);
+      await this.platformAuthEvent(req, 'PLATFORM_ADMIN_REPLACEMENT_AUTH_FAILED', user.id, 'HIGH', { reason: 'factor_invalid_or_replayed' });
+      throw new UnauthorizedException('Verification failed. Check your password and current authenticator or recovery code.');
+    }
+    const secret = authenticator.generateSecret();
+    const replacement: NonNullable<Request['session']['platformReplacement']> = {
+      id: randomToken(), userId: user.id, version: user.sessionVersion, stage: 'verify',
+      issuedAt: Date.now(), expiresAt: Date.now() + 5 * 60000, attempts: 0, encryptedSecret: encrypt(secret),
+    };
+    req.session.platformReplacement = replacement;
+    await this.saveSession(req);
+    await this.platformAuthEvent(req, recoveryUsed ? 'PLATFORM_ADMIN_RECOVERY_CODE_USED' : 'PLATFORM_ADMIN_REPLACEMENT_STARTED', user.id, 'HIGH', { factor: recoveryUsed ? 'recovery_code' : 'totp', notified: recoveryUsed });
+    return { secret, qr: await QRCode.toDataURL(authenticator.keyuri(user.email, 'SyncAcademy', secret)) };
+  }
+  async verifyPlatformAuthenticatorReplacement(req: Request, code: string) {
+    const { challenge, user } = await this.replacementChallenge(req, ['verify']);
+    await this.ratePlatformReplacement(req, challenge);
+    const checker = authenticator.clone();
+    checker.options = { window: 1 };
+    const delta = checker.checkDelta(code, decrypt(challenge.encryptedSecret));
+    if (delta === null) {
+      challenge.attempts += 1;
+      if (challenge.attempts >= 5) delete req.session.platformReplacement;
+      await this.saveSession(req);
+      await this.recordFailure('platform-replacement-fail-ip:' + req.ip, 30);
+      await this.recordFailure('platform-replacement-fail-account:' + user.id);
+      await this.platformAuthEvent(req, 'PLATFORM_ADMIN_REPLACEMENT_VERIFY_FAILED', user.id, 'MEDIUM', { failedAttempts: challenge.attempts });
+      throw new UnauthorizedException('Replacement verification failed. Start again or use another valid code.');
+    }
+    const step = Math.floor(Date.now() / 30000) + delta;
+    const changed = await this.atomic(async tx => {
+      const fresh = await tx.user.findFirst({
+        where: { id: user.id, platformAdmin: true, enabled: true, sessionVersion: challenge.version, mfaSecret: { not: null } },
+      });
+      if (!fresh) return false;
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'PLATFORM_ADMIN_REPLACEMENT_VERIFIED', target: user.id } });
+      return true;
+    });
+    if (!changed) {
+      challenge.attempts += 1;
+      if (challenge.attempts >= 5) delete req.session.platformReplacement;
+      await this.saveSession(req);
+      await this.recordFailure('platform-replacement-fail-ip:' + req.ip, 30);
+      await this.recordFailure('platform-replacement-fail-account:' + user.id);
+      await this.platformAuthEvent(req, 'PLATFORM_ADMIN_REPLACEMENT_VERIFY_FAILED', user.id, 'MEDIUM', { reason: 'code_replayed' });
+      throw new UnauthorizedException('Replacement verification failed. Wait for a new code and try again.');
+    }
+    const recoveryCodes = Array.from({ length: 8 }, () => randomToken().slice(0, 20));
+    challenge.stage = 'recovery-ack';
+    challenge.verifiedStep = step;
+    challenge.recoveryHashes = recoveryCodes.map(digest);
+    await this.saveSession(req);
+    await this.platformAuthEvent(req, 'PLATFORM_ADMIN_REPLACEMENT_VERIFIED', user.id, 'HIGH', { recoveryCodesIssued: true });
+    return { recoveryCodes };
+  }
+  async acknowledgePlatformAuthenticatorReplacement(req: Request) {
+    const { challenge, user } = await this.replacementChallenge(req, ['recovery-ack']);
+    await this.ratePlatformReplacement(req, challenge);
+    if (!challenge.recoveryHashes?.length || challenge.verifiedStep === undefined) throw new UnauthorizedException('Authenticator replacement is invalid or expired. Start again.');
+    const verifiedStep = challenge.verifiedStep;
+    const recoveryHashes = challenge.recoveryHashes;
+    await this.atomic(async tx => {
+      const changed = await tx.user.updateMany({
+        where: { id: user.id, platformAdmin: true, enabled: true, sessionVersion: challenge.version, mfaSecret: { not: null } },
+        data: { mfaSecret: challenge.encryptedSecret, mfaRecovery: recoveryHashes, mfaLastStep: BigInt(verifiedStep), sessionVersion: { increment: 1 } },
+      });
+      if (!changed.count) throw new UnauthorizedException('Authenticator replacement is invalid or expired. Start again.');
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'PLATFORM_ADMIN_AUTHENTICATOR_REPLACED', target: user.id } });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'PLATFORM_ADMIN_SESSIONS_REVOKED', target: `${user.id}:account-wide-authenticator-replacement` } });
+      await this.queuePlatformNotice(tx, user.email, 'SyncAcademy administrator authenticator replaced', 'The authenticator for your SyncAcademy platform administrator account was replaced and all active account sessions were revoked. Sign in again with your password and new authenticator.');
+    });
+    await this.realtime.publish({ scope: 'platform', userId: user.id });
+    delete req.session.platformReplacement;
+    await this.platformAuthEvent(req, 'PLATFORM_ADMIN_AUTHENTICATOR_REPLACED', user.id, 'HIGH', { sessionsRevoked: true, accountWide: true, notified: true });
+    await new Promise<void>((resolve, reject) => req.session.destroy(error => error ? reject(error) : resolve()));
+    return { message: 'Authenticator replaced. Sign in again with your new authenticator.' };
+  }
+  async setPlatformAdminEnabled(req: Request, userId: string, enabled: boolean) {
+    const actor = await this.administrator(req);
+    if (actor.id === userId) throw new ForbiddenException('You cannot change your own Super Admin access.');
+    await this.rate('platform-admin-status:' + actor.id, 20, 3600);
+    const result = await this.atomic(async tx => {
+      const target = await tx.user.findFirst({ where: { id: userId, platformAdmin: true } });
+      if (!target) throw new BadRequestException('Super Admin account not found.');
+      if (target.enabled === enabled) return { changed: false, email: target.email };
+      if (!enabled && await tx.user.count({ where: { platformAdmin: true, enabled: true } }) <= 1) throw new ConflictException('At least one active Super Admin must remain.');
+      const updated = await tx.user.updateMany({
+        where: { id: target.id, platformAdmin: true, enabled: target.enabled, sessionVersion: target.sessionVersion },
+        data: { enabled, sessionVersion: { increment: 1 } },
+      });
+      if (!updated.count) throw new ConflictException('This administrator account changed. Refresh and try again.');
+      const action = enabled ? 'PLATFORM_ADMIN_ENABLED' : 'PLATFORM_ADMIN_DISABLED';
+      await tx.auditEvent.create({ data: { actorId: actor.id, action, target: target.id } });
+      await tx.auditEvent.create({ data: { actorId: actor.id, action: 'PLATFORM_ADMIN_SESSIONS_REVOKED', target: `${target.id}:account-wide-access-change` } });
+      await this.queuePlatformNotice(tx, target.email, enabled ? 'SyncAcademy administrator access enabled' : 'SyncAcademy administrator access disabled', enabled
+        ? 'Platform administrator access was enabled for your account. Sign in again with your password and authenticator to access the platform.'
+        : 'Platform administrator access was disabled for your account. All account sessions were revoked, including any school-role sessions. Contact another active platform administrator if this was not expected.');
+      return { changed: true, email: target.email };
+    });
+    if (result.changed) {
+      await this.realtime.publish({ scope: 'platform', userId });
+      await this.platformAuthEvent(req, enabled ? 'PLATFORM_ADMIN_ENABLED' : 'PLATFORM_ADMIN_DISABLED', actor.id, 'HIGH', { targetUserId: userId, sessionsRevoked: true, accountWide: true, notified: true });
+      await this.platformAuthEvent(req, 'PLATFORM_ADMIN_SESSIONS_REVOKED', actor.id, 'HIGH', { targetUserId: userId, scope: 'account-wide' });
+    }
+    return { message: enabled ? 'Super Admin account enabled. Fresh password and MFA sign-in are required.' : 'Super Admin account disabled. All sessions and school-role access for this account are revoked.' };
+  }
+  async logout(req: Request) {
+    if (req.session.selectedRole === 'SUPER_ADMIN' && req.session.platformMfaAssured) {
+      await this.db.auditEvent.create({ data: { actorId: req.session.userId, action: 'PLATFORM_ADMIN_LOGOUT', target: req.session.userId || '' } });
+      await this.auditLog.recordSecurityEvent({ actorId: req.session.userId, category: 'AUTHENTICATION', eventType: 'PLATFORM_ADMIN_LOGOUT', severity: 'LOW', ipAddress: req.ip, userAgent: req.get('user-agent')?.slice(0, 500), details: { targetUserId: req.session.userId } });
+    }
+    await new Promise<void>((resolve, reject) => req.session.destroy(error => error ? reject(error) : resolve())); return { message: 'Signed out.' };
+  }
   async changePassword(req: Request, current: string, next: string) {
     const user = await this.user(req, false);
     if (user.mfaSecret && !req.session.mfaVerified) throw new ForbiddenException('Verify your authenticator code first.');
@@ -98,10 +474,11 @@ export class PlatformService {
       await tx.auditEvent.create({ data: { actorId: user.id, action: 'PASSWORD_CHANGED', target: user.id } });
       return tx.user.findUniqueOrThrow({ where: { id: user.id } });
     });
-    await this.session(req, updated, !!user.mfaSecret); return this.me(req);
+    await this.session(req, updated, !!user.mfaSecret, false, req.session.selectedRole, req.session.platformMfaAssured === true); return this.me(req);
   }
   async setupMfa(req: Request) {
     const user = await this.user(req, false);
+    if (user.platformAdmin) throw new ForbiddenException('Platform administrators must enroll through the dedicated sign-in challenge.');
     if (user.mustChangePassword || user.mfaSecret) throw new ForbiddenException('MFA setup is not available. Complete the password change first.');
     await this.rate('mfa-setup:' + user.id, 10, 900);
     const secret = authenticator.generateSecret(); req.session.setupSecret = encrypt(secret); req.session.setupExpires = Date.now() + 10 * 60000;
@@ -110,6 +487,7 @@ export class PlatformService {
   }
   async verifyMfa(req: Request, code: string, setup = false) {
     const user = await this.user(req, false); await this.rate('mfa:' + user.id, 8, 300);
+    if (user.platformAdmin) throw new ForbiddenException('Platform administrators must verify through the dedicated sign-in challenge.');
     const stored = setup ? req.session.setupSecret : user.mfaSecret;
     if (!stored || (setup && (user.mfaSecret || !req.session.setupExpires || req.session.setupExpires < Date.now()))) throw new BadRequestException('Start authenticator setup again.');
     const secret = decrypt(stored); const checker = authenticator.clone(); checker.options = { window: 1 };
@@ -127,6 +505,7 @@ export class PlatformService {
   }
   async recoverMfa(req: Request, code: string) {
     const user = await this.user(req, false); await this.rate('mfa:' + user.id, 8, 300);
+    if (user.platformAdmin) throw new ForbiddenException('Platform administrators must recover through the dedicated sign-in challenge.');
     const hash = digest(code);
     const updated = await this.atomic(async tx => {
       const fresh = await tx.user.findUniqueOrThrow({ where: { id: user.id } });

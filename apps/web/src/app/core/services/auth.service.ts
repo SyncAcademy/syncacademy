@@ -6,10 +6,19 @@ export interface Identity { id: string; name: string; email: string; selectedRol
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private http = inject(HttpClient);
+  private lastTrustedActivity = 0;
   readonly identity = signal<Identity | null>(null);
   readonly isLoggedIn = () => !!this.identity();
+  constructor() {
+    if (typeof window !== 'undefined') {
+      const recordActivity = (event: Event) => { if (event.isTrusted) this.lastTrustedActivity = Date.now(); };
+      for (const eventName of ['pointerdown', 'keydown', 'touchstart']) window.addEventListener(eventName, recordActivity, { passive: true });
+    }
+  }
   request<T = any>(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
-    return firstValueFrom(this.http.request<T>(method, '/api/v1/' + path, { body, headers: { 'X-Requested-With': 'SyncAcademy', ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) } }));
+    const identity = this.identity();
+    const activity = identity?.selectedRole === 'SUPER_ADMIN' && Date.now() - this.lastTrustedActivity < 60000;
+    return firstValueFrom(this.http.request<T>(method, '/api/v1/' + path, { body, headers: { 'X-Requested-With': 'SyncAcademy', ...(activity ? { 'X-Platform-Activity': '1' } : {}), ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) } }));
   }
   async requestBlob(path: string): Promise<Blob> {
     try {

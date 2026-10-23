@@ -49,6 +49,9 @@ async function main() {
       if (config.REQUEST_METRICS === 'true' || durationMs >= 1000) console.log(JSON.stringify({ event: 'http_request', method: req.method, route: req.route?.path ?? 'unmatched', status: res.statusCode, durationMs, requestId: res.getHeader('X-Request-ID') }));
     });
     res.setHeader('X-Request-ID', randomUUID()); res.setHeader('Cache-Control', 'no-store');
+    if (config.NODE_ENV === 'production' && req.path.startsWith('/api/v1/auth/') && !req.secure) {
+      return res.status(403).json({ message: 'Secure transport is required.' });
+    }
     const isExempt = req.path.startsWith('/api/v1/webhooks/') || req.path.startsWith('/api/v1/public/');
     if (!isExempt && !['GET','HEAD','OPTIONS'].includes(req.method) && (req.get('Origin') !== config.APP_ORIGIN || req.get('X-Requested-With') !== 'SyncAcademy' || !req.is('application/json'))) {
       return res.status(403).json({ message: 'Request origin or content type is not allowed.' });

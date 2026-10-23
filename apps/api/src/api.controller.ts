@@ -15,7 +15,6 @@ const email = z.string().trim().email().max(254).transform(v => v.toLowerCase())
 const name = z.string().trim().min(2).max(150);
 const password = z.string().min(15).max(128);
 const token = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
-const loginRole = z.enum(['SUPER_ADMIN', 'HEADMASTER', 'REGISTRAR', 'ACADEMIC', 'TEACHER', 'BURSAR']);
 const schoolRole = z.enum(['HEADMASTER', 'REGISTRAR', 'ACADEMIC', 'TEACHER', 'BURSAR']);
 const invitationExpiryOptions = [5, 15, 30, 60, 240, 720, 1440, 2880, 10080] as const;
 const invitationExpiry = z.coerce.number().int().refine(value => invitationExpiryOptions.some(option => option === value), 'Choose a supported invitation expiry.');
@@ -187,16 +186,9 @@ export class ApiController {
     return this.svc.idempotent(actor.id + ':platform-invitation', key(req), invitation, tx => this.svc.createPlatformInvitation(tx, actor.id, invitation));
   }
   @Patch('platform/admins/:userId') async platformAdminRole(@Req() req: Request, @Param('userId') userId: string, @Body() body: unknown) {
-    const actor = await this.svc.administrator(req); parse(uuid, userId); const { enabled } = parse(z.object({ enabled: z.boolean() }).strict(), body);
-    if (actor.id === userId) throw new ForbiddenException('You cannot suspend your own Super Admin access.');
-    return this.svc.atomic(async tx => {
-      const target = await tx.user.findFirst({ where: { id: userId, platformAdmin: true } });
-      if (!target) throw new BadRequestException('Super Admin account not found.');
-      if (!enabled && await tx.user.count({ where: { platformAdmin: true, enabled: true } }) <= 1) throw new ConflictException('At least one active Super Admin must remain.');
-      await tx.user.update({ where: { id: userId }, data: { platformAdmin: enabled, sessionVersion: { increment: 1 } } });
-      await tx.auditEvent.create({ data: { actorId: actor.id, action: enabled ? 'PLATFORM_ADMIN_REACTIVATED' : 'PLATFORM_ADMIN_SUSPENDED', target: userId } });
-      return { message: enabled ? 'Super Admin access reactivated.' : 'Super Admin access suspended. School roles and records remain.' };
-    });
+    parse(uuid, userId);
+    const { enabled } = parse(z.object({ enabled: z.boolean() }).strict(), body);
+    return this.svc.setPlatformAdminEnabled(req, userId, enabled);
   }
   @Post('platform/invitations/:invitationId/:action') async managePlatformInvitation(@Req() req: Request, @Param('invitationId') invitationId: string, @Param('action') action: string) {
     const actor = await this.svc.administrator(req); parse(uuid, invitationId); parse(z.enum(['resend', 'revoke']), action);
@@ -213,7 +205,33 @@ export class ApiController {
       return { message: action === 'resend' ? 'New platform invitation queued. Previous link is invalid.' : 'Platform invitation revoked.' };
     });
   }
-  @Post('auth/login') login(@Req() req: Request, @Body() body: unknown) { return this.svc.login(req, parse(z.object({ email, password: z.string().min(1).max(128), role: loginRole, rememberMe: z.boolean().default(false) }).strict(), body)); }
+  @Post('auth/login') login(@Req() req: Request, @Body() body: unknown) { return this.svc.login(req, parse(z.object({ email, password: z.string().min(1).max(128), role: schoolRole, rememberMe: z.boolean().default(false) }).strict(), body)); }
+  @Post('auth/platform/login') platformLogin(@Req() req: Request, @Body() body: unknown) {
+    return this.svc.platformLogin(req, parse(z.object({ email, password: z.string().min(1).max(128) }).strict(), body));
+  }
+  @Get('auth/platform/challenge') platformChallenge(@Req() req: Request) { return this.svc.platformChallengeStatus(req); }
+  @Post('auth/platform/password') platformPassword(@Req() req: Request, @Body() body: unknown) {
+    return this.svc.changePlatformPassword(req, parse(z.object({ password }).strict(), body).password);
+  }
+  @Post('auth/platform/verify') platformVerify(@Req() req: Request, @Body() body: unknown) {
+    return this.svc.verifyPlatformMfa(req, parse(z.object({ code: z.string().regex(/^\d{6}$/) }).strict(), body).code);
+  }
+  @Post('auth/platform/recovery') platformRecovery(@Req() req: Request, @Body() body: unknown) {
+    return this.svc.recoverPlatformLogin(req, parse(z.object({ code: z.string().regex(/^[A-Za-z0-9_-]{20}$/) }).strict(), body).code);
+  }
+  @Post('auth/platform/acknowledge-recovery') platformAcknowledgeRecovery(@Req() req: Request) { return this.svc.acknowledgePlatformRecovery(req); }
+  @Post('auth/platform/replacement/start') startPlatformReplacement(@Req() req: Request, @Body() body: unknown) {
+    const b = parse(z.object({ currentPassword: z.string().min(1).max(128), factor: z.string().regex(/^(?:\d{6}|[A-Za-z0-9_-]{20})$/) }).strict(), body);
+    return this.svc.startPlatformAuthenticatorReplacement(req, b.currentPassword, b.factor);
+  }
+  @Post('auth/platform/replacement/verify') verifyPlatformReplacement(@Req() req: Request, @Body() body: unknown) {
+    return this.svc.verifyPlatformAuthenticatorReplacement(req, parse(z.object({ code: z.string().regex(/^\d{6}$/) }).strict(), body).code);
+  }
+  @Post('auth/platform/replacement/acknowledge') async acknowledgePlatformReplacement(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const result = await this.svc.acknowledgePlatformAuthenticatorReplacement(req);
+    res.clearCookie('sa.sid', { path: '/' });
+    return result;
+  }
   @Get('auth/me') me(@Req() req: Request) { return this.svc.me(req); }
   @Post('auth/logout') async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) { const result = await this.svc.logout(req); res.clearCookie('sa.sid', { path: '/' }); return result; }
   @Post('auth/change-password') change(@Req() req: Request, @Body() body: unknown) { const b = parse(z.object({ currentPassword: z.string().min(1).max(128), password }).strict(), body); return this.svc.changePassword(req, b.currentPassword, b.password); }

@@ -19,7 +19,6 @@ import { SubscriptionService } from './subscription.service';
 import { WalletService } from './wallet.service';
 import { ReconciliationService } from './reconciliation.service';
 import { SecurityEventsService } from './security-events.service';
-import { RealtimeBus } from './realtime-bus';
 import { RealtimeGateway } from './realtime.gateway';
 
 @Module({
@@ -45,7 +44,6 @@ import { RealtimeGateway } from './realtime.gateway';
     WalletService,
     ReconciliationService,
     SecurityEventsService,
-    RealtimeBus,
     RealtimeGateway,
   ]
 })

@@ -11,6 +11,8 @@ export class LiveAuthPage implements OnInit {
   email = ''; password = ''; confirm = ''; currentPassword = ''; code = ''; rememberMe = false;
   legalAccepted = false;
   token = ''; invitation: any = null; setup: { secret: string; qr: string } | null = null;
+  replacement: { secret: string; qr: string } | null = null;
+  replacementFactor = ''; replacementCode = '';
   resetTokenValid = false;
   busy = false; activityLabel = 'Working…'; error = ''; notice = ''; recoveryCodes: string[] = []; recoveryCode = '';
   async ngOnInit() {
@@ -40,5 +42,8 @@ export class LiveAuthPage implements OnInit {
   async startMfa() { await this.run(async () => { this.setup = await this.auth.request('POST', 'auth/mfa/setup', {}); }, 'Preparing authenticator…'); }
   async verify() { await this.run(async () => { const result = await this.auth.request('POST', 'auth/mfa/verify', { code: this.code, setup: !!this.setup }); this.setup = null; this.code = ''; await this.auth.refresh(); if (result.recoveryCodes) this.recoveryCodes = result.recoveryCodes; else await this.router.navigateByUrl(this.auth.landing()); }, 'Verifying code…'); }
   async recoverMfa() { await this.run(async () => { await this.auth.request('POST', 'auth/mfa/recovery', { code: this.recoveryCode.trim() }); this.recoveryCode = ''; await this.auth.refresh(); await this.router.navigateByUrl(this.auth.landing()); }, 'Checking recovery code…'); }
+  async startPlatformReplacement() { await this.run(async () => { this.replacement = await this.auth.request('POST', 'auth/platform/replacement/start', { currentPassword: this.currentPassword, factor: this.replacementFactor.trim() }); this.currentPassword = ''; this.replacementFactor = ''; }, 'Verifying your current factors…'); }
+  async verifyPlatformReplacement() { await this.run(async () => { const result = await this.auth.request('POST', 'auth/platform/replacement/verify', { code: this.replacementCode }); this.recoveryCodes = result.recoveryCodes; this.replacementCode = ''; this.replacement = null; }, 'Verifying replacement authenticator…'); }
+  async acknowledgePlatformReplacement() { await this.run(async () => { await this.auth.request('POST', 'auth/platform/replacement/acknowledge', {}); this.auth.identity.set(null); this.recoveryCodes = []; await this.router.navigateByUrl('/platform-access/login'); }, 'Replacing authenticator and revoking sessions…'); }
   async signOut() { await this.run(async () => { await this.auth.logout(); await this.router.navigateByUrl('/auth/login'); }, 'Signing out…'); }
 }

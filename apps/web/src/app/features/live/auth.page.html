@@ -23,6 +23,27 @@
 @if (me.mustChangePassword) { <p class="notice">Replace your temporary password before using the dashboard.</p> }
 @if (me.mustChangePassword || (!me.needsMfaSetup && !setup)) { <form #f="ngForm" (ngSubmit)="changePassword()"><label>Current password<input name="current" type="password" required autocomplete="current-password" [(ngModel)]="currentPassword" /></label><label>New password (at least 15 characters)<input name="password" type="password" minlength="15" maxlength="128" required autocomplete="new-password" [(ngModel)]="password" /></label><label>Confirm password<input name="confirm" type="password" required [(ngModel)]="confirm" /></label><button class="primary" [disabled]="f.invalid || busy">Change password</button></form> }
 @if (!me.mustChangePassword && !me.mfaEnabled) { <h2>Authenticator protection</h2><p>{{ me.needsMfaSetup ? 'Required for Super Admin access.' : 'Add an extra layer of account protection.' }} Use an authenticator app and keep its backup secure.</p>@if (!setup) { <button class="primary" (click)="startMfa()" [disabled]="busy">Set up authenticator</button> } @else { <img class="qr" [src]="setup.qr" alt="Scan with your authenticator app" /><p>Or enter this setup key:</p><code class="secret">{{ setup.secret }}</code><form #f="ngForm" (ngSubmit)="verify()"><label>Six-digit code<input name="code" inputmode="numeric" required pattern="[0-9]{6}" autocomplete="one-time-code" [(ngModel)]="code" /></label><button class="primary" [disabled]="f.invalid || busy">Enable authenticator</button></form> } }
+@if (me.platformAdmin && me.selectedRole === 'SUPER_ADMIN' && me.mfaEnabled) {
+<section class="notice" aria-labelledby="replace-platform-authenticator">
+  <h2 id="replace-platform-authenticator">Replace authenticator</h2>
+  <p>Replacement requires your current password and either your current authenticator code or one unused recovery code. The new authenticator must be verified before it is activated; activation revokes every session for this account, including school-role sessions.</p>
+  @if (replacement; as pending) {
+    <img class="qr" [src]="pending.qr" alt="Scan with your replacement authenticator app" />
+    <p>Or enter this setup key manually:</p><code class="secret">{{ pending.secret }}</code>
+    <form #replaceVerify="ngForm" (ngSubmit)="verifyPlatformReplacement()"><label>Code from the new authenticator<input name="replacementCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required [(ngModel)]="replacementCode" /></label><button class="primary" [disabled]="replaceVerify.invalid || busy">Verify replacement</button></form>
+  } @else if (recoveryCodes.length) {
+    <p>Save these new recovery codes before continuing. They cannot be displayed again.</p>
+    <button class="primary" (click)="acknowledgePlatformReplacement()" [disabled]="busy">I saved my recovery codes and sign out</button>
+  } @else {
+    <form #replaceStart="ngForm" (ngSubmit)="startPlatformReplacement()">
+      <label>Current password<input name="currentPassword" type="password" autocomplete="current-password" required [(ngModel)]="currentPassword" /></label>
+      <label>Current authenticator code or unused recovery code<input name="factor" autocomplete="off" minlength="6" maxlength="20" required [(ngModel)]="replacementFactor" /></label>
+      <button class="primary" [disabled]="replaceStart.invalid || busy">Verify and start replacement</button>
+    </form>
+    <p class="muted">If both your password and MFA factors are lost, the system cannot reset MFA automatically. Another active platform administrator is needed to manage account access; they cannot bypass your required factors.</p>
+  }
+</section>
+}
 @if (!me.mustChangePassword && !me.needsMfaSetup) { <a [routerLink]="auth.landing()">Return to dashboard</a> }
 }<button class="text-button" (click)="signOut()" [disabled]="busy">Sign out</button>
 } @else { <a routerLink="/auth/login">Sign in again</a> }

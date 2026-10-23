@@ -178,9 +178,9 @@ erDiagram
 
 ## 5. Security Architecture & Credential Governance
 
-1. **Stateful Opaque Sessions & CSRF Protection**:
-   - Sessions are stored in PostgreSQL (`UserSession`) as SHA-256 hashes (`sessionTokenHash`) and delivered via `HttpOnly`, `SameSite=Lax` cookies (`syncacademy_session`, with `Secure` enabled in production).
-   - State-mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) require an `x-csrf-token` header matching `UserSession.csrfTokenHash`.
+1. **Stateful Sessions & Same-Origin Write Protection**:
+   - The current runtime stores Express sessions in PostgreSQL (`session`) and delivers the session identifier in an `HttpOnly`, `SameSite=Lax` cookie named `sa.sid` (`Secure` in production).
+   - State-mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) must pass the configured same-origin, `X-Requested-With`, and JSON content-type checks in `apps/api/src/main.ts`.
 2. **Cryptography**:
    - Passwords are hashed using **Argon2id** (`apps/api/src/security.ts`).
    - Sensitive database settings (`PlatformSetting.smtpPassEncrypted`) are encrypted at rest using **AES-256-GCM** keyed by `DATA_ENCRYPTION_KEY`.
@@ -370,9 +370,13 @@ Extends student class enrollment with a formal verification and attendance sanit
 - **Authorization and privacy**: Platform-wide views require Super Admin authorization. School-scoped views are authorized against the selected school at the API boundary. List results omit resource identifiers and event payloads; details are loaded only on demand. Security-event details are redacted before persistence and again before presentation.
 - **Frontend behavior**: The Super Admin page preserves filters and pagination in URL query parameters, supports combined filters and server-side pagination, and does not download the complete event stream to paginate locally.
 
-## 10. Current Implementation: Administrative System Health
+## 10. Current Implementation: Platform Authentication and Administrative System Health
 
 The active runtime uses the controllers in `src/app.module.ts`, PostgreSQL-backed `express-session` authentication, `/api/v1` routes and the Socket.IO gateway in `src/realtime.gateway.ts`. Earlier diagrams and opaque-session/SSE descriptions above describe a different architecture revision and must not be used to introduce a second authentication system into this runtime.
+
+Platform administrators use the manually entered `/platform-access/login` route and versioned `/api/v1/auth/platform/*` endpoints. The public school-role login excludes `SUPER_ADMIN`. Platform access requires an enabled account with `platformAdmin=true`, a password, and TOTP or a one-time recovery code; new authenticator enrollment completes only after code verification and recovery-code acknowledgment. TOTP secrets use the existing AES-256-GCM `DATA_ENCRYPTION_KEY`; recovery codes are stored as hashes and consumed atomically. Authenticator replacement requires a fresh password and current TOTP or recovery code, verifies the new authenticator, rotates recovery codes, records audit/outbox notifications, and revokes account sessions. If all factors are lost, there is no automatic or email-only bypass.
+
+Platform sessions have a 15-minute idle limit, an 8-hour absolute limit, and no remember-device option. Pending MFA challenges expire after five minutes and allow at most five verification failures. `PlatformService` checks MFA assurance and account `sessionVersion` for privileged REST and Socket.IO access; account disablement and authenticator replacement publish user-scoped invalidation events. Same-origin write protection remains in `main.ts`.
 
 The protected monitoring module at `/api/v1/system-health` reuses `PlatformService.administrator` and its selected-role/MFA checks. It collects bounded route-template histograms, process resource measurements, time-limited PostgreSQL probes, gateway counters and communication-worker heartbeats. An additive migration creates aggregate observation, endpoint, incident, settings and heartbeat tables; no tenant data is copied into telemetry. All ordinary school roles are denied access at the backend boundary.
 
