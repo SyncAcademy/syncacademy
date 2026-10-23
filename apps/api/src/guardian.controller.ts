@@ -27,7 +27,7 @@ const parse = <S extends z.ZodTypeAny>(schema: S, input: unknown): z.output<S> =
 };
 
 const readers: Role[] = ['HEADMASTER', 'REGISTRAR', 'ACADEMIC', 'TEACHER', 'BURSAR'];
-const writers: Role[] = ['HEADMASTER', 'REGISTRAR'];
+const writers: Role[] = ['HEADMASTER', 'REGISTRAR', 'ACADEMIC'];
 
 const phoneValidator = z.string().trim().min(7).max(25).transform(v => normalizePhoneNumber(v)).refine(v => /^255\d{9}$|^\+?[1-9]\d{6,14}$/.test(v), {
   message: 'Enter a valid phone number (e.g., 0712345678 or 255712345678).',
@@ -36,7 +36,7 @@ const phoneValidator = z.string().trim().min(7).max(25).transform(v => normalize
 const guardianSchema = z.object({
   name: z.string().trim().min(2).max(150),
   phone: phoneValidator,
-  whatsappPhone: z.string().trim().transform(v => v ? normalizePhoneNumber(v) : '').optional().nullable(),
+  whatsappPhone: z.union([phoneValidator, z.literal('')]).optional().nullable(),
   email: z.string().trim().email().optional().nullable().or(z.literal('')),
   preferredChannel: z.enum(['SMS', 'WHATSAPP', 'EMAIL']).default('SMS'),
   preferredLanguage: z.enum(['sw', 'en']).default('sw'),
@@ -70,6 +70,12 @@ const paging = {
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
   q: z.string().trim().max(150).default(''),
 };
+const invitationSchema = z.object({
+  yearId: uuid,
+  classId: uuid.optional(),
+  studentIds: z.array(uuid).min(1).max(100).optional(),
+  channel: z.enum(['SMS', 'WHATSAPP', 'EMAIL']).default('SMS'),
+}).strict();
 
 @Controller('api/v1/schools/:schoolId')
 export class GuardianController {
@@ -80,6 +86,45 @@ export class GuardianController {
 
   private async access(req: Request, schoolId: string, write = false) {
     return this.svc.authorize(req, parse(uuid, schoolId), write ? writers : readers);
+  }
+
+  @Post('guardian-invitations')
+  async sendInvitations(@Req() req: Request, @Param('schoolId') schoolId: string, @Body() body: unknown) {
+    const { user } = await this.access(req, schoolId, true);
+    const b = parse(invitationSchema, body);
+    await this.svc.rate(`guardian-invitations:${user.id}`, 20, 3600);
+    const year = await this.svc.db.academicYear.findFirst({ where: { id: b.yearId, schoolId } });
+    if (!year) throw new NotFoundException('Academic year not found in this school.');
+    if (b.classId) {
+      const classroom = await this.svc.db.classroom.findFirst({ where: { id: b.classId, schoolId, yearId: b.yearId } });
+      if (!classroom) throw new NotFoundException('Class not found in this academic year.');
+    }
+    if (b.studentIds) {
+      const enrolled = await this.svc.db.enrollment.findMany({ where: { schoolId, classroom: { yearId: b.yearId }, status: 'active', ...(b.classId ? { classroomId: b.classId } : {}), studentId: { in: b.studentIds } }, select: { studentId: true } });
+      if (new Set(enrolled.map(row => row.studentId)).size !== new Set(b.studentIds).size) throw new BadRequestException('Every selected student must be actively enrolled in the selected scope.');
+    }
+    const links = await this.svc.db.studentGuardian.findMany({
+      where: { schoolId, active: true, ...(b.studentIds ? { studentId: { in: b.studentIds } } : {}), student: { schoolId, enrollments: { some: { schoolId, classroom: { yearId: b.yearId }, status: 'active', ...(b.classId ? { classroomId: b.classId } : {}) } } } },
+      include: { guardian: true },
+    });
+    const guardians = new Map(links.map(link => [link.guardianId, link.guardian]));
+    let sent = 0; let skipped = 0;
+    const recipients = [...guardians.values()];
+    for (let offset = 0; offset < recipients.length; offset += 8) {
+      const outcomes = await Promise.all(recipients.slice(offset, offset + 8).map(async guardian => {
+        if ((b.channel === 'SMS' && guardian.optOutSms) || (b.channel === 'WHATSAPP' && guardian.optOutWhatsapp) || (b.channel === 'EMAIL' && !guardian.email) || (b.channel === 'WHATSAPP' && !guardian.whatsappPhone)) return false;
+        try {
+          await this.comms.requestVerification(schoolId, guardian.id, b.channel as CommunicationChannel, user.id, true);
+          return true;
+        } catch (error) {
+          if (error instanceof ConflictException || error instanceof BadRequestException) return false;
+          throw error;
+        }
+      }));
+      sent += outcomes.filter(Boolean).length;
+      skipped += outcomes.filter(outcome => !outcome).length;
+    }
+    return { eligibleGuardians: guardians.size, sent, skipped, message: 'Contact verification invitations queued. Student-record access is not granted.' };
   }
 
   private async teacherClassrooms(req: Request, schoolId: string, memberships: { id: string }[]) {
@@ -369,6 +414,13 @@ export class GuardianController {
         },
       });
 
+      if (b.name || b.phone) {
+        await tx.student.updateMany({
+          where: { schoolId, guardians: { some: { schoolId, guardianId, active: true, isPrimary: true } } },
+          data: { guardianName: res.name, guardianPhone: res.phone },
+        });
+      }
+
       await tx.auditEvent.create({
         data: {
           schoolId,
@@ -450,15 +502,6 @@ export class GuardianController {
 
       if (existingLink && existingLink.active) {
         throw new ConflictException('This guardian is already actively linked to the student.');
-      }
-
-      // Enforce strict maximum of two active authorized parent recipients per student
-      const activeCount = await tx.studentGuardian.count({
-        where: { studentId, schoolId, active: true },
-      });
-
-      if (activeCount >= 2) {
-        throw new ConflictException('A student may have a maximum of two active authorized parent recipients.');
       }
 
       // If isPrimary is true, unset other primary guardians for this student
@@ -551,15 +594,6 @@ export class GuardianController {
       // If activating or setting primary, serialize on student
       if (b.active === true || b.isPrimary === true) {
         await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId}::uuid AND "schoolId" = ${schoolId}::uuid FOR UPDATE`;
-      }
-
-      if (b.active === true && !link.active) {
-        const activeCount = await tx.studentGuardian.count({
-          where: { studentId, schoolId, active: true },
-        });
-        if (activeCount >= 2) {
-          throw new ConflictException('A student may have a maximum of two active authorized parent recipients.');
-        }
       }
 
       if (b.isPrimary) {

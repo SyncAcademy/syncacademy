@@ -30,7 +30,7 @@ const parse = <S extends z.ZodTypeAny>(schema: S, input: unknown): z.output<S> =
 const publishWithLinksSchema = z.object({
   yearId: uuid,
   assessmentId: uuid,
-  classId: uuid,
+  classId: uuid.optional(),
   channel: z.enum(['SMS', 'WHATSAPP', 'EMAIL']).default('SMS'),
   expiresDays: z.coerce.number().int().min(1).max(90).default(30),
   verificationType: z.enum(['otp']).default('otp'),
@@ -59,6 +59,16 @@ export class ReportAccessController {
     private readonly comms: CommunicationService,
   ) {}
 
+  @Get('schools/:schoolId/reports/publish-options')
+  async publishOptions(@Req() req: Request, @Param('schoolId') schoolId: string, @Query() query: unknown) {
+    await this.svc.authorize(req, parse(uuid, schoolId), ['HEADMASTER', 'ACADEMIC']);
+    const { yearId } = parse(z.object({ yearId: uuid }).strict(), query);
+    const workspace = await this.svc.db.academicWorkspace.findFirst({ where: { schoolId, yearId } });
+    const state = workspace?.data as any;
+    const approved = new Set((state?.reports || []).filter((r: any) => r.academicApproved === true && r.status === 'approved').map((r: any) => r.assessmentId));
+    return { assessments: (state?.assessments || []).filter((a: any) => approved.has(a.id)).map((a: any) => ({ id: a.id, name: a.name, term: a.term })) };
+  }
+
   /**
    * School Administrative: Generate report access links and notify guardians
    */
@@ -84,16 +94,14 @@ export class ReportAccessController {
 
     const state = workspace.data as any;
     const reports: any[] = state?.reports || [];
-    const classReports = reports.filter(r => r.assessmentId === b.assessmentId && r.classId === b.classId);
+    const classes = await this.svc.db.classroom.findMany({ where: { schoolId, yearId: b.yearId, ...(b.classId ? { id: b.classId } : {}) }, select: { id: true, name: true } });
+    if (b.classId && !classes.length) throw new BadRequestException('Class not found in this academic year.');
+    const classNames = new Map(classes.map(c => [c.id, c.name]));
+    const classReports = reports.filter(r => r.assessmentId === b.assessmentId && classNames.has(r.classId) && r.academicApproved === true && r.status === 'approved');
 
     if (!classReports.length) {
-      throw new BadRequestException('No generated reports found for this assessment and class. Generate reports first.');
+      throw new BadRequestException('No approved reports found for this assessment and scope. Generate and approve reports first.');
     }
-
-    const classroom = await this.svc.db.classroom.findFirst({
-      where: { id: b.classId, schoolId },
-    });
-    const className = classroom?.name || 'Class';
 
     const expiresAt = new Date(Date.now() + b.expiresDays * 86400000);
     const results: Array<{ studentName: string; guardianName: string; linkId: string; channel: string }> = [];
@@ -104,21 +112,31 @@ export class ReportAccessController {
         const parts = report.id.split(':');
         const studentId = parts[2];
         if (!studentId) continue;
+        if (parts[0] !== b.assessmentId || parts[1] !== report.classId) continue;
+
+        const approvedSubmissions = (state?.submissions || []).filter((s: any) => s.assessmentId === b.assessmentId && s.classId === report.classId);
+        if (!approvedSubmissions.length || approvedSubmissions.some((s: any) => s.assessmentProgress?.status !== 'approved')) continue;
 
         const student = await tx.student.findFirst({
           where: { id: studentId, schoolId },
           include: {
             guardians: {
-              where: { canReceiveReports: true },
+              where: { schoolId, active: true, canReceiveReports: true },
               include: { guardian: true },
             },
           },
         });
 
         if (!student || !student.guardians.length) continue;
+        const enrolled = await tx.enrollment.findFirst({ where: { schoolId, studentId, classroomId: report.classId, classroom: { yearId: b.yearId }, status: 'active' } });
+        if (!enrolled) continue;
+        const className = classNames.get(report.classId) || 'Class';
 
         for (const sg of student.guardians) {
           const guardian = sg.guardian;
+          const channel = b.channel as CommunicationChannel;
+          const recipient = channel === 'WHATSAPP' ? guardian.whatsappPhone : channel === 'EMAIL' ? guardian.email : guardian.phone;
+          if (!recipient || (channel === 'SMS' && guardian.optOutSms) || (channel === 'WHATSAPP' && guardian.optOutWhatsapp)) continue;
           const rawToken = randomToken();
           const tokenHash = digest(rawToken);
 
@@ -155,14 +173,6 @@ export class ReportAccessController {
           // Format notification text in Swahili / English
           const messageText = `SyncAcademy: Taarifa ya maendeleo ya mwanafunzi ${student.name} (${className} - ${report.period || year.name}) ipo tayari. Bonyeza link kuona ripoti: ${reportUrl} (Inaisha siku ${b.expiresDays}).`;
 
-          const channel = b.channel as CommunicationChannel;
-          let recipient = guardian.phone;
-          if (channel === 'WHATSAPP' && guardian.whatsappPhone) {
-            recipient = guardian.whatsappPhone;
-          } else if (channel === 'EMAIL' && guardian.email) {
-            recipient = guardian.email;
-          }
-
           await this.comms.enqueueMessage(tx, {
             schoolId,
             guardianId: guardian.id,
@@ -194,7 +204,7 @@ export class ReportAccessController {
           schoolId,
           actorId: user.id,
           action: 'REPORTS_PUBLISHED_WITH_GUARDIAN_LINKS',
-          target: `${b.classId}:${b.assessmentId}`,
+          target: `${b.classId || 'school'}:${b.assessmentId}`,
         },
       });
     });
@@ -357,6 +367,7 @@ export class ReportAccessController {
     if (!link || !link.school.active) {
       throw new NotFoundException('This report link is invalid or no longer available.');
     }
+    if (!await this.svc.db.studentGuardian.findFirst({ where: { schoolId: link.schoolId, studentId: link.studentId, guardianId: link.guardianId, active: true, canReceiveReports: true } })) throw new ForbiddenException('Guardian access to this student is no longer active.');
 
     if (link.revokedAt) {
       throw new ForbiddenException(`This report link has been revoked by the school: ${link.revokeReason || 'Access removed'}.`);
@@ -494,6 +505,7 @@ export class ReportAccessController {
     if (!link || !link.school.active) {
       throw new NotFoundException('Report link not found or inactive.');
     }
+    if (!await this.svc.db.studentGuardian.findFirst({ where: { schoolId: link.schoolId, studentId: link.studentId, guardianId: link.guardianId, active: true, canReceiveReports: true } })) throw new ForbiddenException('Guardian access to this student is no longer active.');
 
     if (link.revokedAt) {
       throw new ForbiddenException('Report access link has been revoked.');

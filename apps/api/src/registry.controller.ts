@@ -3,12 +3,25 @@ import { Prisma, Role } from '@prisma/client';
 import { Request } from 'express';
 import { z } from 'zod';
 import { PlatformService } from './platform.service';
-import { studentProfile, contactFields, setSubjects, subjectIds, teacherEnrollmentScope, defaultSubjectIds, classTeacherIds, isClassTeacher } from './registry-support';
+import { studentProfile, contactFields, phone, setSubjects, subjectIds, teacherEnrollmentScope, defaultSubjectIds, classTeacherIds, isClassTeacher } from './registry-support';
+import { normalizePhoneNumber } from './communication/communication.service';
 
 const uuid = z.string().uuid();
 const name = z.string().trim().min(2).max(150);
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v && v <= new Date().toISOString().slice(0, 10), 'Enter a valid birth date that is not in the future.');
 const profile = studentProfile;
+const registrationGuardian = z.object({
+  name,
+  relationship: z.string().trim().min(2).max(50).default('Guardian'),
+  phone: phone.refine(Boolean, 'Enter a guardian phone number.').transform(normalizePhoneNumber),
+  whatsappPhone: phone.transform(value => value ? normalizePhoneNumber(value) : '').optional(),
+  email: z.union([z.string().trim().email(), z.literal('')]).default(''),
+  isPrimary: z.boolean().default(false),
+}).strict();
+const registrationGuardians = z.array(registrationGuardian).max(10).default([]).superRefine((rows, context) => {
+  if (rows.filter(row => row.isPrimary).length > 1) context.addIssue({ code: 'custom', message: 'Choose only one primary guardian.' });
+  if (new Set(rows.map(row => row.phone)).size !== rows.length) context.addIssue({ code: 'custom', message: 'Each guardian phone number must be unique for this student.' });
+});
 const readers: Role[] = ['HEADMASTER', 'REGISTRAR', 'ACADEMIC', 'TEACHER'];
 const writers: Role[] = ['HEADMASTER', 'REGISTRAR'];
 const parse = <S extends z.ZodTypeAny>(schema: S, input: unknown): z.output<S> => { const result = schema.safeParse(input); if (!result.success) throw new BadRequestException(result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')); return result.data; };
@@ -19,6 +32,20 @@ const paging = { page: z.coerce.number().int().min(1).max(100000).default(1), pa
 export class RegistryController {
   constructor(private readonly svc: PlatformService) {}
   private async access(req: Request, id: string, write = false) { return this.svc.authorize(req, parse(uuid, id), write ? writers : readers); }
+  private async attachGuardians(tx: Prisma.TransactionClient, schoolId: string, studentId: string, rows: z.output<typeof registrationGuardian>[]) {
+    for (const [index, row] of rows.entries()) {
+      const guardianPhone = normalizePhoneNumber(row.phone);
+      const guardian = await tx.guardian.upsert({
+        where: { schoolId_phone: { schoolId, phone: guardianPhone } },
+        update: {},
+        create: { schoolId, name: row.name, phone: guardianPhone, whatsappPhone: row.whatsappPhone || null, email: row.email || null },
+      });
+      await tx.studentGuardian.create({ data: {
+        schoolId, studentId, guardianId: guardian.id, relationship: row.relationship,
+        isPrimary: row.isPrimary || (index === 0 && !rows.some(item => item.isPrimary)), active: true,
+      } });
+    }
+  }
   private async openClass(tx: Prisma.TransactionClient, schoolId: string, id: string) {
     const c = await tx.classroom.findFirst({ where: { id, schoolId }, include: { year: true } });
     if (!c) throw new BadRequestException('Choose a class in this school.');
@@ -82,6 +109,7 @@ export class RegistryController {
     const { user, memberships } = await this.access(req, schoolId);
     const b = parse(z.object({ ...paging, yearId: uuid, classId: uuid.optional(), status: z.enum(['active', 'transferred_out', 'withdrawn', 'graduated', 'unassigned']).optional() }).strict(), query);
     const manager = user.platformAdmin || memberships.some(m => writers.includes(m.role));
+    const guardianReader = manager || memberships.some(m => m.role === 'ACADEMIC');
     const teacher = !manager && !memberships.some(m => m.role === 'ACADEMIC') && memberships.some(m => m.role === 'TEACHER');
     const teacherScope = teacher ? await teacherEnrollmentScope(this.svc.db, schoolId, user.id) : {};
     const classroom: Prisma.ClassroomWhereInput = { yearId: b.yearId, ...(b.classId ? { id: b.classId } : {}), ...(teacher ? { assignments: { some: { membership: { userId: user.id, active: true } } } } : {}) };
@@ -91,7 +119,7 @@ export class RegistryController {
     const [total, items] = await this.svc.db.$transaction([
       this.svc.db.student.count({ where }),
       this.svc.db.student.findMany({ where, orderBy: [{ name: 'asc' }, { id: 'asc' }], skip: (b.page - 1) * b.pageSize, take: b.pageSize,
-        select: { id: true, name: true, admissionNumber: true, gender: true, version: true, ...(manager ? { dateOfBirth: true, address: true, admissionDate: true, ownPhone: true, guardianName: true, guardianPhone: true } : {}),
+        select: { id: true, name: true, admissionNumber: true, gender: true, version: true, ...(manager ? { dateOfBirth: true, address: true, admissionDate: true, ownPhone: true } : {}), ...(guardianReader ? { guardianName: true, guardianPhone: true } : {}),
           enrollments: { where: { ...teacherScope, classroom: { yearId: b.yearId, ...(teacher ? { assignments: { some: { membership: { userId: user.id, active: true } } } } : {}) } }, include: { subjects: { include: { subject: true } }, classroom: { select: { name: true, yearId: true } } } } } }),
     ]);
     return { items, total, page: b.page, pageSize: b.pageSize };
@@ -99,9 +127,10 @@ export class RegistryController {
   @Get('students/:studentId') async detail(@Req() req: Request, @Param('schoolId') schoolId: string, @Param('studentId') studentId: string) {
     const { user, memberships } = await this.access(req, schoolId); parse(uuid, studentId);
     const manager = user.platformAdmin || memberships.some(m => writers.includes(m.role));
+    const guardianReader = manager || memberships.some(m => m.role === 'ACADEMIC');
     const teacher = !manager && !memberships.some(m => m.role === 'ACADEMIC') && memberships.some(m => m.role === 'TEACHER');
     const permitted: Prisma.EnrollmentWhereInput = teacher ? await teacherEnrollmentScope(this.svc.db, schoolId, user.id) : {};
-    const student = await this.svc.db.student.findFirst({ where: { id: studentId, schoolId, ...(teacher ? { enrollments: { some: permitted } } : {}) }, select: { id: true, name: true, admissionNumber: true, gender: true, version: true, ...(manager ? { address: true, dateOfBirth: true, admissionDate: true, ownPhone: true, guardianName: true, guardianPhone: true, guardians: { include: { guardian: true } } } : {}), enrollments: { where: permitted, include: { subjects: { include: { subject: true } }, classroom: { include: { year: { select: { name: true } } } } }, orderBy: { createdAt: 'desc' } } } });
+    const student = await this.svc.db.student.findFirst({ where: { id: studentId, schoolId, ...(teacher ? { enrollments: { some: permitted } } : {}) }, select: { id: true, name: true, admissionNumber: true, gender: true, version: true, ...(manager ? { address: true, dateOfBirth: true, admissionDate: true, ownPhone: true } : {}), ...(guardianReader ? { guardianName: true, guardianPhone: true, guardians: { where: { active: true }, include: { guardian: true } } } : {}), enrollments: { where: permitted, include: { subjects: { include: { subject: true } }, classroom: { include: { year: { select: { name: true } } } } }, orderBy: { createdAt: 'desc' } } } });
     if (!student) throw new BadRequestException('Student is unavailable.');
     const events = manager ? await this.svc.db.registryEvent.findMany({ where: { schoolId, studentId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100 }) : [];
     return { ...student, events };
@@ -122,11 +151,14 @@ export class RegistryController {
   }
   @Post('students') async create(@Req() req: Request, @Param('schoolId') schoolId: string, @Body() body: unknown) {
     const { user } = await this.access(req, schoolId, true);
-    const b = parse(z.object({ ...profile, classroomId: uuid, subjectIds: subjectIds.default([]) }).strict(), body);
+    const b = parse(z.object({ ...profile, classroomId: uuid, subjectIds: subjectIds.default([]), guardians: registrationGuardians }).strict(), body);
     return this.svc.idempotent(`${user.id}:registry-create:${schoolId}`, key(req), b, async tx => {
       const c = await this.openClass(tx, schoolId, b.classroomId);
-      const { classroomId, subjectIds: selectedSubjects, ...p } = b;
-      const student = await tx.student.create({ data: { ...p, schoolId, dateOfBirth: b.dateOfBirth ? new Date(b.dateOfBirth) : null, admissionDate: b.admissionDate ? new Date(b.admissionDate) : null } });
+      const { classroomId, subjectIds: selectedSubjects, guardians, ...p } = b;
+      const contacts = guardians.length ? guardians : b.guardianName && b.guardianPhone ? [{ name: b.guardianName, phone: b.guardianPhone, relationship: 'Guardian', email: '', isPrimary: true }] : [];
+      const primary = contacts.find(guardian => guardian.isPrimary) || contacts[0];
+      const student = await tx.student.create({ data: { ...p, schoolId, guardianName: primary?.name || '', guardianPhone: primary?.phone || '', dateOfBirth: b.dateOfBirth ? new Date(b.dateOfBirth) : null, admissionDate: b.admissionDate ? new Date(b.admissionDate) : null } });
+      await this.attachGuardians(tx, schoolId, student.id, contacts);
       const enrollment = await tx.enrollment.create({ data: { schoolId, studentId: student.id, classroomId } });
       await setSubjects(tx, schoolId, enrollment.id, classroomId, await defaultSubjectIds(tx, schoolId, classroomId, selectedSubjects));
       await this.event(tx, schoolId, user.id, c.yearId, 'registration', `${student.name} registered in ${c.name}.`, student.id, undefined, c.id);
@@ -212,6 +244,7 @@ export class RegistryController {
         if (c.yearId !== a.yearId) throw new BadRequestException('Choose a class in the application year.');
         const s = await tx.student.create({ data: { schoolId, name: a.name, admissionNumber: b.admissionNumber, gender: a.gender, dateOfBirth: a.dateOfBirth, admissionDate: a.admissionDate, ownPhone: a.ownPhone, guardianName: a.guardianName, guardianPhone: a.guardianPhone, address: a.address } });
         studentId = s.id;
+        if (a.guardianName && a.guardianPhone) await this.attachGuardians(tx, schoolId, s.id, [{ name: a.guardianName, phone: a.guardianPhone, relationship: 'Guardian', email: '', isPrimary: true }]);
         const enrollment = await tx.enrollment.create({ data: { schoolId, studentId, classroomId: c.id } });
         await setSubjects(tx, schoolId, enrollment.id, c.id, await defaultSubjectIds(tx, schoolId, c.id, b.subjectIds));
       } else if (b.note.length < 5) throw new BadRequestException('Record a reason for rejecting the application.');

@@ -122,7 +122,8 @@ export class CommunicationService {
     schoolId: string,
     guardianId: string,
     channel: CommunicationChannel,
-    actorId: string
+    actorId: string,
+    invitation = false,
   ): Promise<{ success: boolean; resendAfter: string; channel: CommunicationChannel; destination: string }> {
     const guardian = await this.db.guardian.findFirst({
       where: { id: guardianId, schoolId },
@@ -165,7 +166,9 @@ export class CommunicationService {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
     const resendAfter = new Date(Date.now() + 60 * 1000); // 60 seconds cooldown
 
-    const verificationMessage = `SyncAcademy verification code: ${code}. Valid for 15 minutes. Do not share this code.`;
+    const verificationMessage = invitation
+      ? `SyncAcademy: Your school invites you to verify your guardian contact. Code: ${code}. Valid for 15 minutes. Give this code only to authorized school staff. Verification does not grant student-record access.`
+      : `SyncAcademy verification code: ${code}. Valid for 15 minutes. Do not share this code.`;
 
     await this.db.$transaction(async tx => {
       // Invalidate existing unverified codes for this guardian and channel
@@ -201,7 +204,7 @@ export class CommunicationService {
         data: {
           schoolId,
           actorId,
-          action: `CONTACT_VERIFICATION_REQUESTED_${channel}`,
+          action: invitation ? `GUARDIAN_INVITATION_SENT_${channel}` : `CONTACT_VERIFICATION_REQUESTED_${channel}`,
           target: guardianId,
         },
       });
