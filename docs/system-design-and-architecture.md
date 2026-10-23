@@ -260,9 +260,11 @@ All communication channels implement a unified interface under `apps/api/src/com
 ### 7.4 Secure, Expiring Report-Access Links (`ReportAccessLink`) & Public Mobile Viewer
 Allows parents to view and download term report cards from an SMS, WhatsApp message, or Email without requiring pre-created portal passwords:
 - High-entropy 256-bit URL token (`/r/<token>`), unguessable and stored only as SHA-256 hash in `ReportAccessLink.tokenHash`.
-- Lightweight identity challenge: guardian enters the last 4 digits of their registered phone number (or 6-digit SMS OTP code for heightened security) before viewing the report card (rate-limited to 10 attempts per 10 minutes).
+- Guardian identity challenge: a verified 6-digit SMS OTP is required before viewing the report card (rate-limited to 10 attempts per 10 minutes). An active student-guardian relationship with report permission is checked again at access time.
 - Public mobile web route `/r/:token` (`apps/web/src/app/features/public/report-viewer.page.ts`) adhering to mobile-native polish (safe-area insets, responsive results table, NECTA-aligned grades, print styling).
 - School staff can publish report links with notifications in bulk (`POST /api/v1/schools/:schoolId/reports/publish-with-links`) and instantly revoke active links with reason tracking (`POST /api/v1/schools/:schoolId/reports/links/:linkId/revoke`).
+- Current implementation: Headmaster and Academic Master may publish only approved academic workspace reports for actively enrolled students, scoped to one class or all classes in an academic year. The Registrar is denied at the API boundary. `GET /api/v1/schools/:schoolId/reports/publish-options?yearId=...` lists available assessments.
+- Current implementation: Headmaster, Academic Master, and Registrar may send contact-verification invitations through `POST /api/v1/schools/:schoolId/guardian-invitations` for a student selection, class, or school year. Shared guardians are deduplicated. Invitations use existing OTP and outbox infrastructure and do not grant a parent login or student-record access.
 
 ---
 
@@ -285,14 +287,14 @@ Phase 3 introduces enterprise operational modules expanding administrative overs
 
 ### 9.1 Mandatory Architecture Corrections
 
-1. **Transactional Parent Limit (Maximum Two Active Authorized Guardians)**:
+1. **Transactional Student-Guardian Relationships**:
    - Enforced in `apps/api/src/guardian.controller.ts` using `SELECT ... FOR UPDATE` row locks on the `Student` record within a PostgreSQL transaction.
    - Historical relationships and communication logs are permanently preserved: unlinking a parent sets `active: false` rather than deleting rows.
    - Cross-school isolation is strictly verified: both student and guardian records must belong to the caller's authorized `schoolId`.
-   - Parents have no login credentials, passwords, or dashboards in SyncAcademy.
+   - Multiple active guardians can be linked to one student, and one guardian can be linked to siblings. Parent sign-in remains planned; a contact-verification invitation never grants account access.
 2. **Independent Contact Verification Invalidation**:
    - Phone and email verification states are isolated.
-   - When a guardian's phone number changes, all outstanding phone OTP challenges are invalidated (`isUsed: true`) and `phoneVerifiedAt` is cleared.
+   - When a guardian's phone number changes, outstanding phone OTP challenges are deleted and `phoneVerifiedAt` is cleared.
    - When an email address changes, email verification challenges are invalidated while preserving unrelated phone verification.
 3. **OTP-Secured Report Access Sessions & Authorized PDF Downloads**:
    - Standalone `phone_last4` challenge is deprecated in favor of verified 6-digit OTP codes.

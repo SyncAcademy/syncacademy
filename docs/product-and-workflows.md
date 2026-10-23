@@ -23,7 +23,7 @@
 | **Academic Reports & Report Cards** | Generate student term result summaries and printable/publishable report cards (`AcademicReportCardRecord`) once marks are approved. | **Implemented** (`/academic`, `/class-teacher`, `/headmaster`) |
 | **Daily Attendance** | Record and review daily student attendance (`PRESENT`, `ABSENT`, `LATE`, `EXCUSED`) by class and date (`AcademicAttendanceSession`, `AcademicAttendanceEntry`) with revision history. | **Implemented** (`/class-teacher`, `/academic`) |
 | **Bursar & Student Fee Workflows** | Define class/term fee structures (`FeeStructure`), issue student invoices (`Invoice`), record installment payments and sequential receipts (`Payment`), and process fee adjustments (`BursarAdjustmentRequest`). | **Implemented** (`/bursar`) |
-| **Parent Communication Engine** | Transactional email notifications via PostgreSQL `Outbox` (`worker.ts`), plus SMS, WhatsApp, cross-school guardian identity, and expiring report-access links (`ReportAccessLink`). | **Email Live; SMS/WhatsApp/Report Links Designed for Phase 3** |
+| **Parent Communication Engine** | PostgreSQL `Outbox` delivery for email, SMS and WhatsApp, guardian contact verification, and expiring OTP-protected report links (`ReportAccessLink`). Provider delivery requires configured credentials; parent account sign-in remains planned. | **Implemented with provider configuration** |
 
 ### Explicitly Out of Scope for Initial MVP
 - Native iOS/Android mobile apps (the MVP is a responsive web application).
@@ -84,6 +84,7 @@ SyncAcademy separates **Global User Identity** (`User`) from **Tenant Authorizat
 - **Admissions, Enrollments & Movements**: Process admission applications, register students and guardian contacts, enroll students into classes, transfer students between streams, and execute atomic year-to-year cohort progressions.
 - **Two-Stage CSV / `.xlsx` Student Import**: Upload spreadsheets (up to 5 MB / 5,000 rows), map columns and explicit date formats, preview validation errors without mutating data, and confirm valid rows in resumable atomic batches of 50.
 - **Subject Selections & Roster Issues**: Adjust student subject combinations and resolve teacher-reported roster issues.
+- **Student Directory and Guardians (Current Implementation)**: Headmaster, Registrar, and Academic Master share the class-card directory and student profiles. Registration can link multiple guardians, including one guardian shared by siblings. These three roles can maintain guardian contacts and relationships and send SMS contact-verification invitations for one student, selected students, a class, or all active students in the selected academic year. An invitation does not create a parent account or grant access to student records.
 
 ### 4.4 Academic Master & Teacher Portals (`/academic`, `/class-teacher`)
 - **Assessments & Marks Lifecycle**:
@@ -92,6 +93,7 @@ SyncAcademy separates **Global User Identity** (`User`) from **Tenant Authorizat
   3. Academic Master reviews submissions in **Marks Review** and approves (`ACADEMIC_APPROVED`) or returns them with a reason.
   4. Headmaster reviews prepared student reports and approves/publishes (`HEADMASTER_APPROVED` / `PUBLISHED`) official report cards.
 - **Attendance, Timetables & Planner**: Class teachers record daily attendance (with audited correction reasons); teachers track syllabus topics, exam slots, and student support plans.
+- **Results Delivery (Current Implementation)**: Headmaster and Academic Master can send approved report cards to eligible guardians from a selected class or across the selected academic year. Registrar cannot publish results. Report links require a guardian OTP before viewing and cease working when the student-guardian relationship or report permission is deactivated.
 
 ### 4.5 Bursar Portal (`/bursar`)
 - **Fee Creation & Application**: Create fee structures in whole Tanzanian Shillings (TZS) for `Term 1`, `Term 2`, or `Full year` across selected classes, and apply them atomically to charge all active, previously uncharged students.
@@ -110,7 +112,7 @@ SyncAcademy separates **Global User Identity** (`User`) from **Tenant Authorizat
   - Payment provider abstraction; the mock provider is limited to tests and explicitly enabled development. A production payment gateway is not yet configured, and payment initiation fails closed.
   - Messaging credit wallet & ledger (separate SMS/WhatsApp balances, atomic credit reservation and release).
   - Bank statement reconciliation (safe CSV parsing, SHA-256 duplicate statement detection, and candidate matching engine).
-  - Transactional parent relationship limit (max 2 active guardians per student with row locks and soft deactivation).
+  - Transactional student-guardian links with row locks and soft deactivation; multiple active guardians are supported.
   - Independent phone/email verification invalidation on contact changes.
   - OTP-secured report viewing sessions and authorized PDF downloads.
   - Security events telemetry with automatic secret redaction.
