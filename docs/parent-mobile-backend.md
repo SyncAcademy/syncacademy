@@ -50,8 +50,8 @@ All paths below start with `/api/v1`. JSON bodies reject unknown fields. UUID pa
 | `GET /parent/children` | Bearer | Up to 100 currently authorized children with school and latest active class. |
 | `GET /parent/children/{studentId}` | Bearer and active link | Selected child, school, and latest active class. |
 | `GET /parent/children/{studentId}/home` | Bearer and active link | Bounded child summary, published-result count, fee totals where permitted, latest attendance, three announcements, unread count. |
-| `GET /parent/children/{studentId}/results` | Bearer, report permission | `cursor?, limit?`; published report references only. |
-| `GET /parent/children/{studentId}/results/{resultId}` | Bearer, report permission | Approved published report details, selected school, year, and child only. |
+| `GET /parent/children/{studentId}/results` | Bearer, report permission | `cursor?, limit?`; unexpired, unrevoked published report references only. |
+| `GET /parent/children/{studentId}/results/{resultId}` | Bearer, report permission | Approved, unexpired published report details for the selected school, year, and child only. |
 | `GET /parent/children/{studentId}/fees` | Bearer, finance permission | `yearId?, limit?, chargeCursor?, paymentCursor?, adjustmentCursor?`; exact aggregate totals plus separately paged rows. |
 | `GET /parent/children/{studentId}/attendance` | Bearer, attendance permission | `yearId, before?, limit?`; latest revisions for selected child, date cursor. |
 | `GET /parent/children/{studentId}/calendar` | Bearer and active link | `yearId`; school year and configured terms, with empty events when none exist. |

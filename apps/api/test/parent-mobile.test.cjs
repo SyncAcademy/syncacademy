@@ -134,6 +134,10 @@ test('parent activation and school isolation', { timeout: 180000 }, async () => 
     const result = await mobile('GET', `parent/children/${child.id}/results/${published.id}`, undefined, token);
     assert.equal(result.status, 200);
     assert.equal(result.body.results[0].mark, 82);
+    await db.reportAccessLink.update({ where: { id: published.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    assert.equal((await mobile('GET', `parent/children/${child.id}/results`, undefined, token)).body.items.length, 0);
+    assert.equal((await mobile('GET', `parent/children/${child.id}/results/${published.id}`, undefined, token)).status, 404);
+    assert.equal((await mobile('GET', `parent/children/${child.id}/home`, undefined, token)).body.results.publishedCount, 0);
     const attendance = await mobile('GET', `parent/children/${child.id}/attendance?yearId=${year.id}`, undefined, token);
     assert.equal(attendance.status, 200);
     assert.equal(attendance.body.items[0].status, 'Present');

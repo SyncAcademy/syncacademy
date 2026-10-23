@@ -407,7 +407,7 @@ export class ParentController {
       link.canReceiveFinanceAlert ? this.svc.db.studentCharge.aggregate({ where: { schoolId: link.schoolId, studentId }, _sum: { amount: true } }) : null,
       link.canReceiveFinanceAlert ? this.svc.db.payment.aggregate({ where: { schoolId: link.schoolId, studentId, voidAt: null }, _sum: { amount: true } }) : null,
       link.canReceiveFinanceAlert ? this.svc.db.adjustment.aggregate({ where: { schoolId: link.schoolId, studentId }, _sum: { amount: true } }) : null,
-      link.canReceiveReports ? this.svc.db.reportAccessLink.count({ where: { schoolId: link.schoolId, studentId, guardianId: link.guardianId, revokedAt: null } }) : 0,
+      link.canReceiveReports ? this.svc.db.reportAccessLink.count({ where: { schoolId: link.schoolId, studentId, guardianId: link.guardianId, revokedAt: null, expiresAt: { gt: new Date() } } }) : 0,
       this.svc.db.parentNotification.count({ where: { userId: user.id, readAt: null, ...await this.notificationScope(user.id) } }),
       enrollment ? this.svc.db.parentAnnouncement.findMany({ where: { schoolId: link.schoolId, yearId: enrollment.classroom.yearId, OR: [{ classId: null }, { classId: enrollment.classroomId }], publishedAt: { lte: new Date() }, AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }] }, orderBy: { publishedAt: 'desc' }, take: 3, select: { id: true, title: true, publishedAt: true } }) : [],
     ]);
@@ -443,7 +443,7 @@ export class ParentController {
     const { link } = await this.child(req, studentId);
     if (!link.canReceiveReports) throw new ForbiddenException('Results are unavailable.');
     const q = parse(z.object({ cursor: uuid.optional(), limit: z.coerce.number().int().min(1).max(50).default(25) }).strict(), query);
-    const rows = await this.svc.db.reportAccessLink.findMany({ where: { schoolId: link.schoolId, studentId, guardianId: link.guardianId, revokedAt: null }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: q.limit + 1, ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}), select: { id: true, reportCardId: true, createdAt: true } });
+    const rows = await this.svc.db.reportAccessLink.findMany({ where: { schoolId: link.schoolId, studentId, guardianId: link.guardianId, revokedAt: null, expiresAt: { gt: new Date() } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: q.limit + 1, ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}), select: { id: true, reportCardId: true, createdAt: true } });
     return { items: rows.slice(0, q.limit).map(row => ({ id: row.id, publishedAt: row.createdAt, assessmentId: row.reportCardId.split(':')[0] })), nextCursor: rows.length > q.limit ? rows[q.limit - 1].id : null };
   }
 
@@ -452,7 +452,7 @@ export class ParentController {
     const { link } = await this.child(req, studentId);
     if (!link.canReceiveReports) throw new ForbiddenException('Results are unavailable.');
     parse(uuid, resultId);
-    const published = await this.svc.db.reportAccessLink.findFirst({ where: { id: resultId, schoolId: link.schoolId, studentId, guardianId: link.guardianId, revokedAt: null }, select: { reportCardId: true, createdAt: true } });
+    const published = await this.svc.db.reportAccessLink.findFirst({ where: { id: resultId, schoolId: link.schoolId, studentId, guardianId: link.guardianId, revokedAt: null, expiresAt: { gt: new Date() } }, select: { reportCardId: true, createdAt: true } });
     if (!published) throw new NotFoundException('Published result unavailable.');
     const classId = published.reportCardId.split(':')[1];
     const classroom = await this.svc.db.classroom.findFirst({ where: { id: classId, schoolId: link.schoolId }, select: { yearId: true, name: true, year: { select: { name: true } } } });
