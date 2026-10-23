@@ -2,6 +2,8 @@
 
 This document is the authoritative technical design specification for SyncAcademy across the **Frontend (`apps/web`)**, **Backend (`apps/api`)**, **Database (`apps/api/prisma`)**, **Multi-Tenancy**, **Security**, **Performance**, **Multi-Channel Communications**, and **Architecture Decision Records (ADRs)**.
 
+The current parent mobile API, invitation activation, bearer-session contract, tenant checks, worker leasing, and measured scaling limits are documented in [Parent mobile backend](parent-mobile-backend.md). Flutter push delivery and a general class lesson timetable remain planned integrations.
+
 ---
 
 ## 1. End-to-End System Topology

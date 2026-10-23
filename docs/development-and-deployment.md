@@ -2,6 +2,8 @@
 
 This document covers local development setup, automated testing standards, and the Cloudflare-first low-cost production deployment architecture for SyncAcademy.
 
+The parent mobile backend runs in the existing API and worker containers. Its additive migration, Flutter API contract, invitation processing, and scaling checks are described in [Parent mobile backend](parent-mobile-backend.md). Use mock communication dispatch and a disposable test database for parent invitation and load tests; production providers must never be exercised by test fixtures.
+
 ---
 
 ## 1. Local Development Setup

@@ -1,0 +1,83 @@
+# Parent mobile backend
+
+## Current implementation
+
+The Flutter client uses the existing `/api/v1` NestJS API and PostgreSQL database. Parent identity is a `User` with a verified `ParentAccount`; each school keeps its own `Guardian` contact and active `StudentGuardian` links. A contact record or invitation alone grants no student access. Every child read checks the active link, school status, account state, and the link's relevant visibility flag. Staff use the existing school cookie session and selected role.
+
+The mobile client sends `Authorization: Bearer <accessToken>` and no browser cookie. Tokens are random 256-bit values; PostgreSQL stores only SHA-256 hashes in `ParentMobileSession`. A session expires after 30 days, can be rotated at `/parent/auth/renew`, and is rejected after logout, account disablement, or `User.sessionVersion` change. Flutter should store the token in Android Keystore or iOS Keychain backed secure storage, never store the password, and send requests only to the public HTTPS API. The backend refuses insecure parent routes in production. The token is returned only at sign-in or renewal and is never a URL parameter.
+
+Parent API requests from native clients omit `Origin` and `Cookie`; JSON writes use `Content-Type: application/json`. The browser origin restriction remains in force for school staff. Staff writing parent invitations or announcements first fetch `GET /schools/{schoolId}/parent-actions/csrf`, then send its `csrfToken` as `x-csrf-token` with the existing authenticated cookie. The token is held in the PostgreSQL-backed browser session.
+
+### Activation and sign-in
+
+1. A Headmaster, Academic Master, or Registrar creates an individual invitation or a selected-student, class, or school batch. Only active guardian links in the selected school and year are eligible. Each guardian receives a unique 48-hour link and 128-bit manual code through the selected existing delivery channel. The outbox worker checks invitation status immediately before sending.
+2. Flutter sends the link token or manual code to `POST /parent/invitations/challenge`. The backend sends a separate 15-minute verification code to the invitation's recorded contact. The challenge response reveals only a masked destination.
+3. Flutter sends the invitation credential, verification code, and chosen password to `POST /parent/invitations/activate`. The transaction consumes the challenge and invitation once, verifies that the contact and relationship are still valid, and links a `User` to the school guardian. For an existing parent account, `password` must match that account. Activation does not return a session.
+4. Flutter signs in with verified email or phone and password at `POST /parent/auth/login`. It stores the returned bearer token, calls `/parent/auth/me` and `/parent/children`, and handles `401` by clearing the stored token and returning to sign-in. Child selection is a client preference and never changes server authorization.
+5. Logout revokes the current token. Password change, password recovery, and revoke-all invalidate all mobile sessions and existing browser sessions through `sessionVersion`.
+
+An SMS-only parent account uses an internal non-deliverable `User.email` identifier. The public profile returns `email: null`; the parent signs in and recovers by verified phone. If the guardian's email belongs to an account without a parent identity, activation requires school follow-up rather than silently attaching a parent identity to that account.
+
+Flutter configures the public HTTPS origin plus `/api/v1` as its base URL. A successful sign-in response has the shape `{ "accessToken": "<opaque-token>", "tokenType": "Bearer", "expiresIn": 2592000 }`. Subsequent requests send `Authorization: Bearer <opaque-token>`; the app stores the token in platform secure storage and sends no cookie or CSRF header. On a `401`, clear that token and show sign-in. After renewal, replace the stored token atomically. On logout, call `/parent/auth/logout` and clear it even if the network request fails. An HTTP `403` means the signed-in parent lacks permission for the requested child data; a `404` means the child or published item is unavailable in the authorized scope.
+
+The permission boundary is: Headmaster, Academic Master, and Registrar can issue parent invitations; Headmaster and Academic Master can publish approved results and parent announcements; a parent can read a child's data only while an active school guardian link permits the specific resource. The mobile token never grants staff or platform authority.
+
+### Endpoint inventory
+
+All paths below start with `/api/v1`. JSON bodies reject unknown fields. UUID path parameters and cursor/limit inputs are validated. `400` means invalid input or challenge, `401` means sign-in or account verification failed, `403` means the role or visibility flag forbids access, `404` means a scoped record is unavailable, `409` means a duplicate or stale state, and `429` means the PostgreSQL-backed rate limit was reached. Invitation validation uses a consistent public error and does not return student details.
+
+| Method and path | Caller | Input and response |
+|---|---|---|
+| `GET /schools/{schoolId}/parent-actions/csrf` | Headmaster, Academic Master, Registrar | Returns `{csrfToken}` for subsequent staff writes. |
+| `POST /schools/{schoolId}/parent-invitations` | Same staff roles | `{guardianId, channel}`; returns `{id, expiresAt}`. Requires CSRF. |
+| `GET /schools/{schoolId}/parent-invitations` | Same staff roles | `cursor?, limit?`; returns status items without credentials and `nextCursor`. |
+| `POST /schools/{schoolId}/parent-invitations/{id}/resend` | Same staff roles | Rotates both credentials, queues a new delivery, returns expiry. Requires CSRF. |
+| `POST /schools/{schoolId}/parent-invitations/{id}/revoke` | Same staff roles | Revokes the invitation and pending delivery. Requires CSRF. |
+| `POST /schools/{schoolId}/parent-invitation-batches` | Same staff roles | `{yearId, classId?, studentIds?, channel}`; selected IDs are limited to 100; omitting IDs selects the class or school. Returns `{jobId, status, createdAt}`. Requires CSRF. |
+| `GET /schools/{schoolId}/parent-invitation-batches/{jobId}` | Same staff roles | Returns `status`, `scanned`, `queued`, `skipped`, `failed`, and timestamps. |
+| `POST /schools/{schoolId}/parent-announcements` | Headmaster, Academic Master | `{yearId, classId?, title, body}`; publishes to parent audience and queues in-app notification fanout. Requires CSRF. |
+| `POST /parent/invitations/challenge` | Public | `{credential}`; returns channel, masked destination, expiry. |
+| `POST /parent/invitations/activate` | Public | `{credential, code, password}`; returns `{activated:true, signInRequired:true}`. |
+| `POST /parent/auth/login` | Public | `{identifier, password}`; returns `{accessToken, tokenType:'Bearer', expiresIn}`. |
+| `POST /parent/auth/recovery/request` | Public | `{identifier}`; returns the same safe message whether an eligible account exists or not. |
+| `POST /parent/auth/recovery/confirm` | Public | `{identifier, code, password}`; consumes the eight-digit recovery code and revokes sessions. |
+| `GET /parent/auth/me` | Bearer | Returns account ID, name, verified contact, and status. |
+| `POST /parent/auth/renew` | Bearer | Rotates the token and returns a new 30-day token. |
+| `POST /parent/auth/logout` | Bearer | Revokes this token. |
+| `POST /parent/auth/revoke-all` | Bearer | `{password}`; revokes all account sessions. |
+| `POST /parent/auth/change-password` | Bearer | `{currentPassword, password}`; revokes all account sessions. |
+| `PATCH /parent/profile` | Bearer | `{name}` only; contact changes require school verification. |
+| `GET /parent/children` | Bearer | Up to 100 currently authorized children with school and latest active class. |
+| `GET /parent/children/{studentId}` | Bearer and active link | Selected child, school, and latest active class. |
+| `GET /parent/children/{studentId}/home` | Bearer and active link | Bounded child summary, published-result count, fee totals where permitted, latest attendance, three announcements, unread count. |
+| `GET /parent/children/{studentId}/results` | Bearer, report permission | `cursor?, limit?`; published report references only. |
+| `GET /parent/children/{studentId}/results/{resultId}` | Bearer, report permission | Approved published report details, selected school, year, and child only. |
+| `GET /parent/children/{studentId}/fees` | Bearer, finance permission | `yearId?, limit?, chargeCursor?, paymentCursor?, adjustmentCursor?`; exact aggregate totals plus separately paged rows. |
+| `GET /parent/children/{studentId}/attendance` | Bearer, attendance permission | `yearId, before?, limit?`; latest revisions for selected child, date cursor. |
+| `GET /parent/children/{studentId}/calendar` | Bearer and active link | `yearId`; school year and configured terms, with empty events when none exist. |
+| `GET /parent/children/{studentId}/timetable` | Bearer and active link | `{available:false, items:[]}` until a class lesson timetable is recorded in the shared system. |
+| `GET /parent/announcements` and `GET /parent/announcements/{id}` | Bearer and current school/class link | Parent-published school or class announcements; list uses `cursor?, limit?`. |
+| `GET /parent/notifications`, `GET /parent/notifications/unread-count` | Bearer and current link | Bounded in-app notification list or count. Revoked school/student scopes are hidden. |
+| `PATCH /parent/notifications/{id}/read`, `POST /parent/notifications/read-all` | Bearer and current link | Updates only the caller's currently authorized notifications. |
+
+### Database and performance review
+
+The new migration adds `ParentAccount`, `ParentInvitation`, `ParentInvitationBatch`, `ParentMobileSession`, `ParentRecoveryChallenge`, `ParentAnnouncement`, and `ParentNotification`. Unique token and code hashes prevent credential reuse; guardian/student relationship constraints remain intact. New compound indexes serve school-scoped invitation lookup, batch leasing, user notification paging, mobile session revocation, and school announcement paging. Existing `StudentGuardian` indexes on `(schoolId, studentId)` and `(schoolId, guardianId)`, enrollment indexes, and fee indexes support the shared authorization checks. Historical migrations remain unchanged.
+
+The parent result endpoint selects one approved report element inside PostgreSQL rather than transferring the whole academic-year workspace JSON. Attendance similarly projects one student's entries in SQL. Fee totals use database aggregates, while charge, payment, and adjustment rows have separate bounded cursors. The existing report publication path now preloads eligible students, guardian links, and enrollments in two queries instead of repeating those reads for every report. The remaining per-recipient writes create distinct links, outbox rows, and audit trails. The JSONB report and attendance scans remain a likely cost at large schools; materialized student-scoped records should be considered after measured query plans justify them.
+
+There is no cross-parent or cross-school data cache. Sensitive reads are served from PostgreSQL with `Cache-Control: no-store`, so relationship revocation and publication changes take effect on the next request. A future shared cache would need a key containing school ID, user ID, student ID, resource ID, and publication version, short TTLs, and invalidation on changes. An in-process cache is inappropriate across API replicas.
+
+The worker leases outbox rows and parent batch/announcement work through PostgreSQL `FOR UPDATE SKIP LOCKED`. It resumes batch work from an indexed guardian cursor, issues distinct invitation credentials, and skips existing active invitations. Announcement notifications use a cursor and unique dedupe key. A worker crash may cause a delivery retry after a lease expires; external SMS/email providers should support an idempotency key for strict exactly-once delivery. Pending invitations and recovery codes are checked again before dispatch. Large school batches still need operational monitoring for provider limits and queue depth.
+
+Existing API process metrics record route latency, error rate, process resources, and session-pool state; the worker publishes heartbeats and queue observations. Query counts and individual query timings are not currently instrumented, so those measurements and PostgreSQL `EXPLAIN (ANALYZE, BUFFERS)` on representative parent data remain deployment checks. Configure Prisma connection limits in the database URL and budget `API replicas x Prisma pool + session pools + workers` below the managed database connection cap. Browser sessions and mobile credentials are in PostgreSQL, and leases work across replicas; use a load balancer with HTTPS and `REALTIME_TRANSPORT=postgres` only if staff realtime events span replicas. Parent updates rely on push and in-app delivery rather than a permanent socket.
+
+### Deployment and verification limits
+
+Apply the additive migration before starting the updated API and worker. Keep the existing Docker Compose services and configure the current email/SMS providers for real delivery; no push provider is present, so push delivery is a future integration. The activation link points to the configured app origin and needs a Flutter deep-link or web handoff when the mobile client is built. The manual code remains available without that handoff.
+
+The shared system currently has no general lesson timetable or event calendar records; the timetable endpoint returns an explicit unavailable state and the calendar returns configured academic terms with an empty events list. The existing public report route named `/pdf` returns JSON rather than a PDF file. Parent mobile results therefore expose the authorized report data and do not claim a downloadable PDF. A real document renderer and authenticated binary download route remain integration work if PDF export is required.
+
+No capacity claim follows from unit tests or a TypeScript build. Load tests should use a disposable PostgreSQL database, representative schools, real guardian links and academic workspaces, mock communication dispatch, and 100, 500, then 1,000 clients with realistic think times. Record hardware, dataset sizes, throughput, p50/p95/p99, error rate, payload sizes, query plans, pool utilization, queue depth, CPU and memory. A provisional budget is p95 below 500 ms for lightweight child reads under the documented workload; results and large-year JSON scans need their own measured budget. Scale API replicas and worker concurrency only after these measurements, keeping a single logical backend and database.
+
+`scripts/load-test-parents.mjs` provides a read-only local workload. Put a restrictive-permission JSON array of `{accessToken, studentId, yearId}` fixtures in ignored `.runtime/parent-load-fixture.json`, point `PARENT_LOAD_BASE_URL` at a local API backed by a disposable database, set `PARENT_LOAD_TEST_ISOLATED=1`, and run `node scripts/load-test-parents.mjs`. Set `PARENT_LOAD_CLIENTS` to 100, 500, and 1000 in separate runs; `PARENT_LOAD_DURATION_MS` and `PARENT_LOAD_THINK_MIN_MS`/`PARENT_LOAD_THINK_MAX_MS` tune the documented workload. The script reports route and aggregate latency quantiles, throughput, errors, and payload sizes without printing credentials. It does not measure query counts, database pools, CPU, memory, or provider delivery and does not create invitation traffic.
