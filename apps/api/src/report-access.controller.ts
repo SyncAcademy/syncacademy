@@ -105,8 +105,19 @@ export class ReportAccessController {
 
     const expiresAt = new Date(Date.now() + b.expiresDays * 86400000);
     const results: Array<{ studentName: string; guardianName: string; linkId: string; channel: string }> = [];
+    const reportStudentIds = [...new Set(classReports.map(report => String(report.id).split(':')[2]).filter(Boolean))];
+    const approvedClasses = new Set(classes.filter(classroom => {
+      const submissions = (state?.submissions || []).filter((submission: any) => submission.assessmentId === b.assessmentId && submission.classId === classroom.id);
+      return submissions.length > 0 && submissions.every((submission: any) => submission.assessmentProgress?.status === 'approved');
+    }).map(classroom => classroom.id));
 
     await this.svc.atomic(async tx => {
+      const [students, enrollments] = await Promise.all([
+        tx.student.findMany({ where: { schoolId, id: { in: reportStudentIds } }, include: { guardians: { where: { schoolId, active: true, canReceiveReports: true }, include: { guardian: true } } } }),
+        tx.enrollment.findMany({ where: { schoolId, studentId: { in: reportStudentIds }, classroomId: { in: classes.map(classroom => classroom.id) }, status: 'active' }, select: { studentId: true, classroomId: true } }),
+      ]);
+      const studentById = new Map(students.map(student => [student.id, student]));
+      const enrolled = new Set(enrollments.map(enrollment => `${enrollment.studentId}:${enrollment.classroomId}`));
       for (const report of classReports) {
         // report.id is formatted as `${assessmentId}:${classId}:${studentId}`
         const parts = report.id.split(':');
@@ -114,22 +125,12 @@ export class ReportAccessController {
         if (!studentId) continue;
         if (parts[0] !== b.assessmentId || parts[1] !== report.classId) continue;
 
-        const approvedSubmissions = (state?.submissions || []).filter((s: any) => s.assessmentId === b.assessmentId && s.classId === report.classId);
-        if (!approvedSubmissions.length || approvedSubmissions.some((s: any) => s.assessmentProgress?.status !== 'approved')) continue;
+        if (!approvedClasses.has(report.classId)) continue;
 
-        const student = await tx.student.findFirst({
-          where: { id: studentId, schoolId },
-          include: {
-            guardians: {
-              where: { schoolId, active: true, canReceiveReports: true },
-              include: { guardian: true },
-            },
-          },
-        });
+        const student = studentById.get(studentId);
 
         if (!student || !student.guardians.length) continue;
-        const enrolled = await tx.enrollment.findFirst({ where: { schoolId, studentId, classroomId: report.classId, classroom: { yearId: b.yearId }, status: 'active' } });
-        if (!enrolled) continue;
+        if (!enrolled.has(`${studentId}:${report.classId}`)) continue;
         const className = classNames.get(report.classId) || 'Class';
 
         for (const sg of student.guardians) {
@@ -189,6 +190,14 @@ export class ReportAccessController {
               report_url: reportUrl,
             },
           });
+
+          if (guardian.userId) {
+            await tx.parentNotification.upsert({
+              where: { dedupeKey: `result:${schoolId}:${report.id}:${guardian.userId}` },
+              create: { userId: guardian.userId, schoolId, studentId, kind: 'RESULT', title: 'New academic result', body: 'A published report is available in the parent app.', targetId: link.id, dedupeKey: `result:${schoolId}:${report.id}:${guardian.userId}` },
+              update: { targetId: link.id, readAt: null },
+            });
+          }
 
           results.push({
             studentName: student.name,

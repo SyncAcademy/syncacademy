@@ -383,6 +383,14 @@ export class GuardianController {
     }
 
     const updated = await this.svc.atomic(async tx => {
+      if ((b.phone && b.phone !== existing.phone) || (b.whatsappPhone !== undefined && (b.whatsappPhone || null) !== existing.whatsappPhone) || (b.email !== undefined && (b.email || null) !== existing.email)) {
+        const pending = await tx.parentInvitation.findMany({ where: { schoolId, guardianId, consumedAt: null, revokedAt: null }, select: { id: true } });
+        await tx.parentInvitation.updateMany({ where: { schoolId, guardianId, consumedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
+        if (pending.length) await tx.outbox.updateMany({ where: { idempotencyKey: { in: pending.map(invitation => `parent-invitation:${invitation.id}`) }, sentAt: null, cancelledAt: null }, data: { cancelledAt: new Date(), payload: '' } });
+        const recovery = await tx.parentRecoveryChallenge.findMany({ where: { schoolId, guardianId, usedAt: null }, select: { id: true } });
+        await tx.parentRecoveryChallenge.updateMany({ where: { schoolId, guardianId, usedAt: null }, data: { usedAt: new Date() } });
+        if (recovery.length) await tx.outbox.updateMany({ where: { idempotencyKey: { in: recovery.map(challenge => `parent-recovery:${challenge.id}`) }, sentAt: null, cancelledAt: null }, data: { cancelledAt: new Date(), payload: '' } });
+      }
       // Invalidate outstanding verification challenges if contacts change
       if (b.phone && b.phone !== existing.phone) {
         await tx.contactVerification.deleteMany({

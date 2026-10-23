@@ -20,6 +20,7 @@ import { WalletService } from './wallet.service';
 import { ReconciliationService } from './reconciliation.service';
 import { SecurityEventsService } from './security-events.service';
 import { RealtimeGateway } from './realtime.gateway';
+import { ParentController } from './parent.controller';
 
 @Module({
   imports: [PlatformCoreModule, MonitoringModule],
@@ -37,6 +38,7 @@ import { RealtimeGateway } from './realtime.gateway';
     WalletController,
     ReconciliationController,
     SecurityEventsController,
+    ParentController,
   ],
   providers: [
     CommunicationService,

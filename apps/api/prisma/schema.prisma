@@ -48,6 +48,10 @@ model User {
   students Student[]
   registryEvents RegistryEvent[]
   guardians Guardian[]
+  parentAccount ParentAccount?
+  mobileSessions ParentMobileSession[]
+  parentNotifications ParentNotification[]
+  parentRecoveries ParentRecoveryChallenge[]
 }
 model School {
   academicWorkspaces AcademicWorkspace[]
@@ -95,6 +99,11 @@ model School {
   bankStatementRows BankStatementRow[]
   reconciliationMatches ReconciliationMatch[]
   securityEvents SecurityEvent[]
+  parentInvitations ParentInvitation[]
+  parentNotifications ParentNotification[]
+  parentInvitationBatches ParentInvitationBatch[]
+  parentAnnouncements ParentAnnouncement[]
+  parentRecoveries ParentRecoveryChallenge[]
 }
 model PlatformLead {
   id String @id @default(uuid()) @db.Uuid
@@ -586,6 +595,8 @@ model Guardian {
   reportLinks ReportAccessLink[]
   communicationLogs CommunicationLog[]
   verifications ContactVerification[]
+  parentInvitations ParentInvitation[]
+  parentRecoveries ParentRecoveryChallenge[]
   @@unique([id, schoolId])
   @@unique([schoolId, phone])
   @@index([schoolId, userId])
@@ -611,6 +622,129 @@ model StudentGuardian {
   @@index([schoolId, studentId])
   @@index([schoolId, guardianId])
   @@index([schoolId, active])
+}
+
+model ParentAccount {
+  userId String @id @db.Uuid
+  loginPhone String? @unique
+  verifiedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ParentInvitation {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  guardianId String @db.Uuid
+  tokenHash String @unique
+  codeHash String @unique
+  channel CommunicationChannel
+  destination String
+  expiresAt DateTime
+  consumedAt DateTime?
+  revokedAt DateTime?
+  attempts Int @default(0)
+  createdAt DateTime @default(now())
+  invitedBy String @db.Uuid
+  school School @relation(fields: [schoolId], references: [id])
+  guardian Guardian @relation(fields: [guardianId, schoolId], references: [id, schoolId])
+  @@index([schoolId, guardianId, consumedAt, revokedAt, expiresAt])
+  @@index([schoolId, createdAt, id])
+}
+
+model ParentInvitationBatch {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  yearId String @db.Uuid
+  classId String? @db.Uuid
+  selectedStudentIds Json?
+  channel CommunicationChannel
+  requestedBy String @db.Uuid
+  status String @default("PENDING")
+  cursor String? @db.Uuid
+  scanned Int @default(0)
+  queued Int @default(0)
+  skipped Int @default(0)
+  failed Int @default(0)
+  leaseId String?
+  leaseUntil DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  completedAt DateTime?
+  school School @relation(fields: [schoolId], references: [id])
+  @@index([status, leaseUntil, createdAt])
+  @@index([schoolId, createdAt, id])
+}
+
+model ParentMobileSession {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  tokenHash String @unique
+  version Int
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, revokedAt, expiresAt])
+}
+
+model ParentRecoveryChallenge {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  schoolId String @db.Uuid
+  guardianId String @db.Uuid
+  channel CommunicationChannel
+  destination String
+  codeHash String
+  expiresAt DateTime
+  attempts Int @default(0)
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  school School @relation(fields: [schoolId], references: [id])
+  guardian Guardian @relation(fields: [guardianId, schoolId], references: [id, schoolId])
+  @@index([userId, usedAt, createdAt])
+  @@index([expiresAt])
+}
+
+model ParentNotification {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  schoolId String @db.Uuid
+  studentId String? @db.Uuid
+  kind String
+  title String
+  body String
+  targetId String?
+  dedupeKey String @unique
+  createdAt DateTime @default(now())
+  readAt DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  school School @relation(fields: [schoolId], references: [id])
+  @@index([userId, createdAt, id])
+  @@index([userId, readAt])
+  @@index([schoolId, studentId])
+}
+
+model ParentAnnouncement {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  yearId String @db.Uuid
+  classId String? @db.Uuid
+  title String
+  body String
+  publishedAt DateTime @default(now())
+  expiresAt DateTime?
+  createdBy String @db.Uuid
+  createdAt DateTime @default(now())
+  notificationCursor String? @db.Uuid
+  notificationCompleteAt DateTime?
+  leaseId String?
+  leaseUntil DateTime?
+  school School @relation(fields: [schoolId], references: [id])
+  @@index([schoolId, publishedAt, id])
+  @@index([schoolId, classId, publishedAt])
+  @@index([notificationCompleteAt, leaseUntil, createdAt])
 }
 
 model ContactVerification {

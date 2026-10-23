@@ -3,6 +3,7 @@ declare module 'express-session' {
   interface SessionData {
     userId?: string; version?: number; selectedRole?: string; mfaVerified?: boolean; issuedAt?: number;
     setupSecret?: string; setupExpires?: number;
+    parentActionCsrf?: string;
     platformMfaAssured?: boolean; platformMfaAt?: number; lastActivityAt?: number;
     platformChallenge?: {
       id: string; userId: string; version: number; stage: 'password-change' | 'enrollment' | 'totp' | 'recovery-ack';

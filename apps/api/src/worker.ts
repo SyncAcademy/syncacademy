@@ -4,8 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PrismaClient, CommunicationChannel, DeliveryStatus } from '@prisma/client';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { config } from './config';
-import { decrypt } from './security';
+import { decrypt, digest } from './security';
 import { SYNCACADEMY_LOGO_CID } from './communication/email/email-templates';
 import {
   SmsProvider,
@@ -19,8 +20,72 @@ import {
   MockCommunicationProvider,
 } from './communication';
 import { calculateSmsSegments } from './communication/communication.service';
+import { CommunicationService } from './communication/communication.service';
+import { Database } from './database/database.service';
+import { queueParentInvitation } from './parent-invitations';
 
 const db = new PrismaClient();
+const batchComms = new CommunicationService(db as unknown as Database);
+
+async function processParentInvitationBatch() {
+  const lease = randomUUID();
+  const claimed = await db.$queryRaw<Array<{ id: string }>>`UPDATE "ParentInvitationBatch" SET "leaseId" = ${lease}, "leaseUntil" = NOW() + INTERVAL '60 seconds', status = 'PROCESSING' WHERE id = (SELECT id FROM "ParentInvitationBatch" WHERE status IN ('PENDING', 'PROCESSING') AND ("leaseUntil" IS NULL OR "leaseUntil" < NOW()) ORDER BY "createdAt" FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING id`;
+  if (!claimed.length) return;
+  const batchId = claimed[0].id;
+  try {
+    await db.$transaction(async tx => {
+      const batch = await tx.parentInvitationBatch.findFirst({ where: { id: batchId, leaseId: lease } });
+      if (!batch) return;
+      if (!await tx.school.findFirst({ where: { id: batch.schoolId, active: true }, select: { id: true } })) {
+        await tx.parentInvitationBatch.update({ where: { id: batch.id }, data: { status: 'CANCELLED', completedAt: new Date(), leaseId: null, leaseUntil: null } });
+        return;
+      }
+      const studentIds = Array.isArray(batch.selectedStudentIds) ? batch.selectedStudentIds.filter((id): id is string => typeof id === 'string') : undefined;
+      const guardian = await tx.guardian.findFirst({ where: { schoolId: batch.schoolId, ...(batch.cursor ? { id: { gt: batch.cursor } } : {}), students: { some: { schoolId: batch.schoolId, active: true, ...(studentIds ? { studentId: { in: studentIds } } : {}), student: { schoolId: batch.schoolId, enrollments: { some: { schoolId: batch.schoolId, status: 'active', ...(batch.classId ? { classroomId: batch.classId } : {}), classroom: { yearId: batch.yearId } } } } } } }, orderBy: { id: 'asc' }, select: { id: true } });
+      if (!guardian) {
+        await tx.parentInvitationBatch.update({ where: { id: batch.id }, data: { status: 'COMPLETE', completedAt: new Date(), leaseId: null, leaseUntil: null } });
+        return;
+      }
+      let queued = 0;
+      let skipped = 0;
+      try {
+        await queueParentInvitation(tx, batchComms, batch.schoolId, guardian.id, batch.channel, batch.requestedBy);
+        queued = 1;
+      } catch (error) {
+        if (!(error instanceof BadRequestException || error instanceof ConflictException)) throw error;
+        skipped = 1;
+      }
+      await tx.parentInvitationBatch.update({ where: { id: batch.id }, data: { cursor: guardian.id, scanned: { increment: 1 }, queued: { increment: queued }, skipped: { increment: skipped }, leaseId: null, leaseUntil: null } });
+    }, { isolationLevel: 'Serializable', timeout: 15000 });
+  } catch {
+    const batch = await db.parentInvitationBatch.findFirst({ where: { id: batchId, leaseId: lease }, select: { failed: true } });
+    if (batch) await db.parentInvitationBatch.updateMany({ where: { id: batchId, leaseId: lease }, data: { failed: { increment: 1 }, status: batch.failed >= 4 ? 'FAILED' : 'PENDING', leaseId: null, leaseUntil: new Date(Date.now() + 30000) } });
+    console.error(JSON.stringify({ event: 'parent_invitation_batch_failed', batchId }));
+  }
+}
+
+async function processParentAnnouncement() {
+  const lease = randomUUID();
+  const claimed = await db.$queryRaw<Array<{ id: string }>>`UPDATE "ParentAnnouncement" SET "leaseId" = ${lease}, "leaseUntil" = NOW() + INTERVAL '60 seconds' WHERE id = (SELECT id FROM "ParentAnnouncement" WHERE "notificationCompleteAt" IS NULL AND ("leaseUntil" IS NULL OR "leaseUntil" < NOW()) ORDER BY "createdAt" FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING id`;
+  if (!claimed.length) return;
+  const announcementId = claimed[0].id;
+  try {
+    await db.$transaction(async tx => {
+      const announcement = await tx.parentAnnouncement.findFirst({ where: { id: announcementId, leaseId: lease } });
+      if (!announcement) return;
+      const guardian = await tx.guardian.findFirst({ where: { schoolId: announcement.schoolId, ...(announcement.notificationCursor ? { id: { gt: announcement.notificationCursor } } : {}), userId: { not: null }, user: { enabled: true, parentAccount: { isNot: null } }, students: { some: { schoolId: announcement.schoolId, active: true, student: { enrollments: { some: { schoolId: announcement.schoolId, status: 'active', ...(announcement.classId ? { classroomId: announcement.classId } : {}), classroom: { yearId: announcement.yearId } } } } } } }, orderBy: { id: 'asc' }, select: { id: true, userId: true } });
+      if (!guardian) {
+        await tx.parentAnnouncement.update({ where: { id: announcement.id }, data: { notificationCompleteAt: new Date(), leaseId: null, leaseUntil: null } });
+        return;
+      }
+      await tx.parentNotification.upsert({ where: { dedupeKey: `announcement:${announcement.id}:${guardian.userId}` }, create: { userId: guardian.userId!, schoolId: announcement.schoolId, kind: 'ANNOUNCEMENT', title: announcement.title, body: 'A school announcement is available in the parent app.', targetId: announcement.id, dedupeKey: `announcement:${announcement.id}:${guardian.userId}` }, update: {} });
+      await tx.parentAnnouncement.update({ where: { id: announcement.id }, data: { notificationCursor: guardian.id, leaseId: null, leaseUntil: null } });
+    }, { isolationLevel: 'Serializable', timeout: 15000 });
+  } catch {
+    await db.parentAnnouncement.updateMany({ where: { id: announcementId, leaseId: lease }, data: { leaseId: null, leaseUntil: new Date(Date.now() + 30000) } });
+    console.error(JSON.stringify({ event: 'parent_announcement_notification_failed', announcementId }));
+  }
+}
 
 // Initialize communication providers with environment options and fallback to mock
 const mockProvider = new MockCommunicationProvider();
@@ -94,6 +159,8 @@ async function main() {
   const heartbeatTimer = setInterval(() => void heartbeat(), 15_000);
   heartbeatTimer.unref();
   while (!stopping) {
+    try { await processParentInvitationBatch(); } catch { console.error(JSON.stringify({ event: 'parent_invitation_batch_claim_failed' })); }
+    try { await processParentAnnouncement(); } catch { console.error(JSON.stringify({ event: 'parent_announcement_claim_failed' })); }
     const lease = randomUUID();
     try {
       const jobs = await db.$queryRaw<{ id: string }[]>`
@@ -141,6 +208,25 @@ async function main() {
 
           const rawPayload = decrypt(job.payload);
           const payload = JSON.parse(rawPayload);
+          if (job.idempotencyKey?.startsWith('parent-invitation:')) {
+            const invitationId = job.idempotencyKey.slice('parent-invitation:'.length);
+            const invitation = await db.parentInvitation.findFirst({ where: { id: invitationId, schoolId: job.schoolId ?? undefined }, include: { school: { select: { active: true } }, guardian: { select: { phone: true, whatsappPhone: true, email: true } } } });
+            const token = /[?&]token=([A-Za-z0-9_-]{40,100})/.exec(payload.body || '')?.[1];
+            const destination = invitation?.channel === 'EMAIL' ? invitation.guardian.email : invitation?.channel === 'WHATSAPP' ? invitation.guardian.whatsappPhone : invitation?.guardian.phone;
+            if (!invitation || !invitation.school.active || invitation.consumedAt || invitation.revokedAt || invitation.expiresAt <= new Date() || !token || digest(token) !== invitation.tokenHash || destination !== invitation.destination) {
+              await db.outbox.updateMany({ where: { id: job.id, leaseId: lease }, data: { cancelledAt: new Date(), payload: '', leaseUntil: null } });
+              continue;
+            }
+          }
+          if (job.idempotencyKey?.startsWith('parent-recovery:')) {
+            const recoveryId = job.idempotencyKey.slice('parent-recovery:'.length);
+            const challenge = await db.parentRecoveryChallenge.findFirst({ where: { id: recoveryId, schoolId: job.schoolId ?? undefined }, select: { destination: true, channel: true, expiresAt: true, usedAt: true, school: { select: { active: true } }, guardian: { select: { phone: true, phoneVerifiedAt: true, email: true, emailVerifiedAt: true } } } });
+            const currentContact = challenge?.channel === 'EMAIL' ? challenge.guardian.email === challenge.destination && !!challenge.guardian.emailVerifiedAt : challenge?.guardian.phone === challenge?.destination && !!challenge?.guardian.phoneVerifiedAt;
+            if (!challenge || !challenge.school.active || !currentContact || challenge.usedAt || challenge.expiresAt <= new Date() || challenge.destination !== payload.recipient) {
+              await db.outbox.updateMany({ where: { id: job.id, leaseId: lease }, data: { cancelledAt: new Date(), payload: '', leaseUntil: null } });
+              continue;
+            }
+          }
           const channel: CommunicationChannel = job.channel || payload.channel || 'EMAIL';
 
           // Credit Wallet Reservation for SMS and WhatsApp
