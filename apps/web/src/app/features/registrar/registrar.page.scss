@@ -63,6 +63,20 @@ td .action-btn { white-space:nowrap; }
 .class-choice-panel .class-chip strong { font-size:.78rem; color:#64748b; font-weight:500; }
 .class-choice-panel .class-chip small { color:#92400e; font-size:.75rem; font-weight:650; }
 .class-choice-panel .class-chip:hover { border-color:#d5a16a; box-shadow:0 8px 20px #17233810; }
+.directory-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+.directory-actions .action-btn { flex:none; white-space:normal; text-align:center; }
+.class-choice-panel .panel-heading { align-items:flex-start; gap:18px; }
+.class-choice-panel .class-chips { gap:14px; }
+.class-choice-panel .class-chip { min-height:108px; padding:17px; transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+.class-choice-panel .class-chip:hover { transform:translateY(-2px); }
+.guardian-list { display:grid; gap:10px; margin:0 0 24px; }
+.guardian-card { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:16px; border:1px solid #e2e8f0; border-radius:10px; }
+.guardian-card strong { margin-right:8px; }
+.guardian-card p { margin-bottom:0; overflow-wrap:anywhere; }
+.guardian-verification { justify-content:flex-start; margin-top:10px; }
+.guardian-verification input { width:150px; }
+.registration-guardian { padding:14px 0; border-bottom:1px solid #e2e8f0; }
+fieldset { min-width:0; border:1px solid #e2e8f0; border-radius:10px; padding:16px; }
 .class-view-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 14px; padding:14px 16px; border:1px solid #e2e8f0; border-radius:11px; background:#fff; }
 .class-view-toolbar h3 { margin:3px 0 0; font-size:1.05rem; }
 .class-view-toolbar .eyebrow { color:#64748b; font-size:.7rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
@@ -83,6 +97,7 @@ dt { color:#64748b; font-size:.75rem; } dd { margin:6px 0 0; font-size:.875rem; 
 *, *::before, *::after { box-sizing:border-box; }
 th, td { overflow-wrap:anywhere; }
 td:first-child { min-width:170px; max-width:320px; }
+th:has(> input[type='checkbox']), td:first-child:has(> input[type='checkbox']) { width:54px; min-width:54px; max-width:54px; padding-inline:14px; }
 .table-scroll table { min-width:650px; }
 .row-actions { gap:6px; }
 .row-actions--single-line { flex-wrap:nowrap; width:max-content; }
@@ -93,3 +108,5 @@ button:disabled { cursor:not-allowed; opacity:.55; }
 .modal-card h2, .activity > span, .class-chip span { overflow-wrap:anywhere; min-width:0; }
 .modal-card .panel-heading { position:sticky; top:-24px; background:#fff; padding:12px 0; z-index:1; }
 @media(max-width:600px) { .form-row { flex-direction:column; gap:0; } .filters > * { width:100%; } .class-chip { width:100%; gap:12px; } .class-choice-panel .class-chips { grid-template-columns:1fr; } .class-view-toolbar { align-items:flex-start; } .modal-card { max-height:calc(100dvh - 20px); } .profile-details { padding:14px; } }
+@media(max-width:600px) { .directory-actions { justify-content:flex-start; width:100%; } .directory-actions .action-btn { flex:1 1 140px; } .guardian-card { flex-direction:column; } }
+@media(prefers-reduced-motion:reduce) { .class-choice-panel .class-chip { transition:none; } .class-choice-panel .class-chip:hover { transform:none; } }
