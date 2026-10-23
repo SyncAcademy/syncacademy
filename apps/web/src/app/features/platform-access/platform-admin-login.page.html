@@ -15,6 +15,7 @@
       @if (stage() === 'totp') { <p>Enter the six-digit code from your authenticator app.</p> }
       @if (stage() === 'recovery-ack') { <p>Save your one-time recovery codes to finish sign-in.</p> }
     </header>
+    @if (sessionNotice && stage() === 'login') { <p class="platform-auth__hint" role="status">{{ sessionNotice }}</p> }
 
     @if (stage() === 'login') {
       <form [formGroup]="passwordForm" (ngSubmit)="signIn()" class="platform-auth__form">

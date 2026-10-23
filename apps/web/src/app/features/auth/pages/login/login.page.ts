@@ -33,8 +33,9 @@ export class LoginPage {
   readonly selectedRole = signal<(typeof this.roleOptions)[number] | null>(null);
   loginForm: FormGroup;
   showPassword = signal<boolean>(false);
+  readonly sessionNotice: string;
 
-  constructor(private fb:FormBuilder,private router:Router,route:ActivatedRoute){this.loginForm=this.fb.group({email:['',[Validators.required,Validators.email]],password:['',[Validators.required]],rememberMe:[false]});const requested=route.snapshot.paramMap.get('role');const selected=this.roleOptions.find(role=>role.value===requested)||null;this.selectedRole.set(selected);if(requested&&!selected)void this.router.navigateByUrl('/auth/login',{replaceUrl:true});}
+  constructor(private fb:FormBuilder,private router:Router,route:ActivatedRoute){this.loginForm=this.fb.group({email:['',[Validators.required,Validators.email]],password:['',[Validators.required]],rememberMe:[false]});const requested=route.snapshot.paramMap.get('role');const selected=this.roleOptions.find(role=>role.value===requested)||null;this.selectedRole.set(selected);this.sessionNotice=route.snapshot.queryParamMap.get('session')==='expired'?'Your session expired. Sign in again.':'';if(requested&&!selected)void this.router.navigateByUrl('/auth/login',{replaceUrl:true});}
 
   togglePassword(): void {
     this.showPassword.update(show => !show);

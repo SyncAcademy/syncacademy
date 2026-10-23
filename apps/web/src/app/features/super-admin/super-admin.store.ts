@@ -196,6 +196,7 @@ export class SuperAdminStore {
         this.schoolRequest++; this.leadRequest++; this.auditRequest++; this.lastAuditQuery = '';
         this.schools.set([]); this.leads.set([]); this.auditLog.set([]); this.admins.set([]); this.summary.set(null);
         this.settings.set({platformName:'SyncAcademy',supportEmail:'',maintenanceMessage:''});
+        this.storageError.set(''); this.summaryError.set('');
         this.loading.set(false); this.schoolsLoading.set(false);
       }
     });
@@ -255,8 +256,8 @@ export class SuperAdminStore {
       this.loadSchools(), this.loadLeads(), this.loadAudit(),
     ]);
     if (context !== this.context()) return;
-    const labels = ['Dashboard totals', 'Platform settings', 'Schools', 'Leads', 'Audit log'];
-    this.storageError.set(results.flatMap((result, index) => result.status === 'rejected' ? [labels[index] + ': ' + this.auth.error(result.reason)] : []).join(' '));
+    const distinct = [...new Set(results.flatMap(result => result.status === 'rejected' ? [this.auth.error(result.reason)] : []))];
+    this.storageError.set(distinct.length > 1 ? 'Some dashboard information could not be loaded. Please retry.' : distinct[0] || '');
     this.loading.set(false);
   }
   async nextPage(change:number) {

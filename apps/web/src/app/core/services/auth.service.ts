@@ -1,11 +1,13 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { Router } from '@angular/router';
 import { requestErrorMessage } from './request-error';
 export interface Identity { id: string; name: string; email: string; selectedRole: string; platformAdmin: boolean; mustChangePassword: boolean; needsMfa: boolean; needsMfaSetup: boolean; mfaEnabled: boolean; memberships: { id: string; role: string; school: { id: string; name: string } }[]; }
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private http = inject(HttpClient);
+  private router = inject(Router);
   private lastTrustedActivity = 0;
   readonly identity = signal<Identity | null>(null);
   readonly isLoggedIn = () => !!this.identity();
@@ -18,16 +20,24 @@ export class AuthService {
   request<T = any>(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
     const identity = this.identity();
     const activity = identity?.selectedRole === 'SUPER_ADMIN' && Date.now() - this.lastTrustedActivity < 60000;
-    return firstValueFrom(this.http.request<T>(method, '/api/v1/' + path, { body, headers: { 'X-Requested-With': 'SyncAcademy', ...(activity ? { 'X-Platform-Activity': '1' } : {}), ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) } }));
+    return firstValueFrom(this.http.request<T>(method, '/api/v1/' + path, { body, headers: { 'X-Requested-With': 'SyncAcademy', ...(activity ? { 'X-Platform-Activity': '1' } : {}), ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) } }))
+      .catch(error => { this.handleSessionError(error, identity, path); throw error; });
+  }
+  private handleSessionError(error: unknown, identity: Identity | null, path: string): void {
+    if (!(error instanceof HttpErrorResponse) || error.status !== 401 || !identity || this.identity() !== identity || path.startsWith('auth/platform/') || path === 'auth/login') return;
+    this.identity.set(null);
+    const destination = identity.selectedRole === 'SUPER_ADMIN' ? '/platform-access/login' : `/auth/sign-in/${identity.selectedRole}`;
+    void this.router.navigate([destination], { queryParams: { session: 'expired' }, replaceUrl: true });
   }
   async requestBlob(path: string): Promise<Blob> {
+    const identity = this.identity();
     try {
       return await firstValueFrom(this.http.get('/api/v1/' + path, {
         responseType: 'blob',
         headers: { 'X-Requested-With': 'SyncAcademy' },
       }));
     } catch (error) {
-      if (!(error instanceof HttpErrorResponse) || !(error.error instanceof Blob)) throw error;
+      if (!(error instanceof HttpErrorResponse) || !(error.error instanceof Blob)) { this.handleSessionError(error, identity, path); throw error; }
       try {
         const body = JSON.parse(await error.error.text());
         throw new HttpErrorResponse({
@@ -38,7 +48,7 @@ export class AuthService {
           url: error.url ?? undefined,
         });
       } catch (parseError) {
-        if (parseError instanceof HttpErrorResponse) throw parseError;
+        if (parseError instanceof HttpErrorResponse) { this.handleSessionError(parseError, identity, path); throw parseError; }
         throw error;
       }
     }

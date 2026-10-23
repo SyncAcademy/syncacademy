@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { DOCUMENT } from '@angular/common';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { throwError } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 import { BrowserDynamicTestingModule, platformBrowserDynamicTesting } from '@angular/platform-browser-dynamic/testing';
 import { AuthService } from '../src/app/core/services/auth.service';
@@ -20,8 +22,10 @@ let settings: {platformName:string;supportEmail:string;maintenanceMessage:string
 let summaryGate: Promise<any> | null = null;
 let failSettings = false;
 let failAudit = false;
+let failAll = false;
 const auth = {identity, error:(e:unknown)=>String(e), async request(method:string,route:string,body?:any) {
   calls.push({method,route,body});
+  if (failAll && method === 'GET') throw new Error('Session expired');
   if (route.startsWith('schools?page=')) return {items:[],total:0};
   if (route==='schools/school-1/workspace?view=summary') return {
     school:{id:'school-1',name:'Example School',code:'EX-1',region:'Arusha'},
@@ -69,10 +73,14 @@ failSettings = true; failAudit = true;
 store.summary.set(null);
 await store.load();
 assert.equal(store.summary()?.students, 0, 'Independent request failures must not discard successful totals');
-assert.match(store.storageError(), /Platform settings:.*Audit log:/);
+assert.equal(store.storageError(), 'Some dashboard information could not be loaded. Please retry.');
 assert.equal(store.summaryError(), '');
 assert.equal(store.loading(), false);
 failSettings = false; failAudit = false;
+failAll = true;
+await store.load();
+assert.equal(store.storageError(), 'Error: Session expired', 'Repeated request failures appear only once');
+failAll = false;
 await store.load();
 assert.equal(store.storageError(), '');
 assert.equal(store.schoolPageCount(), 1);
@@ -151,5 +159,24 @@ release({schools:999,students:999,admins:[{id:'private',name:'Private',email:'pr
 await loading;
 assert.equal(store.summary(),null,'late platform responses cannot restore data after logout');
 assert.deepEqual(store.admins(),[]);
+TestBed.resetTestingModule();
+const redirects: { commands: unknown[]; options: any }[] = [];
+TestBed.configureTestingModule({ providers: [
+  { provide: HttpClient, useValue: { request: () => throwError(() => new HttpErrorResponse({ status: 401 })) } },
+  { provide: Router, useValue: { navigate: (commands: unknown[], options: any) => { redirects.push({ commands, options }); return Promise.resolve(true); } } },
+] });
+const sessionAuth = TestBed.inject(AuthService);
+sessionAuth.identity.set({ id: 'admin', selectedRole: 'SUPER_ADMIN' } as any);
+await Promise.allSettled([sessionAuth.request('GET', 'schools'), sessionAuth.request('GET', 'audit')]);
+assert.equal(sessionAuth.identity(), null, 'expired session clears the old identity');
+assert.equal(redirects.length, 1, 'simultaneous unauthorized requests redirect once');
+assert.deepEqual(redirects[0].commands, ['/platform-access/login']);
+assert.equal(redirects[0].options.queryParams.session, 'expired');
+sessionAuth.identity.set({ id: 'registrar', selectedRole: 'REGISTRAR' } as any);
+await Promise.allSettled([sessionAuth.request('GET', 'schools/school-1/registry/students')]);
+assert.deepEqual(redirects[1].commands, ['/auth/sign-in/REGISTRAR'], 'school users return to their own sign-in');
+sessionAuth.identity.set({ id: 'admin', selectedRole: 'SUPER_ADMIN' } as any);
+await Promise.allSettled([sessionAuth.request('POST', 'auth/platform/verify', {})]);
+assert.equal(redirects.length, 2, 'an MFA challenge failure does not end the dashboard session');
 TestBed.resetTestingModule();
 console.log('Super Admin checks passed: persisted lead workflow, class-scoped rosters, unique-teacher pagination, conversion and preferences.');

@@ -55,6 +55,6 @@ for (const file of files) {
   const relative = path.relative(appRoot, file).replaceAll('\\', '/');
   inboundLinks.push(relative);
 }
-assert.deepEqual(inboundLinks.sort(), ['features/live/auth.page.ts'], 'the private route has no public navigation link');
+assert.deepEqual(inboundLinks.sort(), ['core/guards/auth.guard.ts', 'core/services/auth.service.ts', 'features/live/auth.page.ts'], 'the private route has no public navigation link');
 
 console.log('Platform administrator auth checks passed: private route, public roles, MFA screens, and no client-side secret storage.');

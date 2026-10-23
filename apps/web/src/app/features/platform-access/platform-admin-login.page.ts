@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthLayoutComponent } from '@shared/layouts/auth-layout/auth-layout.component';
 import { LogoComponent } from '@shared/components/logo/logo.component';
 import { AuthService } from '@core/services/auth.service';
@@ -19,12 +19,14 @@ type ChallengeResponse = { stage: PlatformStage; secret?: string; qr?: string; r
 export class PlatformAdminLoginPage implements OnInit {
   private readonly formBuilder = inject(FormBuilder);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
   readonly stage = signal<PlatformStage>('login');
   readonly busy = signal(false);
   readonly showPassword = signal(false);
   readonly recoveryMode = signal(false);
   readonly error = signal('');
+  readonly sessionNotice = this.route.snapshot.queryParamMap.get('session') === 'expired' ? 'Your administrator session expired. Sign in again.' : '';
   readonly setup = signal<{ secret: string; qr: string } | null>(null);
   readonly recoveryCodes = signal<string[]>([]);
   readonly passwordForm = this.formBuilder.group({

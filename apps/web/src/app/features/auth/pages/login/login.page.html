@@ -1,6 +1,7 @@
 <app-auth-layout>
   <div class="login">
     <app-logo variant="dark" size="md"></app-logo>
+    @if (sessionNotice) { <p role="status">{{ sessionNotice }}</p> }
 
     @if (selectedRole(); as role) {
     <div class="login__header">

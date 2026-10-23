@@ -1,4 +1,5 @@
 import { inject } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '@core/services/auth.service';
 export const authGuard: CanActivateFn = async route => {
@@ -11,5 +12,11 @@ export const authGuard: CanActivateFn = async route => {
     if (role && role !== me.selectedRole) return router.createUrlTree([auth.landing(me)]);
     if (roles && !roles.includes(me.selectedRole)) return router.createUrlTree(['/auth/login']);
     return true;
-  } catch { auth.identity.set(null); return router.createUrlTree(['/auth/login']); }
+  } catch (error) {
+    auth.identity.set(null);
+    const expired = error instanceof HttpErrorResponse && error.status === 401;
+    if (!expired) return router.createUrlTree(['/auth/login']);
+    const platformRoute = route.pathFromRoot.some(parent => parent.data['role'] === 'SUPER_ADMIN');
+    return router.createUrlTree([platformRoute ? '/platform-access/login' : '/auth/login'], { queryParams: { session: 'expired' } });
+  }
 };

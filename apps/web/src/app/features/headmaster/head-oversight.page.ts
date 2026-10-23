@@ -42,6 +42,29 @@ export class HeadOversightPage {
   readonly financeActivityPage = signal(1);
   readonly financeActivityPages = computed(() => Math.max(1, Math.ceil(this.bursarActivity().length / 10)));
   readonly recentFinanceActivity = computed(() => this.bursarActivity().slice((this.financeActivityPage() - 1) * 10, this.financeActivityPage() * 10));
+  readonly balancePage = signal(1);
+  readonly balancePageCount = computed(() => Math.max(1, Math.ceil(this.accounts().length / 25)));
+  readonly balancePageRecords = computed(() => this.accounts().slice((this.balancePage() - 1) * 25, this.balancePage() * 25));
+  readonly balancePageRange = computed(() => {
+    const count = this.accounts().length;
+    return {
+      start: count ? (this.balancePage() - 1) * 25 + 1 : 0,
+      end: Math.min(this.balancePage() * 25, count),
+      count,
+    };
+  });
+  readonly feePage = signal(1);
+  readonly feePageSize = signal(10);
+  readonly feePageCount = computed(() => Math.max(1, Math.ceil(this.feeStructures().length / this.feePageSize())));
+  readonly feePageRecords = computed(() => this.feeStructures().slice((this.feePage() - 1) * this.feePageSize(), this.feePage() * this.feePageSize()));
+  readonly feePageRange = computed(() => {
+    const count = this.feeStructures().length;
+    return {
+      start: count ? (this.feePage() - 1) * this.feePageSize() + 1 : 0,
+      end: Math.min(this.feePage() * this.feePageSize(), count),
+      count,
+    };
+  });
   private readonly data = toSignal(inject(ActivatedRoute).data);
   readonly section = computed(() => this.data()?.['section'] ?? 'overview');
   readonly title = computed(() => this.data()?.['title'] ?? 'School Overview');
@@ -83,7 +106,7 @@ export class HeadOversightPage {
   readonly progressClassCards = computed(() => this.store.classes().map(c => ({ id: c.id, name: this.store.className(c.id), attendance: this.store.attendanceSheets().filter(s => s.classId === c.id && this.inAssessmentTerm(s.date)).length, submissions: this.submissions().filter(a => a.classId === c.id).length, syllabus: this.store.academicData().syllabus.filter(t => this.store.assignments().some(a => a.id === t.assignmentId && a.classId === c.id) && this.inAssessmentTerm(t.due)).length, support: this.store.academicData().support.filter(s => s.className === this.store.className(c.id) && this.inAssessmentTerm(s.due)).length, timetable: this.store.academicData().slots.filter(s => s.className === this.store.className(c.id) && this.inAssessmentTerm(s.date)).length })));
   readonly activity = computed(() => this.store.activity().filter(a => (!this.owner() || a.owner === this.owner()) && a.message.toLowerCase().includes(this.search().toLowerCase())));
   readonly pageCount = computed(() => {
-    const count = this.section() === 'finance' ? (this.classId() ? Math.max(this.accounts().length, this.feeStructures().length) : this.feeStructures().length)
+    const count = this.section() === 'finance' ? 0
       : this.section() === 'academic-results' ? this.studentResults().length
       : this.section() === 'academic-progress' ? Math.max(this.classSupport().length, this.classAttendance().length, this.classSubmissions().length, this.classSyllabus().length, this.classSlots().length)
       : this.section() === 'teaching' ? this.store.teaching().length : this.activity().length;
@@ -97,14 +120,22 @@ export class HeadOversightPage {
       untracked(() => {
         const yearId = this.store.year()?.id;
         this.feeDialog.set(false); this.feeError.set(''); this.editor = null;
-        this.term.set(''); this.classId.set(''); this.search.set(''); this.assessmentId.set(''); this.assessmentTerm.set(''); this.financeActivityPage.set(1);
+        this.term.set(''); this.classId.set(''); this.search.set(''); this.assessmentId.set(''); this.assessmentTerm.set(''); this.financeActivityPage.set(1); this.balancePage.set(1); this.feePage.set(1);
         this.subject.set(''); this.status.set('approved'); this.owner.set(''); this.page.set(1);
         if (yearId) void this.store.loadFinance(yearId);
       });
     });
-    effect(() => { this.term(); this.classId(); this.search(); this.assessmentId(); this.subject(); this.status(); this.owner(); this.page.set(1); });
+    effect(() => { this.term(); this.classId(); this.search(); this.assessmentId(); this.subject(); this.status(); this.owner(); this.page.set(1); this.balancePage.set(1); this.feePage.set(1); });
     effect(() => { if (this.page() > this.pageCount()) this.page.set(this.pageCount()); });
+    effect(() => {
+      if (this.balancePage() > this.balancePageCount()) this.balancePage.set(this.balancePageCount());
+      if (this.feePage() > this.feePageCount()) this.feePage.set(this.feePageCount());
+    });
     effect(() => { if (this.financeActivityPage() > this.financeActivityPages()) this.financeActivityPage.set(this.financeActivityPages()); });
+  }
+  setFeePageSize(size: 10 | 20 | 50): void {
+    this.feePageSize.set(size);
+    this.feePage.set(1);
   }
   attendanceCounts(entries: { status: string }[]) { return ['Present', 'Late', 'Absent', 'Excused'].map(status => `${status}: ${entries.filter(e => e.status === status).length}`).join(' \u00b7 '); }
   selectClassByName(name: string): void { const cls = this.store.classes().find(c => this.store.className(c.id) === name || c.stream === name || c.name === name); if (cls) { this.classId.set(cls.id); this.search.set(''); this.page.set(1); } }
