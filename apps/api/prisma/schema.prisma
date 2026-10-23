@@ -103,6 +103,7 @@ model School {
   parentNotifications ParentNotification[]
   parentInvitationBatches ParentInvitationBatch[]
   parentAnnouncements ParentAnnouncement[]
+  parentAnnouncementMedia ParentAnnouncementMedia[]
   parentRecoveries ParentRecoveryChallenge[]
 }
 model PlatformLead {
@@ -733,7 +734,7 @@ model ParentAnnouncement {
   classId String? @db.Uuid
   title String
   body String
-  publishedAt DateTime @default(now())
+  publishedAt DateTime? @default(now())
   expiresAt DateTime?
   createdBy String @db.Uuid
   createdAt DateTime @default(now())
@@ -741,10 +742,27 @@ model ParentAnnouncement {
   notificationCompleteAt DateTime?
   leaseId String?
   leaseUntil DateTime?
+  unpublishedAt DateTime?
+  media ParentAnnouncementMedia?
   school School @relation(fields: [schoolId], references: [id])
   @@index([schoolId, publishedAt, id])
   @@index([schoolId, classId, publishedAt])
   @@index([notificationCompleteAt, leaseUntil, createdAt])
+}
+
+model ParentAnnouncementMedia {
+  id String @id @default(uuid()) @db.Uuid
+  announcementId String @unique @db.Uuid
+  schoolId String @db.Uuid
+  storageKey String @unique
+  mimeType String
+  byteSize Int
+  width Int
+  height Int
+  createdAt DateTime @default(now())
+  announcement ParentAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  school School @relation(fields: [schoolId], references: [id])
+  @@index([schoolId, announcementId])
 }
 
 model ContactVerification {

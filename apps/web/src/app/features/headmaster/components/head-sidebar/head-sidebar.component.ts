@@ -81,6 +81,7 @@ export class HeadSidebarComponent {
       ],
     },
     { label: 'FINANCE', items: [{ title: 'Finance Overview', route: '/head/finance', icon: 'payments' }] },
+    { label: 'COMMUNICATION', items: [{ title: 'Announcements', route: '/head/announcements', icon: 'communication' }] },
     {
       label: 'REPORTS',
       items: [        { title: 'Reports Overview', route: '/head/reports', icon: 'reports' },

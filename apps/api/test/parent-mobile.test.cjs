@@ -187,6 +187,17 @@ test('parent activation and school isolation', { timeout: 180000 }, async () => 
     const announcement = await headCall('POST', `schools/${school.id}/parent-announcements`, { yearId: year.id, title: 'School notice', body: 'School notice body' }, headCsrf);
     assert.equal(announcement.status, 201);
     assert.equal((await mobile('GET', `parent/announcements/${announcement.body.id}`, undefined, token)).status, 200);
+    const draft = await headCall('POST', `schools/${school.id}/parent-announcements`, { yearId: year.id, title: 'Draft notice', body: 'Draft notice body', draft: true }, headCsrf);
+    assert.equal(draft.status, 201);
+    assert.equal(draft.body.publishedAt, null);
+    assert.equal((await mobile('GET', `parent/announcements/${draft.body.id}`, undefined, token)).status, 404);
+    assert.equal((await headCall('GET', `schools/${school.id}/parent-announcements/${draft.body.id}`)).status, 200);
+    assert.equal((await headCall('PATCH', `schools/${school.id}/parent-announcements/${draft.body.id}`, { title: 'Edited notice' }, headCsrf)).status, 200);
+    assert.equal((await headCall('POST', `schools/${school.id}/parent-announcements/${draft.body.id}/publish`, {}, headCsrf)).status, 201);
+    assert.equal((await mobile('GET', `parent/announcements/${draft.body.id}`, undefined, token)).body.title, 'Edited notice');
+    assert.equal((await headCall('POST', `schools/${school.id}/parent-announcements/${draft.body.id}/unpublish`, {}, headCsrf)).status, 201);
+    assert.equal((await mobile('GET', `parent/announcements/${draft.body.id}`, undefined, token)).status, 404);
+    assert.equal((await mobile('GET', `parent/announcements/${draft.body.id}/media`, undefined, token)).status, 404);
     const batch = await staffCall('POST', `schools/${school.id}/parent-invitation-batches`, { yearId: year.id, studentIds: [child.id], channel: 'EMAIL' }, csrf);
     assert.equal(batch.status, 201);
     worker = spawn(process.execPath, [path.resolve(__dirname, '../dist/worker.js')], { env: { ...process.env, MONITOR_INSTANCE_ID: 'parent-test-worker' }, stdio: 'ignore', windowsHide: true });

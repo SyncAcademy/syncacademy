@@ -6,6 +6,7 @@ export const HEADMASTER_ROUTES: Routes = [
     path: '',
     component: HeadmasterLayout,
     children: [
+      { path: 'announcements', loadComponent: () => import('../announcements/announcements.page').then(m => m.AnnouncementsPage), data: { title: 'Announcements', breadcrumb: 'Headmaster / Announcements' } },
       { path: 'notifications', loadComponent: () => import('../../shared/notifications/notifications.page').then(m => m.NotificationsPage), data: { title: 'Notifications', breadcrumb: 'Headmaster / Notifications', audience: 'head' } },
       { path: 'academic-results/class/:classId', loadComponent: () => import('../academic/class-results.page').then(m => m.ClassResultsPage), data: { title: 'Class Results', breadcrumb: 'Headmaster / Academic Results / Class Results', audience: 'head' } },
       { path: 'import', loadComponent: () => import('../registrar/student-import.page').then(m => m.StudentImportPage), data: { title: 'Bulk Import' } },

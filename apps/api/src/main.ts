@@ -54,12 +54,14 @@ async function main() {
     }
     const mobileRequest = req.path.startsWith('/api/v1/parent/') && !req.get('Origin') && !req.get('Cookie') && (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.is('application/json'));
     const isExempt = req.path.startsWith('/api/v1/webhooks/') || req.path.startsWith('/api/v1/public/') || mobileRequest;
-    if (!isExempt && !['GET','HEAD','OPTIONS'].includes(req.method) && (req.get('Origin') !== config.APP_ORIGIN || req.get('X-Requested-With') !== 'SyncAcademy' || !req.is('application/json'))) {
+    const imageUpload = req.method === 'PUT' && /^\/api\/v1\/schools\/[0-9a-f-]{36}\/parent-announcements\/[0-9a-f-]{36}\/media$/.test(req.path) && !!req.is('image/png');
+    if (!isExempt && !['GET','HEAD','OPTIONS'].includes(req.method) && (req.get('Origin') !== config.APP_ORIGIN || req.get('X-Requested-With') !== 'SyncAcademy' || (!req.is('application/json') && !imageUpload))) {
       return res.status(403).json({ message: 'Request origin or content type is not allowed.' });
     }
     next();
   });
   app.use('/api/v1/schools/:schoolId/registry/imports/preview', express.json({ limit: '8mb' }));
+  app.use('/api/v1/schools/:schoolId/parent-announcements/:announcementId/media', express.raw({ type: 'image/png', limit: '5mb' }));
   app.use(express.json({
     limit: '32kb',
     verify: (req, _res, buffer) => {

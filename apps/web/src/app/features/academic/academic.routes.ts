@@ -24,6 +24,7 @@ export const ACADEMIC_PAGES = [
 
 export const ACADEMIC_ROUTES: Routes = [{
   path: '', component: AcademicLayout, children: [
+    { path: 'announcements', loadComponent: () => import('../announcements/announcements.page').then(m => m.AnnouncementsPage), data: { title: 'Announcements', breadcrumb: 'Academic Master / Announcements' } },
     { path: 'notifications', loadComponent: () => import('../../shared/notifications/notifications.page').then(m => m.NotificationsPage), data: { title: 'Notifications', breadcrumb: 'Academic Master / Notifications', audience: 'academic' } },
     { path: 'academic-reports/class/:classId', loadComponent: () => import('./class-results.page').then(m => m.ClassResultsPage), data: { title: 'Class Results', breadcrumb: 'Academic Master / Academic Reports / Class Results', audience: 'academic' } },
     { path: 'years', loadComponent: () => import('../headmaster/pages/head-academic-years/head-academic-years.page').then(m => m.HeadAcademicYearsPage), data: { title: 'Academic Years & Terms', breadcrumb: 'Academic Master / Academic Years & Terms' } },

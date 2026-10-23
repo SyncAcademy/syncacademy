@@ -34,6 +34,7 @@ export class AcademicSidebarComponent {
       { title: 'Roster Issues', route: '/academic/roster-issues', icon: 'students' },
       { title: 'Student Support', route: '/academic/interventions', icon: 'communication' },
     ] },
+    { label: 'COMMUNICATION', items: [{ title: 'Announcements', route: '/academic/announcements', icon: 'communication' }] },
     { label: 'SETTINGS', items: [{ title: 'Academic Years & Terms', route: '/academic/years', icon: 'calendar' }, { title: 'Academic Settings', route: '/academic/settings', icon: 'settings' }] },
   ];
   constructor(private router:Router,private menuController:MenuController) {}

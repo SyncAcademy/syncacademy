@@ -37,6 +37,10 @@ const schema = z.object({
   EMAIL_PROVIDER: z.enum(['smtp', 'resend', 'mock']).default('smtp'),
   MOCK_PAYMENT_PROVIDER: z.enum(['true', 'false']).default('false'),
   COMMUNICATION_MOCK_DISPATCH: z.enum(['true', 'false']).default('false'),
+  ANNOUNCEMENT_MEDIA_ENDPOINT: z.string().url().optional(),
+  ANNOUNCEMENT_MEDIA_BUCKET: z.string().regex(/^[a-z0-9][a-z0-9.-]{2,62}$/).optional(),
+  ANNOUNCEMENT_MEDIA_ACCESS_KEY: z.string().min(1).optional(),
+  ANNOUNCEMENT_MEDIA_SECRET_KEY: z.string().min(1).optional(),
 });
 export const config = schema.parse(process.env);
 if (config.NODE_ENV === 'production' && !config.APP_ORIGIN.startsWith('https://')) throw new Error('Production requires an HTTPS APP_ORIGIN');

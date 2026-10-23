@@ -1,0 +1,65 @@
+<section class="announcements-page">
+  <header class="announcements-heading">
+    <div>
+      <h1>Announcements</h1>
+      <p>Share a school update with parents in the selected academic year.</p>
+    </div>
+  </header>
+
+  @if (success()) { <p class="message message--success" role="status">{{ success() }}</p> }
+  @if (error()) { <p class="message message--error" role="alert">{{ error() }}</p> }
+  @if (api.loading()) { <p class="message" role="status">Loading school information...</p> }
+  @if (api.error()) { <p class="message message--error" role="alert">{{ api.error() }}</p> }
+
+  <div class="announcement-grid">
+    <form class="announcement-card" (ngSubmit)="publish()" #form="ngForm">
+      <div class="card-heading"><span class="eyebrow">NEW POST</span><h2>Compose announcement</h2></div>
+      <div class="field-row">
+        <label>Academic year
+          <span class="read-only-value">{{ year()?.label || 'No academic year selected' }}</span>
+        </label>
+        <label for="announcement-audience">Audience
+          <select id="announcement-audience" class="sa-select" [ngModel]="classId()" (ngModelChange)="classId.set($event)" name="classId" [disabled]="busy() || !year()">
+            <option value="">Whole school</option>
+            @for (classroom of classes(); track classroom.id) { <option [value]="classroom.id">{{ classroom.name }}</option> }
+          </select>
+        </label>
+      </div>
+      <label for="announcement-title">Title
+        <input id="announcement-title" class="sa-input" [ngModel]="title()" (ngModelChange)="title.set($event)" name="title" required minlength="3" maxlength="160" [disabled]="busy()" placeholder="A clear headline for parents">
+      </label>
+      <label for="announcement-body">Message
+        <textarea id="announcement-body" class="sa-input" [ngModel]="body()" (ngModelChange)="body.set($event)" name="body" required minlength="3" maxlength="5000" rows="8" [disabled]="busy()" placeholder="Write the update parents need to know"></textarea>
+      </label>
+      <span class="character-count">{{ body().length }} / 5000</span>
+      <div class="image-field">
+        <label for="announcement-image">Optional image</label>
+        <input #imageInput id="announcement-image" type="file" accept="image/jpeg,image/png,image/webp" (change)="selectImage($event)" [disabled]="busy()">
+        <p>JPG, PNG or WebP, up to 5 MB. Image preview is available. Publishing images requires the school media service.</p>
+        @if (imageName()) { <button type="button" class="text-button" (click)="clearImage()">Remove {{ imageName() }}</button> }
+      </div>
+      <div class="form-actions">
+        <button type="button" class="secondary-button" (click)="preview.set(!preview())" [disabled]="!title().trim() && !body().trim() && !imageUrl()">{{ preview() ? 'Hide preview' : 'Preview' }}</button>
+        <button type="submit" class="sa-btn--primary" [disabled]="!canPublish()">{{ busy() ? 'Publishing...' : 'Publish announcement' }}</button>
+      </div>
+      @if (imageUrl()) { <p class="image-warning" role="status">Remove the image to publish a text announcement. Image upload is not yet available.</p> }
+    </form>
+
+    <aside class="announcement-card preview-card" aria-label="Announcement preview">
+      <div class="card-heading"><span class="eyebrow">PARENT VIEW</span><h2>Preview</h2></div>
+      @if (preview()) {
+        <article class="post-preview">
+          <p class="preview-school">{{ api.schoolName() }}</p>
+          @if (imageUrl()) { <img [src]="imageUrl()" alt="Selected announcement image preview"> }
+          <div class="preview-content">
+            <span>{{ classId() ? 'Class announcement' : 'School announcement' }}</span>
+            <h3>{{ title().trim() || 'Announcement title' }}</h3>
+            <p>{{ body().trim() || 'Your message will appear here.' }}</p>
+          </div>
+        </article>
+      } @else {
+        <p class="preview-empty">Write an update, then choose Preview to see how it will read for parents.</p>
+      }
+    </aside>
+  </div>
+</section>

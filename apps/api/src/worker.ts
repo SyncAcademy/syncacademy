@@ -66,12 +66,12 @@ async function processParentInvitationBatch() {
 
 async function processParentAnnouncement() {
   const lease = randomUUID();
-  const claimed = await db.$queryRaw<Array<{ id: string }>>`UPDATE "ParentAnnouncement" SET "leaseId" = ${lease}, "leaseUntil" = NOW() + INTERVAL '60 seconds' WHERE id = (SELECT id FROM "ParentAnnouncement" WHERE "notificationCompleteAt" IS NULL AND ("leaseUntil" IS NULL OR "leaseUntil" < NOW()) ORDER BY "createdAt" FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING id`;
+  const claimed = await db.$queryRaw<Array<{ id: string }>>`UPDATE "ParentAnnouncement" SET "leaseId" = ${lease}, "leaseUntil" = NOW() + INTERVAL '60 seconds' WHERE id = (SELECT id FROM "ParentAnnouncement" WHERE "notificationCompleteAt" IS NULL AND "publishedAt" <= NOW() AND "unpublishedAt" IS NULL AND ("leaseUntil" IS NULL OR "leaseUntil" < NOW()) ORDER BY "createdAt" FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING id`;
   if (!claimed.length) return;
   const announcementId = claimed[0].id;
   try {
     await db.$transaction(async tx => {
-      const announcement = await tx.parentAnnouncement.findFirst({ where: { id: announcementId, leaseId: lease } });
+      const announcement = await tx.parentAnnouncement.findFirst({ where: { id: announcementId, leaseId: lease, publishedAt: { lte: new Date() }, unpublishedAt: null } });
       if (!announcement) return;
       const guardian = await tx.guardian.findFirst({ where: { schoolId: announcement.schoolId, ...(announcement.notificationCursor ? { id: { gt: announcement.notificationCursor } } : {}), userId: { not: null }, user: { enabled: true, parentAccount: { isNot: null } }, students: { some: { schoolId: announcement.schoolId, active: true, student: { enrollments: { some: { schoolId: announcement.schoolId, status: 'active', ...(announcement.classId ? { classroomId: announcement.classId } : {}), classroom: { yearId: announcement.yearId } } } } } } }, orderBy: { id: 'asc' }, select: { id: true, userId: true } });
       if (!guardian) {
