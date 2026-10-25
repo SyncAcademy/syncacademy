@@ -76,6 +76,7 @@ td .action-btn { white-space:nowrap; }
 .guardian-verification { justify-content:flex-start; margin-top:10px; }
 .guardian-verification input { width:150px; }
 .registration-guardian { padding:14px 0; border-bottom:1px solid #e2e8f0; }
+.registration-guardian + .action-btn { margin-top:16px; }
 fieldset { min-width:0; border:1px solid #e2e8f0; border-radius:10px; padding:16px; }
 .class-view-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 14px; padding:14px 16px; border:1px solid #e2e8f0; border-radius:11px; background:#fff; }
 .class-view-toolbar h3 { margin:3px 0 0; font-size:1.05rem; }
