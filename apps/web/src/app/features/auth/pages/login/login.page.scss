@@ -4,6 +4,20 @@
   margin: 0 auto;
 }
 
+.login__session-notice {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 16px 0 20px;
+  padding: 12px 16px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  text-align: left;
+}
+
 .role-back {
   display: inline-block;
   margin-bottom: 14px;

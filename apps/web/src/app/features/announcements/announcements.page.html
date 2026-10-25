@@ -1,65 +1,317 @@
 <section class="announcements-page">
   <header class="announcements-heading">
-    <div>
+    <div class="heading-copy">
+      <span class="heading-kicker">SCHOOL COMMUNICATION</span>
       <h1>Announcements</h1>
-      <p>Share a school update with parents in the selected academic year.</p>
+      <p>Keep families informed with timely updates from your school.</p>
+    </div>
+    <div class="heading-actions">
+      <button type="button" class="primary-button create-button" (click)="openComposer()" [disabled]="!year()">
+        <span class="button-plus" aria-hidden="true">+</span>
+        Create announcement
+      </button>
     </div>
   </header>
 
-  @if (success()) { <p class="message message--success" role="status">{{ success() }}</p> }
-  @if (error()) { <p class="message message--error" role="alert">{{ error() }}</p> }
-  @if (api.loading()) { <p class="message" role="status">Loading school information...</p> }
-  @if (api.error()) { <p class="message message--error" role="alert">{{ api.error() }}</p> }
+  @if (success()) {
+    <p class="page-message page-message--success" role="status">{{ success() }}</p>
+  }
 
-  <div class="announcement-grid">
-    <form class="announcement-card" (ngSubmit)="publish()" #form="ngForm">
-      <div class="card-heading"><span class="eyebrow">NEW POST</span><h2>Compose announcement</h2></div>
-      <div class="field-row">
-        <label>Academic year
-          <span class="read-only-value">{{ year()?.label || 'No academic year selected' }}</span>
+  <div class="announcements-layout">
+    <section class="announcements-list-panel" aria-labelledby="announcements-list-heading">
+      <div class="list-heading">
+        <div>
+          <h2 id="announcements-list-heading">Your announcements</h2>
+          <p>Updates for {{ year()?.label || 'your school community' }}</p>
+        </div>
+        <label class="search-field">
+          <span class="search-icon" aria-hidden="true"></span>
+          <span class="announcement-visually-hidden">Search announcements</span>
+          <input type="search" placeholder="Search by title or message" [ngModel]="searchTerm()"
+            (ngModelChange)="searchTerm.set($event)" aria-label="Search announcements">
         </label>
-        <label for="announcement-audience">Audience
-          <select id="announcement-audience" class="sa-select" [ngModel]="classId()" (ngModelChange)="classId.set($event)" name="classId" [disabled]="busy() || !year()">
-            <option value="">Whole school</option>
-            @for (classroom of classes(); track classroom.id) { <option [value]="classroom.id">{{ classroom.name }}</option> }
-          </select>
-        </label>
       </div>
-      <label for="announcement-title">Title
-        <input id="announcement-title" class="sa-input" [ngModel]="title()" (ngModelChange)="title.set($event)" name="title" required minlength="3" maxlength="160" [disabled]="busy()" placeholder="A clear headline for parents">
-      </label>
-      <label for="announcement-body">Message
-        <textarea id="announcement-body" class="sa-input" [ngModel]="body()" (ngModelChange)="body.set($event)" name="body" required minlength="3" maxlength="5000" rows="8" [disabled]="busy()" placeholder="Write the update parents need to know"></textarea>
-      </label>
-      <span class="character-count">{{ body().length }} / 5000</span>
-      <div class="image-field">
-        <label for="announcement-image">Optional image</label>
-        <input #imageInput id="announcement-image" type="file" accept="image/jpeg,image/png,image/webp" (change)="selectImage($event)" [disabled]="busy()">
-        <p>JPG, PNG or WebP, up to 5 MB. Image preview is available. Publishing images requires the school media service.</p>
-        @if (imageName()) { <button type="button" class="text-button" (click)="clearImage()">Remove {{ imageName() }}</button> }
-      </div>
-      <div class="form-actions">
-        <button type="button" class="secondary-button" (click)="preview.set(!preview())" [disabled]="!title().trim() && !body().trim() && !imageUrl()">{{ preview() ? 'Hide preview' : 'Preview' }}</button>
-        <button type="submit" class="sa-btn--primary" [disabled]="!canPublish()">{{ busy() ? 'Publishing...' : 'Publish announcement' }}</button>
-      </div>
-      @if (imageUrl()) { <p class="image-warning" role="status">Remove the image to publish a text announcement. Image upload is not yet available.</p> }
-    </form>
 
-    <aside class="announcement-card preview-card" aria-label="Announcement preview">
-      <div class="card-heading"><span class="eyebrow">PARENT VIEW</span><h2>Preview</h2></div>
-      @if (preview()) {
-        <article class="post-preview">
-          <p class="preview-school">{{ api.schoolName() }}</p>
-          @if (imageUrl()) { <img [src]="imageUrl()" alt="Selected announcement image preview"> }
-          <div class="preview-content">
-            <span>{{ classId() ? 'Class announcement' : 'School announcement' }}</span>
-            <h3>{{ title().trim() || 'Announcement title' }}</h3>
-            <p>{{ body().trim() || 'Your message will appear here.' }}</p>
-          </div>
-        </article>
+      <nav class="announcement-tabs" aria-label="Filter announcements">
+        <button type="button" [class.is-active]="announcementFilter() === 'all'" [attr.aria-pressed]="announcementFilter() === 'all'" (click)="setFilter('all')">
+          All <span>{{ announcementCounts().all }}</span>
+        </button>
+        <button type="button" [class.is-active]="announcementFilter() === 'published'" [attr.aria-pressed]="announcementFilter() === 'published'" (click)="setFilter('published')">
+          Published <span>{{ announcementCounts().published }}</span>
+        </button>
+        <button type="button" [class.is-active]="announcementFilter() === 'drafts'" [attr.aria-pressed]="announcementFilter() === 'drafts'" (click)="setFilter('drafts')">
+          Drafts <span>{{ announcementCounts().drafts }}</span>
+        </button>
+        <button type="button" [class.is-active]="announcementFilter() === 'scheduled'" [attr.aria-pressed]="announcementFilter() === 'scheduled'" (click)="setFilter('scheduled')">
+          Scheduled <span>{{ announcementCounts().scheduled }}</span>
+        </button>
+      </nav>
+
+      @if (loadingAnnouncements() && !announcements().length) {
+        <div class="list-state" role="status"><span class="loading-mark" aria-hidden="true"></span><p>Loading announcements...</p></div>
+      } @else if (announcementsError()) {
+        <div class="list-state list-state--error" role="alert">
+          <p>{{ announcementsError() }}</p>
+          <button type="button" class="text-action" (click)="reloadAnnouncements()">Try again</button>
+        </div>
+      } @else if (!filteredAnnouncements().length) {
+        <div class="list-state empty-state">
+          <span class="empty-mark" aria-hidden="true"></span>
+          <h3>{{ searchTerm().trim() ? 'No matching announcements' : 'Nothing here yet' }}</h3>
+          <p>{{ searchTerm().trim() ? 'Try another search term.' : 'Create an update for parents or save a draft to finish later.' }}</p>
+          @if (!searchTerm().trim()) {
+            <button type="button" class="secondary-button" (click)="openComposer()" [disabled]="!year()">Create announcement</button>
+          }
+        </div>
       } @else {
-        <p class="preview-empty">Write an update, then choose Preview to see how it will read for parents.</p>
+        <div class="announcement-list">
+          @for (item of filteredAnnouncements(); track item.id) {
+            <article class="announcement-item">
+              @if (announcementImage(item); as imageSource) {
+                <img class="announcement-thumbnail" [src]="imageSource" [alt]="item.title" loading="lazy" (error)="markImageFailed(item.id)">
+              } @else {
+                <div class="announcement-thumbnail announcement-thumbnail--text" aria-hidden="true"><span class="thumbnail-mark">S</span></div>
+              }
+              <div class="announcement-copy">
+                <div class="announcement-meta">
+                  <span class="announcement-status" [ngClass]="statusClass(item)"><span aria-hidden="true"></span>{{ statusLabel(item) }}</span>
+                  <span class="meta-dot" aria-hidden="true"></span>
+                  <span>{{ categoryLabel(item) }}</span>
+                </div>
+                <button type="button" class="announcement-title-button" (click)="openAnnouncement(item)">{{ item.title }}</button>
+                <p class="announcement-excerpt">{{ item.body }}</p>
+                <div class="announcement-details">
+                  <span class="detail-item">
+                    <span class="detail-calendar" aria-hidden="true"></span>
+                    {{ (item.publishedAt || item.createdAt) | date:'MMM d, y' }}
+                  </span>
+                  <span class="audience-pill"><span class="detail-audience" aria-hidden="true"></span>{{ audienceLabel(item) }}</span>
+                  <span class="audience-pill">{{ yearLabel(item.yearId) }}</span>
+                </div>
+              </div>
+              <div class="announcement-actions">
+                <button type="button" class="icon-button row-menu-trigger" [attr.aria-label]="'Actions for ' + item.title"
+                  [attr.aria-expanded]="menuAnnouncementId() === item.id" (click)="toggleAnnouncementMenu(item.id)">···</button>
+                @if (menuAnnouncementId() === item.id) {
+                  <div class="announcement-action-menu">
+                    <button type="button" (click)="closeAnnouncementMenu(); openAnnouncement(item)">Preview</button>
+                    @if (!item.publishedAt && !item.unpublishedAt) {
+                      <button type="button" (click)="closeAnnouncementMenu(); editDraft(item)">Edit draft</button>
+                      <button type="button" (click)="toggleAnnouncementStatus(item)" [disabled]="busy()">Publish now</button>
+                    } @else if (item.publishedAt && !item.unpublishedAt) {
+                      <button type="button" class="menu-danger" (click)="toggleAnnouncementStatus(item)" [disabled]="busy()">Unpublish</button>
+                    }
+                  </div>
+                }
+              </div>
+            </article>
+          }
+        </div>
       }
+    </section>
+
+    <aside class="create-callout quick-tips">
+      <span class="tips-icon" aria-hidden="true">i</span>
+      <h2>Quick tips</h2>
+      <ul>
+        <li>Keep titles clear and easy to scan.</li>
+        <li>Include dates, times, and any action families need to take.</li>
+        <li>Choose the class audience when an update is not school-wide.</li>
+        <li>Save a draft to review before sharing it.</li>
+      </ul>
+      <div class="callout-divider"></div>
+      <h3>Ready to share an update?</h3>
+      <p>Preview it first, then publish now or schedule it for later.</p>
+      <button type="button" class="primary-button callout-button" (click)="openComposer()" [disabled]="!year()">
+        <span class="button-plus" aria-hidden="true">+</span>Create announcement
+      </button>
     </aside>
   </div>
 </section>
+
+@if (composerOpen()) {
+  <div class="modal-backdrop" (click)="closeComposer()" (keydown.escape)="closeComposer()">
+    <section class="announcement-modal workflow-modal" role="dialog" aria-modal="true" aria-labelledby="composer-title" (click)="$event.stopPropagation()">
+      <header class="modal-header workflow-header">
+        <div>
+          <span class="modal-kicker">{{ selectedAnnouncement() && !editingDraft() ? 'ANNOUNCEMENT DETAILS' : 'SCHOOL COMMUNICATION' }}</span>
+          <h2 id="composer-title">{{ selectedAnnouncement() && !editingDraft() ? 'Announcement preview' : editingDraft() ? 'Edit draft' : 'Create announcement' }}</h2>
+          <p>{{ selectedAnnouncement() && !editingDraft() ? 'Review the announcement and its current audience.' : 'Create, review, and share an update with parents.' }}</p>
+        </div>
+        <button type="button" class="icon-button modal-close" aria-label="Close composer" (click)="closeComposer()" [disabled]="busy()">×</button>
+      </header>
+
+      @if (!(selectedAnnouncement() && !editingDraft())) {
+        <nav class="composer-steps" aria-label="Announcement steps">
+          <button type="button" [class.is-active]="composerStep() === 1" [class.is-complete]="composerStep() > 1" (click)="setComposerStep(1)">
+            <span>1</span><span><strong>Content</strong><small>Write your update</small></span>
+          </button>
+          <span class="step-connector" aria-hidden="true"></span>
+          <button type="button" [class.is-active]="composerStep() === 2" [class.is-complete]="composerStep() > 2" (click)="setComposerStep(2)">
+            <span>2</span><span><strong>Audience</strong><small>Choose who sees it</small></span>
+          </button>
+          <span class="step-connector" aria-hidden="true"></span>
+          <button type="button" [class.is-active]="composerStep() === 3" (click)="setComposerStep(3)">
+            <span>3</span><span><strong>Preview</strong><small>Review and publish</small></span>
+          </button>
+        </nav>
+      }
+
+      <form class="workflow-form" (ngSubmit)="composerStep() < 3 ? setComposerStep(composerStep() + 1) : publish()">
+        <div class="workflow-content">
+          @if (error()) { <p class="form-message form-message--error" role="alert">{{ error() }}</p> }
+          @if (pendingImageDraft()) {
+            <p class="form-message form-message--note" role="status">Your image is saved privately. Retry to finish, or save your draft and return to it later.</p>
+          }
+
+          @if (composerStep() === 1 && !(selectedAnnouncement() && !editingDraft())) {
+            <section class="workflow-step-content">
+              <div class="step-section-heading"><h3>Write your announcement</h3><p>Start with a clear message families can understand at a glance.</p></div>
+              <div class="form-grid">
+                <label class="form-field form-field--full">
+                  <span class="field-label">Title <span class="required-mark">*</span></span>
+                  <input class="form-control" [ngModel]="title()" (ngModelChange)="title.set($event)" name="title" required minlength="3" maxlength="160"
+                    [disabled]="busy() || !!pendingImageDraft()" placeholder="A clear headline for parents">
+                  <span class="field-hint">{{ title().length }} / 160 characters</span>
+                </label>
+                <label class="form-field form-field--full message-field">
+                  <span class="field-label">Message <span class="required-mark">*</span></span>
+                  <textarea class="form-control message-control" [ngModel]="body()" (ngModelChange)="body.set($event)" name="body" required minlength="3" maxlength="5000"
+                    [disabled]="busy() || !!pendingImageDraft()" placeholder="Write the update parents need to know"></textarea>
+                  <span class="character-count">{{ body().length }} / 5000</span>
+                </label>
+              </div>
+
+              <fieldset class="format-selector" [disabled]="busy() || !!editingDraft() || !!pendingImageDraft()">
+                <legend class="field-label">Announcement format</legend>
+                <button type="button" [class.is-selected]="announcementType() === 'text'" (click)="announcementType.set('text'); clearImage()">
+                  <span class="format-mark format-mark--text" aria-hidden="true">T</span><span><strong>Text update</strong><small>Share a message</small></span>
+                </button>
+                <button type="button" [class.is-selected]="announcementType() === 'image'" (click)="announcementType.set('image')">
+                  <span class="format-mark format-mark--image" aria-hidden="true">▧</span><span><strong>Image update</strong><small>Add a school photo</small></span>
+                </button>
+              </fieldset>
+
+              @if (announcementType() === 'image') {
+                <div class="image-field form-field--full">
+                  <div class="image-field-heading">
+                    <div><span class="field-label">Add an image <span class="optional-mark">Optional</span></span><p>Upload a photo to accompany your message.</p></div>
+                    <span class="image-format">PNG, JPG or WebP · up to 5 MB</span>
+                  </div>
+                  @if (imageUrl()) {
+                    <div class="selected-image">
+                      <div class="selected-image-preview">
+                        <img [src]="imageUrl()" alt="Announcement image preview">
+                        @if (!selectedAnnouncement()?.media) {
+                          <button type="button" class="remove-image-button selected-image-remove" (click)="clearImage()"
+                            [disabled]="busy() || processingImage() || !!pendingImageDraft()" aria-label="Remove selected image" title="Remove selected image">×</button>
+                        }
+                      </div>
+                      <div class="selected-image-info"><span class="image-file-mark" aria-hidden="true"></span><span class="selected-image-name">{{ imageName() }}</span>
+                        @if (imageFile()) { <span class="selected-image-size">{{ imageFile()!.size / 1024 / 1024 | number:'1.1-1' }} MB</span> }
+                      </div>
+                      @if (!selectedAnnouncement()?.media) {
+                        <div class="image-actions"><button type="button" class="secondary-button" (click)="imageInput.click()" [disabled]="busy() || processingImage() || !!pendingImageDraft()">Replace image</button></div>
+                      }
+                    </div>
+                  } @else {
+                    <label class="image-dropzone" for="announcement-image">
+                      <svg class="upload-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 16V3m0 0L7 8m5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
+                      </svg>
+                      <span class="dropzone-title">{{ processingImage() ? 'Preparing your image...' : 'Choose an image to upload' }}</span>
+                      <span class="dropzone-copy">JPG, PNG or WebP. Your image will be shown in the parent app.</span>
+                      <span class="secondary-button choose-image-button">{{ processingImage() ? 'Please wait' : 'Choose image' }}</span>
+                    </label>
+                  }
+                  <input #imageInput id="announcement-image" class="announcement-visually-hidden" type="file" accept="image/jpeg,image/png,image/webp"
+                    (change)="selectImage($event)" [disabled]="busy() || processingImage() || !!pendingImageDraft() || !!selectedAnnouncement()?.media">
+                </div>
+              }
+            </section>
+          }
+
+          @if (composerStep() === 2 && !(selectedAnnouncement() && !editingDraft())) {
+            <section class="workflow-step-content">
+              <div class="step-section-heading"><h3>Choose your audience</h3><p>Select an academic year and decide whether this update is for everyone or a specific class.</p></div>
+              @if (editingDraft()) { <p class="form-message form-message--note">The academic year and audience are fixed after a draft is created.</p> }
+              <div class="form-grid">
+                <label class="form-field">
+                  <span class="field-label">Academic year <span class="required-mark">*</span></span>
+                  <select class="form-control" [ngModel]="year()?.id || ''" (ngModelChange)="selectYear($event)" name="yearId" required
+                    [disabled]="busy() || !!pendingImageDraft() || !!editingDraft()">
+                    <option value="" disabled>Select an academic year</option>
+                    @for (academicYear of availableYears(); track academicYear.id) { <option [value]="academicYear.id">{{ academicYear.label }}{{ academicYear.status === 'active' ? ' · Current' : '' }}</option> }
+                  </select>
+                </label>
+                <label class="form-field">
+                  <span class="field-label">Audience <span class="required-mark">*</span></span>
+                  <select class="form-control" [ngModel]="classId()" (ngModelChange)="classId.set($event)" name="classId"
+                    [disabled]="busy() || !!pendingImageDraft() || !year() || !!editingDraft()">
+                    <option value="">Whole school</option>
+                    @for (classroom of classes(); track classroom.id) { <option [value]="classroom.id">{{ classroom.name }}</option> }
+                  </select>
+                </label>
+              </div>
+              <div class="audience-summary"><span class="audience-summary-icon" aria-hidden="true"></span><span><strong>{{ selectedAudienceLabel() }}</strong><small>{{ year()?.label || 'Choose an academic year' }}</small></span></div>
+            </section>
+          }
+
+          @if (composerStep() === 3) {
+            <section class="workflow-step-content preview-step">
+              <div class="step-section-heading">
+                <h3>{{ selectedAnnouncement() && !editingDraft() ? 'Announcement preview' : 'Review your announcement' }}</h3>
+                <p>{{ selectedAnnouncement() && !editingDraft() ? 'This is the announcement currently shown to its audience.' : 'Check the message and delivery details before sharing.' }}</p>
+              </div>
+              <div class="preview-content">
+                <div class="mobile-preview-column">
+                  <div class="mobile-app-label"><span class="mobile-app-icon" aria-hidden="true">S</span><span>Parent Mobile App</span></div>
+                  <article class="mobile-post">
+                    <header class="mobile-post-header"><span class="school-avatar" aria-hidden="true">{{ api.schoolName().charAt(0) }}</span>
+                      <span class="school-byline"><strong>{{ api.schoolName() }}</strong><small>Announcement</small></span><span class="mobile-post-menu" aria-hidden="true">···</span>
+                    </header>
+                    @if (imageUrl()) { <img class="mobile-post-image" [src]="imageUrl()" alt="Announcement image"> }
+                    <div class="mobile-post-body">
+                      <div class="preview-tags"><span class="preview-tag">{{ year()?.label || 'Academic year' }}</span><span class="preview-tag preview-tag--audience">{{ selectedAudienceLabel() }}</span></div>
+                      <h3>{{ title() }}</h3><p>{{ body() }}</p>
+                      <span class="mobile-post-date">{{ selectedAnnouncement() && !editingDraft() ? ((selectedAnnouncement()!.publishedAt || selectedAnnouncement()!.createdAt) | date:'MMM d, y') : scheduleForLater() && scheduledAt() ? ('Scheduled ' + (scheduledAt() | date:'medium')) : 'Publishes when you confirm' }}</span>
+                    </div>
+                  </article>
+                  <p class="preview-caption">Preview only. The announcement is shared according to the delivery option you choose.</p>
+                </div>
+              </div>
+              @if (!(selectedAnnouncement() && !editingDraft())) {
+                <fieldset class="schedule-options" [disabled]="busy()">
+                  <legend class="field-label">Delivery</legend>
+                  <label><input type="radio" name="delivery" [ngModel]="scheduleForLater()" [ngModelOptions]="{standalone: true}" [value]="false" (ngModelChange)="scheduleForLater.set(false)"> Publish now</label>
+                  <label><input type="radio" name="delivery" [ngModel]="scheduleForLater()" [ngModelOptions]="{standalone: true}" [value]="true" (ngModelChange)="scheduleForLater.set(true)"> Schedule for later</label>
+                  @if (scheduleForLater()) {
+                    <label class="schedule-date"><span class="visually-hidden">Schedule date and time</span><input type="datetime-local" name="scheduledAt" [ngModel]="scheduledAt()" (ngModelChange)="scheduledAt.set($event)" [min]="minimumScheduleDate()" required></label>
+                  }
+                </fieldset>
+              }
+            </section>
+          }
+        </div>
+
+        <footer class="modal-footer workflow-footer">
+          @if (selectedAnnouncement() && !editingDraft()) {
+            <button type="button" class="secondary-button" (click)="closeComposer()">Close</button>
+            <span></span>
+          } @else {
+            <button type="button" class="secondary-button" (click)="closeComposer()" [disabled]="busy()">Cancel</button>
+            <div class="footer-actions">
+              @if (composerStep() > 1) { <button type="button" class="secondary-button" (click)="setComposerStep(composerStep() - 1)" [disabled]="busy()">Back</button> }
+              <button type="button" class="secondary-button save-draft-button" (click)="saveDraft()" [disabled]="!canContinueToAudience() || !canContinueToPreview() || busy()">Save draft</button>
+              @if (composerStep() < 3) {
+                <button type="submit" class="primary-button" [disabled]="composerStep() === 1 ? !canContinueToAudience() : !canContinueToPreview()">Continue <span class="button-arrow" aria-hidden="true">→</span></button>
+              } @else {
+                <button type="submit" class="primary-button publish-button" [disabled]="!canPreview()">{{ busy() ? 'Saving...' : scheduleForLater() ? 'Schedule announcement' : 'Publish announcement' }} <span aria-hidden="true">→</span></button>
+              }
+            </div>
+          }
+        </footer>
+      </form>
+    </section>
+  </div>
+}

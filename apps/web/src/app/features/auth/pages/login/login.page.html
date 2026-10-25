@@ -1,7 +1,7 @@
 <app-auth-layout>
   <div class="login">
     <app-logo variant="dark" size="md"></app-logo>
-    @if (sessionNotice) { <p role="status">{{ sessionNotice }}</p> }
+    @if (sessionNotice) { <p class="login__session-notice" role="alert">{{ sessionNotice }}</p> }
 
     @if (selectedRole(); as role) {
     <div class="login__header">

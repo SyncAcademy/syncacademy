@@ -20,7 +20,7 @@ export class AuthService {
   request<T = any>(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
     const identity = this.identity();
     const activity = identity?.selectedRole === 'SUPER_ADMIN' && Date.now() - this.lastTrustedActivity < 60000;
-    return firstValueFrom(this.http.request<T>(method, '/api/v1/' + path, { body, headers: { 'X-Requested-With': 'SyncAcademy', ...(activity ? { 'X-Platform-Activity': '1' } : {}), ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) } }))
+    return firstValueFrom(this.http.request<T>(method, '/api/v1/' + path, { body, withCredentials: true, headers: { 'X-Requested-With': 'SyncAcademy', ...(activity ? { 'X-Platform-Activity': '1' } : {}), ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) } }))
       .catch(error => { this.handleSessionError(error, identity, path); throw error; });
   }
   private handleSessionError(error: unknown, identity: Identity | null, path: string): void {
@@ -34,6 +34,7 @@ export class AuthService {
     try {
       return await firstValueFrom(this.http.get('/api/v1/' + path, {
         responseType: 'blob',
+        withCredentials: true,
         headers: { 'X-Requested-With': 'SyncAcademy' },
       }));
     } catch (error) {
