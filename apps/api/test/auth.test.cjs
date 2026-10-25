@@ -109,11 +109,7 @@ test(
     const migrate = spawnSync(
       process.execPath,
       [
-        path.resolve(__dirname, "../../../node_modules/prisma/build/index.js"),
-        "migrate",
-        "deploy",
-        "--schema",
-        path.resolve(__dirname, "../prisma/schema.prisma"),
+        path.resolve(__dirname, "../scripts/deploy-migrations.cjs"),
       ],
       { env: process.env, encoding: "utf8" },
     );
@@ -1664,6 +1660,7 @@ test(
         },
       );
       await t.test('student management persists records and enforces role, school, year and concurrency boundaries', async () => {
+        await db.rateBucket.deleteMany({ where: { key: { in: ['127.0.0.1', '::ffff:127.0.0.1', '::1'].map(ip => digest('login-ip:' + ip)) } } });
         const school = await db.school.create({ data: { name: 'Registry integration school', code: 'REG-TEST', region: 'Test' } });
         const other = await db.school.create({ data: { name: 'Isolated registry school', code: 'REG-OTHER', region: 'Test' } });
         const year = await db.academicYear.create({ data: { schoolId: school.id, name: '2026', startsAt: new Date('2026-01-01'), endsAt: new Date('2026-12-31') } });

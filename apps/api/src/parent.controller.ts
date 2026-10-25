@@ -1,14 +1,17 @@
-import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Put, Query, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, HttpException, NotFoundException, Param, Patch, Post, Put, Query, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { CommunicationChannel, Prisma, User } from '@prisma/client';
 import { Request, Response } from 'express';
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
+import { Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
 import { PlatformService } from './platform.service';
 import { CommunicationService } from './communication/communication.service';
 import { digest, passwordHash, passwordMatches, randomToken } from './security';
 import { config } from './config';
 import { queueParentInvitation } from './parent-invitations';
-import { objectRequest, validateAnnouncementPng } from './announcement-media';
+import { MediaProvider, mediaProvider, objectRequest, openObjectStream, validateAnnouncementPng } from './announcement-media';
+import { RealtimeBus } from './realtime-bus';
 
 const uuid = z.string().uuid();
 const credential = z.string().regex(/^[A-Za-z0-9_-]{20,64}$/);
@@ -21,12 +24,15 @@ const parse = <S extends z.ZodTypeAny>(schema: S, value: unknown): z.output<S> =
 const genericInvitationError = () => new BadRequestException('Invitation is invalid or unavailable.');
 const invitationInput = z.object({ guardianId: uuid, channel: z.enum(['SMS', 'WHATSAPP', 'EMAIL']).default('SMS') }).strict();
 const announcementInput = z.object({ yearId: uuid, classId: uuid.nullish(), title: z.string().trim().min(3).max(160), body: z.string().trim().min(3).max(5000) }).strict();
-const mediaSelect = { id: true, mimeType: true, byteSize: true, width: true, height: true } as const;
+const announcementSchedule = z.string().datetime({ offset: true }).refine(value => new Date(value).getTime() > Date.now(), 'must be in the future');
+const mediaSelect = { id: true, mimeType: true, byteSize: true, width: true, height: true, status: true } as const;
+const mediaStorageSelect = { storageKey: true, displayKey: true, thumbnailKey: true, storageProvider: true, status: true } as const;
 
 @Controller('api/v1')
 export class ParentController {
   private readonly dummyHash = passwordHash(randomToken());
-  constructor(private readonly svc: PlatformService, private readonly comms: CommunicationService) {}
+  private readonly eventConnections = new Map<string, number>();
+  constructor(private readonly svc: PlatformService, private readonly comms: CommunicationService, private readonly bus: RealtimeBus) {}
 
   private async parent(req: Request) {
     const match = /^Bearer ([A-Za-z0-9_-]{40,100})$/.exec(req.get('Authorization') || '');
@@ -139,12 +145,16 @@ export class ParentController {
   async publishAnnouncement(@Req() req: Request, @Param('schoolId') schoolId: string, @Body() body: unknown) {
     const { user } = await this.svc.authorize(req, parse(uuid, schoolId), ['HEADMASTER', 'ACADEMIC']);
     this.staffCsrf(req);
-    const b = parse(announcementInput.extend({ draft: z.boolean().optional() }), body);
+    const b = parse(announcementInput.extend({
+      draft: z.boolean().optional(),
+      scheduleAt: announcementSchedule.optional(),
+    }).refine(value => !(value.draft && value.scheduleAt), { message: 'A draft cannot also be scheduled.' }), body);
     if (!await this.svc.db.academicYear.findFirst({ where: { id: b.yearId, schoolId }, select: { id: true } })) throw new NotFoundException('Academic year unavailable.');
     if (b.classId && !await this.svc.db.classroom.findFirst({ where: { id: b.classId, schoolId, yearId: b.yearId }, select: { id: true } })) throw new NotFoundException('Class unavailable.');
     return this.svc.atomic(async tx => {
-      const announcement = await tx.parentAnnouncement.create({ data: { schoolId, yearId: b.yearId, classId: b.classId, title: b.title, body: b.body, createdBy: user.id, ...(b.draft ? { publishedAt: null } : {}) }, select: { id: true, title: true, publishedAt: true } });
-      await tx.auditEvent.create({ data: { schoolId, actorId: user.id, action: b.draft ? 'PARENT_ANNOUNCEMENT_DRAFTED' : 'PARENT_ANNOUNCEMENT_PUBLISHED', target: announcement.id } });
+      const announcement = await tx.parentAnnouncement.create({ data: { schoolId, yearId: b.yearId, classId: b.classId, title: b.title, body: b.body, createdBy: user.id, ...(b.draft ? { publishedAt: null } : b.scheduleAt ? { publishedAt: new Date(b.scheduleAt) } : {}) }, select: { id: true, title: true, publishedAt: true } });
+      const action = b.draft ? 'PARENT_ANNOUNCEMENT_DRAFTED' : b.scheduleAt ? 'PARENT_ANNOUNCEMENT_SCHEDULED' : 'PARENT_ANNOUNCEMENT_PUBLISHED';
+      await tx.auditEvent.create({ data: { schoolId, actorId: user.id, action, target: announcement.id } });
       return announcement;
     });
   }
@@ -180,14 +190,17 @@ export class ParentController {
   }
 
   @Post('schools/:schoolId/parent-announcements/:announcementId/publish')
-  async publishDraft(@Req() req: Request, @Param('schoolId') schoolId: string, @Param('announcementId') announcementId: string) {
+  async publishDraft(@Req() req: Request, @Param('schoolId') schoolId: string, @Param('announcementId') announcementId: string, @Body() body: unknown) {
     const { user } = await this.svc.authorize(req, parse(uuid, schoolId), ['HEADMASTER', 'ACADEMIC']);
     this.staffCsrf(req);
+    const b = parse(z.object({ scheduleAt: announcementSchedule.optional() }).strict(), body ?? {});
     return this.svc.atomic(async tx => {
-      const changed = await tx.parentAnnouncement.updateMany({ where: { id: parse(uuid, announcementId), schoolId, publishedAt: null, unpublishedAt: null }, data: { publishedAt: new Date() } });
+      const unfinished = await tx.parentAnnouncementMedia.findFirst({ where: { schoolId, announcementId: parse(uuid, announcementId), status: { not: 'READY' } }, select: { id: true } });
+      if (unfinished) throw new ConflictException('Wait for the image upload to finish before publishing.');
+      const changed = await tx.parentAnnouncement.updateMany({ where: { id: parse(uuid, announcementId), schoolId, publishedAt: null, unpublishedAt: null }, data: { publishedAt: b.scheduleAt ? new Date(b.scheduleAt) : new Date() } });
       if (!changed.count) throw new ConflictException('Draft is unavailable.');
-      await tx.auditEvent.create({ data: { schoolId, actorId: user.id, action: 'PARENT_ANNOUNCEMENT_PUBLISHED', target: announcementId } });
-      return { published: true };
+      await tx.auditEvent.create({ data: { schoolId, actorId: user.id, action: b.scheduleAt ? 'PARENT_ANNOUNCEMENT_SCHEDULED' : 'PARENT_ANNOUNCEMENT_PUBLISHED', target: announcementId } });
+      return b.scheduleAt ? { published: false, scheduled: true, publishedAt: b.scheduleAt } : { published: true, scheduled: false };
     });
   }
 
@@ -198,6 +211,7 @@ export class ParentController {
     return this.svc.atomic(async tx => {
       const changed = await tx.parentAnnouncement.updateMany({ where: { id: parse(uuid, announcementId), schoolId, unpublishedAt: null }, data: { unpublishedAt: new Date(), notificationCompleteAt: new Date() } });
       if (!changed.count) throw new NotFoundException('Announcement unavailable.');
+      await tx.parentNotification.deleteMany({ where: { schoolId, kind: 'ANNOUNCEMENT', targetId: announcementId } });
       await tx.auditEvent.create({ data: { schoolId, actorId: user.id, action: 'PARENT_ANNOUNCEMENT_UNPUBLISHED', target: announcementId } });
       return { unpublished: true };
     });
@@ -209,22 +223,47 @@ export class ParentController {
     this.staffCsrf(req);
     await this.svc.rate(`announcement-media:${user.id}`, 20, 3600);
     if (!Buffer.isBuffer(body)) throw new BadRequestException('PNG upload is required.');
-    const image = validateAnnouncementPng(body);
     const id = parse(uuid, announcementId);
     const row = await this.svc.db.parentAnnouncement.findFirst({ where: { id, schoolId, publishedAt: null, unpublishedAt: null }, select: { id: true, media: { select: { id: true } } } });
     if (!row || row.media) throw new ConflictException('An unpublished draft without media is required.');
-    const key = `announcements/${schoolId}/${randomUUID()}.png`;
-    await objectRequest('PUT', key, image.bytes);
+    if (!req.is('image/png')) throw new BadRequestException('PNG upload is required.');
+    const image = await validateAnnouncementPng(body);
+    const base = `announcements/${schoolId}/${randomUUID()}`;
+    const key = `${base}.png`, displayKey = `${base}-display.png`, thumbnailKey = `${base}-thumbnail.png`;
+    const provider = mediaProvider();
+    const pending = await this.svc.atomic(async tx => {
+      const draft = await tx.parentAnnouncement.findFirst({ where: { id, schoolId, publishedAt: null, unpublishedAt: null, media: null }, select: { id: true } });
+      if (!draft) throw new ConflictException('Draft changed during upload.');
+      return tx.parentAnnouncementMedia.create({ data: { schoolId, announcementId: id, storageKey: key, displayKey, thumbnailKey,
+        storageProvider: provider, status: 'PENDING', cleanupAfter: new Date(Date.now() + 3600000),
+        mimeType: 'image/png', byteSize: image.bytes.length, width: image.width, height: image.height,
+        displayByteSize: image.display.length, thumbnailByteSize: image.thumbnail.length }, select: { id: true } });
+    });
     try {
-      const media = await this.svc.atomic(async tx => {
-        const fresh = await tx.parentAnnouncement.findFirst({ where: { id, schoolId, publishedAt: null, unpublishedAt: null, media: null }, select: { id: true } });
+      await objectRequest('PUT', key, image.bytes, provider);
+      await objectRequest('PUT', displayKey, image.display, provider);
+      await objectRequest('PUT', thumbnailKey, image.thumbnail, provider);
+      return await this.svc.atomic(async tx => {
+        const fresh = await tx.parentAnnouncement.findFirst({ where: { id, schoolId, publishedAt: null, unpublishedAt: null, media: { id: pending.id, status: 'PENDING' } }, select: { id: true } });
         if (!fresh) throw new ConflictException('Draft changed during upload.');
-        const created = await tx.parentAnnouncementMedia.create({ data: { schoolId, announcementId: id, storageKey: key, mimeType: 'image/png', byteSize: image.bytes.length, width: image.width, height: image.height }, select: mediaSelect });
+        const changed = await tx.parentAnnouncementMedia.updateMany({ where: { id: pending.id, schoolId, status: 'PENDING' }, data: { status: 'READY', cleanupAfter: null } });
+        if (!changed.count) throw new ConflictException('Upload changed. Try again.');
         await tx.auditEvent.create({ data: { schoolId, actorId: user.id, action: 'PARENT_ANNOUNCEMENT_MEDIA_UPLOADED', target: id } });
-        return created;
+        return tx.parentAnnouncementMedia.findFirstOrThrow({ where: { id: pending.id, schoolId }, select: mediaSelect });
       });
-      return media;
-    } catch (error) { await objectRequest('DELETE', key).catch(() => undefined); throw error; }
+    } catch (error) {
+      const failed = await this.svc.db.parentAnnouncementMedia.updateMany({ where: { id: pending.id, schoolId, status: 'PENDING' }, data: { status: 'FAILED', cleanupAfter: new Date() } }).catch(() => null);
+      // A lost commit acknowledgement must never delete an already READY image.
+      if (!failed) throw error;
+      if (!failed.count) {
+        const ready = await this.svc.db.parentAnnouncementMedia.findFirst({ where: { id: pending.id, schoolId, status: 'READY' }, select: mediaSelect });
+        if (ready) return ready;
+        throw error;
+      }
+      const cleanup = await Promise.allSettled([key, displayKey, thumbnailKey].map(objectKey => objectRequest('DELETE', objectKey, undefined, provider)));
+      if (cleanup.every(result => result.status === 'fulfilled')) await this.svc.db.parentAnnouncementMedia.deleteMany({ where: { id: pending.id, schoolId, status: 'FAILED' } }).catch(() => undefined);
+      throw error;
+    }
   }
 
   @Get('schools/:schoolId/parent-invitations')
@@ -278,7 +317,7 @@ export class ParentController {
     const invitation = await this.activeInvitation(b.credential);
     await this.svc.rate(`parent-challenge:${invitation.id}`, 5, 900);
     const result = await this.comms.requestVerification(invitation.schoolId, invitation.guardianId, invitation.channel, invitation.invitedBy);
-    return { challengeRequired: true, channel: result.channel, maskedDestination: result.destination, expiresAt: invitation.expiresAt };
+    return { challengeRequired: true, codeLength: 6, channel: result.channel, maskedDestination: result.destination, expiresAt: invitation.expiresAt };
   }
 
   @Post('parent/invitations/activate')
@@ -490,7 +529,7 @@ export class ParentController {
       link.canReceiveFinanceAlert ? this.svc.db.adjustment.aggregate({ where: { schoolId: link.schoolId, studentId }, _sum: { amount: true } }) : null,
       link.canReceiveReports ? this.svc.db.reportAccessLink.count({ where: { schoolId: link.schoolId, studentId, guardianId: link.guardianId, revokedAt: null, expiresAt: { gt: new Date() } } }) : 0,
       this.svc.db.parentNotification.count({ where: { userId: user.id, readAt: null, ...await this.notificationScope(user.id) } }),
-      enrollment ? this.svc.db.parentAnnouncement.findMany({ where: { schoolId: link.schoolId, yearId: enrollment.classroom.yearId, OR: [{ classId: null }, { classId: enrollment.classroomId }], publishedAt: { lte: new Date() }, AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }] }, orderBy: { publishedAt: 'desc' }, take: 3, select: { id: true, title: true, publishedAt: true } }) : [],
+      enrollment ? this.svc.db.parentAnnouncement.findMany({ where: { schoolId: link.schoolId, yearId: enrollment.classroom.yearId, OR: [{ classId: null }, { classId: enrollment.classroomId }], publishedAt: { lte: new Date() }, unpublishedAt: null, AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }] }, orderBy: { publishedAt: 'desc' }, take: 3, select: { id: true, title: true, publishedAt: true } }) : [],
     ]);
     const billed = charges?._sum.amount ?? 0;
     const paid = payments?._sum.amount ?? 0;
@@ -571,13 +610,61 @@ export class ParentController {
     return { available: false, items: [] };
   }
 
+  @Get('parent/announcements/stream')
+  async announcementStream(@Req() req: Request, @Query() query: unknown, @Res() res: Response) {
+    parse(z.object({}).strict(), query);
+    const { user } = await this.parent(req);
+    if ((this.eventConnections.get(user.id) ?? 0) >= 3) throw new HttpException('Too many active announcement streams.', 429);
+    await this.svc.rate(`parent-events:${user.id}`, 120, 3600);
+    const schoolIds = async () => new Set((await this.svc.db.studentGuardian.findMany({
+      where: { active: true, guardian: { userId: user.id }, school: { active: true } },
+      distinct: ['schoolId'], take: 100, select: { schoolId: true },
+    })).map(link => link.schoolId));
+    let schools = await schoolIds();
+    let closed = false, checking = false, pending = false;
+    let debounce: NodeJS.Timeout | undefined;
+    if ((this.eventConnections.get(user.id) ?? 0) >= 3) throw new HttpException('Too many active announcement streams.', 429);
+    this.eventConnections.set(user.id, (this.eventConnections.get(user.id) ?? 0) + 1);
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+    const send = () => { if (!closed && !res.write('event: changed\ndata: {}\n\n')) res.end(); };
+    const reconcile = async (notify: boolean) => {
+      if (closed) return;
+      if (checking) { pending ||= notify; return; }
+      checking = true;
+      try {
+        await this.parent(req);
+        const current = await schoolIds();
+        const changed = current.size !== schools.size || [...current].some(id => !schools.has(id));
+        schools = current;
+        if (notify || changed) send();
+        else if (!res.write(': keepalive\n\n')) res.end();
+      } catch { res.end(); }
+      finally { checking = false; if (pending && !closed) { pending = false; void reconcile(true); } }
+    };
+    const unsubscribe = this.bus.subscribe(event => {
+      if (closed || event && (event.scope !== 'school' || !schools.has(event.schoolId))) return;
+      if (!debounce) debounce = setTimeout(() => { debounce = undefined; void reconcile(true); }, 100);
+    });
+    const heartbeat = setInterval(() => void reconcile(false), 15000);
+    const lifetime = setTimeout(() => res.end(), 5 * 60000);
+    res.on('close', () => {
+      closed = true; unsubscribe(); clearInterval(heartbeat); clearTimeout(lifetime); clearTimeout(debounce);
+      const count = (this.eventConnections.get(user.id) ?? 1) - 1;
+      if (count > 0) this.eventConnections.set(user.id, count); else this.eventConnections.delete(user.id);
+    });
+    send();
+  }
+
   @Get('parent/announcements')
   async announcements(@Req() req: Request, @Query() query: unknown) {
     const { user } = await this.parent(req);
     const q = parse(z.object({ cursor: uuid.optional(), limit: z.coerce.number().int().min(1).max(50).default(25) }).strict(), query);
     const scope = await this.announcementScope(user.id);
-    const items = await this.svc.db.parentAnnouncement.findMany({ where: { AND: [scope, { unpublishedAt: null, publishedAt: { lte: new Date() }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }] }, orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }], take: q.limit + 1, ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}), select: { id: true, schoolId: true, yearId: true, classId: true, title: true, publishedAt: true, media: { select: mediaSelect } } });
-    return { items: items.slice(0, q.limit), nextCursor: items.length > q.limit ? items[q.limit - 1].id : null };
+    const items = await this.svc.db.parentAnnouncement.findMany({ where: { AND: [scope, { unpublishedAt: null, publishedAt: { lte: new Date() }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }] }, orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }], take: q.limit + 1, ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}), select: { id: true, schoolId: true, yearId: true, classId: true, title: true, body: true, publishedAt: true, media: { select: mediaSelect }, school: { select: { name: true } } } });
+    return { items: items.slice(0, q.limit).map(({ school, ...item }) => ({ ...item, schoolName: school.name })), nextCursor: items.length > q.limit ? items[q.limit - 1].id : null };
   }
 
   @Get('parent/announcements/:announcementId')
@@ -585,30 +672,48 @@ export class ParentController {
     const { user } = await this.parent(req);
     parse(uuid, announcementId);
     const scope = await this.announcementScope(user.id);
-    const item = await this.svc.db.parentAnnouncement.findFirst({ where: { id: announcementId, AND: [scope, { unpublishedAt: null, publishedAt: { lte: new Date() }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }] }, select: { id: true, schoolId: true, yearId: true, classId: true, title: true, body: true, publishedAt: true, media: { select: mediaSelect } } });
+    const item = await this.svc.db.parentAnnouncement.findFirst({ where: { id: announcementId, AND: [scope, { unpublishedAt: null, publishedAt: { lte: new Date() }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }] }, select: { id: true, schoolId: true, yearId: true, classId: true, title: true, body: true, publishedAt: true, media: { select: mediaSelect }, school: { select: { name: true } } } });
     if (!item) throw new NotFoundException('Announcement unavailable.');
-    return item;
+    const { school, ...details } = item;
+    return { ...details, schoolName: school.name };
   }
 
   @Get('parent/announcements/:announcementId/media')
-  async parentAnnouncementMedia(@Req() req: Request, @Param('announcementId') announcementId: string, @Res() res: Response) {
+  async parentAnnouncementMedia(@Req() req: Request, @Param('announcementId') announcementId: string, @Query() query: unknown, @Res() res: Response) {
+    const q = parse(z.object({ variant: z.enum(['original', 'display', 'thumbnail']).default('display') }).strict(), query);
     const { user } = await this.parent(req);
     const scope = await this.announcementScope(user.id);
-    const item = await this.svc.db.parentAnnouncement.findFirst({ where: { id: parse(uuid, announcementId), AND: [scope, { unpublishedAt: null, publishedAt: { lte: new Date() }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }] }, select: { media: { select: { storageKey: true } } } });
+    const item = await this.svc.db.parentAnnouncement.findFirst({ where: { id: parse(uuid, announcementId), AND: [scope, { unpublishedAt: null, publishedAt: { lte: new Date() }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }] }, select: { media: { select: mediaStorageSelect } } });
     if (!item?.media) throw new NotFoundException('Announcement media unavailable.');
-    const bytes = await objectRequest('GET', item.media.storageKey);
-    res.setHeader('Content-Type', 'image/png'); res.setHeader('Content-Disposition', 'inline'); res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Cache-Control', 'private, no-store');
-    res.end(bytes);
+    await this.sendMedia(res, item.media, q.variant);
   }
 
   @Get('schools/:schoolId/parent-announcements/:announcementId/media')
-  async staffAnnouncementMedia(@Req() req: Request, @Param('schoolId') schoolId: string, @Param('announcementId') announcementId: string, @Res() res: Response) {
+  async staffAnnouncementMedia(@Req() req: Request, @Param('schoolId') schoolId: string, @Param('announcementId') announcementId: string, @Query() query: unknown, @Res() res: Response) {
+    const q = parse(z.object({ variant: z.enum(['original', 'display', 'thumbnail']).default('display') }).strict(), query);
     await this.svc.authorize(req, parse(uuid, schoolId), ['HEADMASTER', 'ACADEMIC']);
-    const item = await this.svc.db.parentAnnouncement.findFirst({ where: { id: parse(uuid, announcementId), schoolId }, select: { media: { select: { storageKey: true } } } });
+    const item = await this.svc.db.parentAnnouncement.findFirst({ where: { id: parse(uuid, announcementId), schoolId }, select: { media: { select: mediaStorageSelect } } });
     if (!item?.media) throw new NotFoundException('Announcement media unavailable.');
-    const bytes = await objectRequest('GET', item.media.storageKey);
+    await this.sendMedia(res, item.media, q.variant);
+  }
+
+  private async sendMedia(res: Response, media: { storageKey: string; displayKey: string | null; thumbnailKey: string | null; storageProvider: string; status: string }, variant: 'original' | 'display' | 'thumbnail') {
+    if (media.status !== 'READY') throw new NotFoundException('Announcement media unavailable.');
+    if (!['local', 's3'].includes(media.storageProvider)) throw new NotFoundException('Announcement media unavailable.');
+    const key = variant === 'thumbnail' ? media.thumbnailKey : variant === 'display' ? media.displayKey : media.storageKey;
+    const { stream, byteSize } = await openObjectStream(key ?? media.storageKey, media.storageProvider as MediaProvider);
     res.setHeader('Content-Type', 'image/png'); res.setHeader('Content-Disposition', 'inline'); res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Cache-Control', 'private, no-store');
-    res.end(bytes);
+    if (byteSize !== undefined) res.setHeader('Content-Length', byteSize);
+    let received = 0;
+    const limit = new Transform({ transform(chunk, _encoding, callback) {
+      received += chunk.length;
+      callback(received > 5 * 1024 * 1024 ? new Error('Stored image exceeds the size limit') : null, chunk);
+    } });
+    try { await pipeline(stream, limit, res); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ERR_STREAM_PREMATURE_CLOSE') console.error(JSON.stringify({ event: 'announcement_media_stream_failed' }));
+      res.destroy();
+    }
   }
 
   @Get('parent/notifications')

@@ -8,14 +8,17 @@
     "worker": "node dist/worker.js",
     "bootstrap": "node dist/bootstrap.js",
     "prisma:generate": "prisma generate",
-    "migrate": "prisma migrate deploy",
+    "migrate": "node scripts/deploy-migrations.cjs",
     "test:integration": "node --test test/auth.test.cjs",
+    "test:announcement-media": "node --test test/announcement-media.test.cjs test/announcement-s3.test.cjs",
+    "test:parent-mobile": "node --test test/parent-mobile.test.cjs",
     "test:security-hardening": "node --test test/security-hardening.test.cjs",
     "test:audit-log": "node --test test/audit-log.test.cjs",
     "test": "npm run test:integration",
     "test:monitoring": "node --test test/monitoring.test.cjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1156.0",
     "@nestjs/common": "11.2.6",
     "@nestjs/core": "11.2.6",
     "@nestjs/platform-express": "11.2.6",
@@ -34,6 +37,7 @@
     "qrcode": "1.5.4",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
+    "sharp": "^0.35.5",
     "socket.io": "^4.8.4",
     "zod": "3.25.76"
   },

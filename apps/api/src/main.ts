@@ -14,6 +14,7 @@ import { config } from './config';
 import { AppModule } from './app.module';
 import { RealtimeGateway, SchoolChange } from './realtime.gateway';
 import { SessionIoAdapter } from './session-io.adapter';
+import { isAllowedBrowserOrigin } from './browser-origin';
 
 @Catch()
 class SafeErrors implements ExceptionFilter {
@@ -22,6 +23,7 @@ class SafeErrors implements ExceptionFilter {
     let status = 500; let message = 'The service could not complete this request. Please try again.';
     if (error instanceof HttpException) { status = error.getStatus(); const details = error.getResponse(); message = typeof details === 'string' ? details : (details as any).message; }
     else if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2002','P2003','P2025','P2034'].includes(error.code)) { status = error.code === 'P2025' ? 404 : 409; message = 'This record already exists, changed, or references an unavailable record. Refresh and try again.'; }
+    if (error && typeof error === 'object' && (error as any).type === 'entity.too.large' && (error as any).status === 413) { status = 413; message = 'Uploaded content exceeds the allowed size.'; }
     if (status >= 500) console.error(JSON.stringify({ event: 'request_failed', requestId: response.getHeader('X-Request-ID'), errorType: error instanceof Error ? error.name : 'unknown' }));
     if (status === 429) response.setHeader('Retry-After', String((error instanceof HttpException && typeof error.getResponse() === 'object' ? (error.getResponse() as any).retryAfter : undefined) ?? 900));
     response.status(status).json({ statusCode: status, message, requestId: response.getHeader('X-Request-ID') });
@@ -55,7 +57,7 @@ async function main() {
     const mobileRequest = req.path.startsWith('/api/v1/parent/') && !req.get('Origin') && !req.get('Cookie') && (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.is('application/json'));
     const isExempt = req.path.startsWith('/api/v1/webhooks/') || req.path.startsWith('/api/v1/public/') || mobileRequest;
     const imageUpload = req.method === 'PUT' && /^\/api\/v1\/schools\/[0-9a-f-]{36}\/parent-announcements\/[0-9a-f-]{36}\/media$/.test(req.path) && !!req.is('image/png');
-    if (!isExempt && !['GET','HEAD','OPTIONS'].includes(req.method) && (req.get('Origin') !== config.APP_ORIGIN || req.get('X-Requested-With') !== 'SyncAcademy' || (!req.is('application/json') && !imageUpload))) {
+    if (!isExempt && !['GET','HEAD','OPTIONS'].includes(req.method) && (!isAllowedBrowserOrigin(req) || req.get('X-Requested-With') !== 'SyncAcademy' || (!req.is('application/json') && !imageUpload))) {
       return res.status(403).json({ message: 'Request origin or content type is not allowed.' });
     }
     next();

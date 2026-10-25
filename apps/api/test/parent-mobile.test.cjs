@@ -1,10 +1,13 @@
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { spawn, spawnSync } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const { Pool } = require('pg');
 const { PrismaClient } = require('@prisma/client');
+const { mkdtempSync, rmSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const sharp = require('sharp');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env'), quiet: true });
 
 const sourceUrl = new URL(process.env.DATABASE_URL);
@@ -20,6 +23,11 @@ process.env.NODE_ENV = 'test';
 process.env.PORT = '3107';
 process.env.COMMUNICATION_MOCK_DISPATCH = 'true';
 process.env.EMAIL_PROVIDER = 'mock';
+process.env.REALTIME_TRANSPORT = 'postgres';
+process.env.ANNOUNCEMENT_MEDIA_PROVIDER = 'local';
+const mediaDirectory = mkdtempSync(path.join(tmpdir(), 'syncacademy-parent-media-'));
+process.env.ANNOUNCEMENT_MEDIA_DIRECTORY = mediaDirectory;
+after(() => rmSync(mediaDirectory, { recursive: true, force: true }));
 if (new URL(process.env.DATABASE_URL).pathname !== `/${databaseName}`) throw Error('Isolated parent test database required');
 const { passwordHash, decrypt, digest } = require('../dist/security');
 const base = 'http://127.0.0.1:3107/api/v1/';
@@ -27,8 +35,8 @@ const origin = process.env.APP_ORIGIN;
 
 function staffClient() {
   let cookie = '';
-  return async (method, route, body, csrf) => {
-    const res = await fetch(base + route, { method, headers: { Origin: origin, 'X-Requested-With': 'SyncAcademy', 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}), ...(csrf ? { 'x-csrf-token': csrf } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  return async (method, route, body, csrf, headers = {}) => {
+    const res = await fetch(base + route, { method, headers: { Origin: origin, 'X-Requested-With': 'SyncAcademy', 'Content-Type': Buffer.isBuffer(body) ? 'image/png' : 'application/json', ...(cookie ? { Cookie: cookie } : {}), ...(csrf ? { 'x-csrf-token': csrf } : {}), ...headers }, ...(body === undefined ? {} : { body: Buffer.isBuffer(body) ? body : JSON.stringify(body) }) });
     const set = res.headers.getSetCookie();
     if (set.length) cookie = set.map(value => value.split(';')[0]).join('; ');
     return { status: res.status, body: await res.json() };
@@ -39,7 +47,7 @@ async function mobile(method, route, body, token) {
   return { status: res.status, body: await res.json() };
 }
 
-test('parent activation and school isolation', { timeout: 180000 }, async () => {
+test('complete parent journey, private media, live publication and school isolation', { timeout: 600000 }, async () => {
   const provision = new Pool({ connectionString: adminUrl.toString(), connectionTimeoutMillis: 5000 });
   try {
     const exists = await provision.query('SELECT 1 FROM pg_database WHERE datname = $1', [databaseName]);
@@ -48,9 +56,8 @@ test('parent activation and school isolation', { timeout: 180000 }, async () => 
       await provision.query('CREATE DATABASE syncacademy_parent_test');
     }
   } finally { await provision.end(); }
-  const prisma = path.resolve(__dirname, '../../../node_modules/prisma/build/index.js');
-  const migration = spawnSync(process.execPath, [prisma, 'migrate', 'deploy', '--schema', path.resolve(__dirname, '../prisma/schema.prisma')], { env: process.env, encoding: 'utf8', timeout: 90000 });
-  assert.equal(migration.status, 0, migration.stderr || migration.stdout);
+  const migration = spawnSync(process.execPath, [path.resolve(__dirname, '../scripts/deploy-migrations.cjs')], { env: process.env, encoding: 'utf8', timeout: 300000, windowsHide: true });
+  assert.equal(migration.status, 0, migration.error?.message || migration.stderr || migration.stdout);
   const db = new PrismaClient();
   const database = await db.$queryRaw`SELECT current_database() AS name`;
   assert.equal(database[0].name, databaseName);
@@ -72,12 +79,17 @@ test('parent activation and school isolation', { timeout: 180000 }, async () => 
   await db.membership.create({ data: { userId: teacher.id, schoolId: school.id, role: 'TEACHER' } });
   const head = await db.user.create({ data: { email: 'head@example.test', name: 'Head Test', passwordHash: hash } });
   await db.membership.create({ data: { userId: head.id, schoolId: school.id, role: 'HEADMASTER' } });
+  const academic = await db.user.create({ data: { email: 'academic@example.test', name: 'Academic Test', passwordHash: hash } });
+  await db.membership.create({ data: { userId: academic.id, schoolId: school.id, role: 'ACADEMIC' } });
+  const bursar = await db.user.create({ data: { email: 'bursar@example.test', name: 'Bursar Test', passwordHash: hash } });
+  await db.membership.create({ data: { userId: bursar.id, schoolId: school.id, role: 'BURSAR' } });
 
-  const api = spawn(process.execPath, [path.resolve(__dirname, '../dist/main.js')], { env: process.env, stdio: 'pipe', windowsHide: true });
+  let api = spawn(process.execPath, [path.resolve(__dirname, '../dist/main.js')], { env: process.env, stdio: 'pipe', windowsHide: true });
   let logs = '';
   api.stdout.on('data', bytes => { logs += bytes; });
   api.stderr.on('data', bytes => { logs += bytes; });
   let worker;
+  let streamAbort;
   try {
     let ready = false;
     for (let attempt = 0; attempt < 120; attempt++) {
@@ -89,6 +101,9 @@ test('parent activation and school isolation', { timeout: 180000 }, async () => 
     const denied = staffClient();
     assert.equal((await denied('POST', 'auth/login', { email: teacher.email, password, role: 'TEACHER' })).status, 201);
     assert.equal((await denied('POST', `schools/${school.id}/parent-invitations`, { guardianId: guardian.id, channel: 'SMS' })).status, 403);
+    const bursarCall = staffClient();
+    assert.equal((await bursarCall('POST', 'auth/login', { email: bursar.email, password, role: 'BURSAR' })).status, 201);
+    assert.equal((await bursarCall('POST', `schools/${school.id}/parent-invitations`, { guardianId: guardian.id, channel: 'SMS' })).status, 403);
     const staffCall = staffClient();
     assert.equal((await staffCall('POST', 'auth/login', { email: staff.email, password, role: 'REGISTRAR' })).status, 201);
     assert.equal((await staffCall('POST', `schools/${school.id}/parent-invitations`, { guardianId: guardian.id, channel: 'SMS' })).status, 403);
@@ -125,6 +140,10 @@ test('parent activation and school isolation', { timeout: 180000 }, async () => 
     assert.equal((await mobile('GET', 'parent/children', undefined, token)).body.items.length, 1);
     assert.equal((await mobile('GET', `parent/children/${child.id}`, undefined, token)).status, 200);
     assert.equal((await mobile('GET', `parent/children/${unrelated.id}`, undefined, token)).status, 404);
+    const unlinkedChild = await db.student.create({ data: { schoolId: school.id, name: 'Unlinked child', admissionNumber: 'P-002' } });
+    assert.equal((await mobile('GET', `parent/children/${unlinkedChild.id}`, undefined, token)).status, 404);
+    assert.equal((await mobile('GET', `parent/children/${child.id}/calendar?yearId=${year.id}`, undefined, token)).status, 200);
+    assert.equal((await mobile('GET', `parent/children/${child.id}/timetable`, undefined, token)).body.available, false);
     const reportCardId = `${randomUUID()}:${classroom.id}:${child.id}`;
     await db.academicWorkspace.create({ data: { schoolId: school.id, yearId: year.id, data: { reports: [{ id: reportCardId, status: 'approved', academicApproved: true, period: '2026 Term 1', results: [{ subject: 'Mathematics', mark: 82, grade: 'A' }] }], attendance: [{ classId: classroom.id, date: '2026-06-01', revision: 1, entries: [{ studentId: child.id, status: 'Present', note: '' }] }] } } });
     const published = await db.reportAccessLink.create({ data: { schoolId: school.id, studentId: child.id, guardianId: guardian.id, reportCardId, tokenHash: digest(randomUUID()), expiresAt: new Date(Date.now() + 86400000) } });
@@ -173,17 +192,107 @@ test('parent activation and school isolation', { timeout: 180000 }, async () => 
     const recovery = await db.parentRecoveryChallenge.findFirstOrThrow({ where: { destination: guardian.phone }, orderBy: { createdAt: 'desc' } });
     const recoveryOutbox = await db.outbox.findFirstOrThrow({ where: { idempotencyKey: `parent-recovery:${recovery.id}` } });
     const recoveryCode = /code: (\d{8})/.exec(JSON.parse(decrypt(recoveryOutbox.payload)).body)?.[1];
-    const recoveredPassword = `Recovered-test-${randomUUID()}`;
+    let recoveredPassword = `Recovered-test-${randomUUID()}`;
     assert.equal((await mobile('POST', 'parent/auth/recovery/confirm', { identifier: guardian.phone, code: '00000000', password: recoveredPassword })).status, 400);
     assert.equal((await mobile('POST', 'parent/auth/recovery/confirm', { identifier: guardian.phone, code: recoveryCode, password: recoveredPassword })).status, 201);
     assert.equal((await mobile('GET', 'parent/auth/me', undefined, token)).status, 401);
     const afterRecovery = await mobile('POST', 'parent/auth/login', { identifier: guardian.phone, password: recoveredPassword });
     assert.equal(afterRecovery.status, 201);
     token = afterRecovery.body.accessToken;
+    assert.equal((await mobile('PATCH', 'parent/profile', { name: 'Parent Updated' }, token)).status, 200);
+    assert.equal((await mobile('GET', 'parent/auth/me', undefined, token)).body.name, 'Parent Updated');
+    assert.equal((await mobile('PATCH', 'parent/profile', { name: 'Parent Updated', email: 'unverified@example.test' }, token)).status, 400);
+    await db.studentGuardian.updateMany({ where: { schoolId: school.id, guardianId: guardian.id, studentId: child.id }, data: { canReceiveReports: false, canReceiveFinanceAlert: false, canReceiveAttendanceAlert: false } });
+    assert.equal((await mobile('GET', `parent/children/${child.id}/results`, undefined, token)).status, 403);
+    assert.equal((await mobile('GET', `parent/children/${child.id}/fees`, undefined, token)).status, 403);
+    assert.equal((await mobile('GET', `parent/children/${child.id}/attendance?yearId=${year.id}`, undefined, token)).status, 403);
+    const restrictedHome = await mobile('GET', `parent/children/${child.id}/home`, undefined, token);
+    assert.equal(restrictedHome.body.fees, null);
+    assert.equal(restrictedHome.body.results.publishedCount, 0);
+    assert.equal(restrictedHome.body.attendance.latest, null);
+    await db.studentGuardian.updateMany({ where: { schoolId: school.id, guardianId: guardian.id, studentId: child.id }, data: { canReceiveReports: true, canReceiveFinanceAlert: true, canReceiveAttendanceAlert: true } });
+    const oldToken = token;
+    token = (await mobile('POST', 'parent/auth/renew', {}, token)).body.accessToken;
+    assert.equal((await mobile('GET', 'parent/auth/me', undefined, oldToken)).status, 401);
+    assert.equal((await mobile('GET', 'parent/auth/me', undefined, token)).status, 200);
     assert.equal((await staffCall('POST', `schools/${school.id}/parent-announcements`, { yearId: year.id, title: 'School notice', body: 'School notice body' }, csrf)).status, 403);
     const headCall = staffClient();
     assert.equal((await headCall('POST', 'auth/login', { email: head.email, password, role: 'HEADMASTER' })).status, 201);
     const headCsrf = (await headCall('GET', `schools/${school.id}/parent-actions/csrf`)).body.csrfToken;
+    const academicCall = staffClient();
+    assert.equal((await academicCall('POST', 'auth/login', { email: academic.email, password, role: 'ACADEMIC' })).status, 201);
+    const academicCsrf = (await academicCall('GET', `schools/${school.id}/parent-actions/csrf`)).body.csrfToken;
+    assert.equal((await academicCall('GET', `schools/${school.id}/parent-invitations`)).status, 200);
+    assert.equal((await academicCall('POST', `schools/${school.id}/parent-announcements`, { yearId: year.id, title: 'Academic notice', body: 'Published by academic staff.' }, academicCsrf)).status, 201);
+    const imagePost = await headCall('POST', `schools/${school.id}/parent-announcements`, { yearId: year.id, title: 'Private image post', body: 'A caption published with the image.', draft: true }, headCsrf);
+    assert.equal(imagePost.status, 201);
+    const uploadPath = `schools/${school.id}/parent-announcements/${imagePost.body.id}/media`;
+    const png = await sharp({ create: { width: 1600, height: 900, channels: 3, background: '#ff9933' } }).png().toBuffer();
+    assert.equal((await denied('PUT', uploadPath, png)).status, 403);
+    assert.equal((await headCall('PUT', uploadPath, png)).status, 403);
+    assert.equal((await headCall('PUT', uploadPath, Buffer.from('not a PNG'), headCsrf)).status, 400);
+    assert.equal((await headCall('PUT', uploadPath, png, headCsrf, { 'Content-Type': 'image/jpeg' })).status, 403);
+    assert.equal((await headCall('PUT', uploadPath, Buffer.alloc(5 * 1024 * 1024 + 1), headCsrf)).status, 413);
+    const uploaded = await headCall('PUT', uploadPath, png, headCsrf);
+    assert.equal(uploaded.status, 200, JSON.stringify(uploaded.body));
+    assert.equal(uploaded.body.status, 'READY');
+    await db.parentAnnouncementMedia.updateMany({ where: { schoolId: school.id, announcementId: imagePost.body.id }, data: { status: 'PENDING' } });
+    const publishPath = `schools/${school.id}/parent-announcements/${imagePost.body.id}/publish`;
+    assert.equal((await headCall('POST', publishPath, {}, headCsrf)).status, 409);
+    assert.equal((await headCall('POST', publishPath, { scheduleAt: new Date(Date.now() + 3600000).toISOString() }, headCsrf)).status, 409);
+    await db.parentAnnouncementMedia.updateMany({ where: { schoolId: school.id, announcementId: imagePost.body.id }, data: { status: 'READY' } });
+    assert.equal((await mobile('GET', `parent/announcements/${imagePost.body.id}/media`, undefined, token)).status, 404);
+    assert.equal((await mobile('GET', 'parent/announcements/stream')).status, 401);
+    streamAbort = new AbortController();
+    const stream = await fetch(base + 'parent/announcements/stream', { headers: { Authorization: `Bearer ${token}` }, signal: streamAbort.signal });
+    assert.equal(stream.status, 200);
+    assert.match(stream.headers.get('content-type'), /text\/event-stream/);
+    const reader = stream.body.getReader();
+    await reader.read();
+    assert.equal((await headCall('POST', `schools/${school.id}/parent-announcements/${imagePost.body.id}/publish`, {}, headCsrf)).status, 201);
+    const liveEvent = await Promise.race([reader.read(), new Promise((_, reject) => { const timer = setTimeout(() => reject(Error('Publication event timed out')), 10000); timer.unref(); })]);
+    assert.match(Buffer.from(liveEvent.value).toString(), /event: changed/);
+    streamAbort.abort(); streamAbort = undefined;
+    const privateImage = await fetch(base + `parent/announcements/${imagePost.body.id}/media?variant=thumbnail`, { headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(privateImage.status, 200);
+    assert.equal(privateImage.headers.get('cache-control'), 'private, no-store');
+    assert.equal((await sharp(Buffer.from(await privateImage.arrayBuffer())).metadata()).width, 480);
+    assert.equal((await mobile('GET', 'parent/announcements', undefined, token)).body.items.find(item => item.id === imagePost.body.id).body, 'A caption published with the image.');
+    assert.equal((await mobile('GET', 'parent/announcements', undefined, token)).body.items.find(item => item.id === imagePost.body.id).schoolName, school.name);
+    const outsider = await db.user.create({ data: { email: 'outsider-parent@example.test', name: 'Other parent', passwordHash: hash, parentAccount: { create: { loginPhone: '255799123456', verifiedAt: new Date() } } } });
+    const outsiderGuardian = await db.guardian.create({ data: { schoolId: otherSchool.id, name: 'Other parent', phone: '255799123456', userId: outsider.id } });
+    await db.studentGuardian.create({ data: { schoolId: otherSchool.id, studentId: unrelated.id, guardianId: outsiderGuardian.id } });
+    const outsiderToken = (await mobile('POST', 'parent/auth/login', { identifier: outsider.email, password })).body.accessToken;
+    assert.equal((await mobile('GET', `parent/announcements/${imagePost.body.id}/media`, undefined, outsiderToken)).status, 404);
+    const otherHead = await db.user.create({ data: { email: 'other-head@example.test', name: 'Other head', passwordHash: hash } });
+    await db.membership.create({ data: { schoolId: otherSchool.id, userId: otherHead.id, role: 'HEADMASTER' } });
+    const otherHeadCall = staffClient();
+    assert.equal((await otherHeadCall('POST', 'auth/login', { email: otherHead.email, password, role: 'HEADMASTER' })).status, 201);
+    assert.equal((await otherHeadCall('PUT', uploadPath, png, headCsrf)).status, 403);
+    const { cleanupAnnouncementMedia } = require('../dist/announcement-media-lifecycle');
+    const { objectRequest } = require('../dist/announcement-media');
+    const abandoned = await db.parentAnnouncement.create({ data: { schoolId: school.id, yearId: year.id, title: 'Interrupted upload', body: 'Not published', createdBy: head.id, publishedAt: null } });
+    const abandonedKey = `announcements/${school.id}/${randomUUID()}.png`;
+    const interrupted = await db.parentAnnouncementMedia.create({ data: { schoolId: school.id, announcementId: abandoned.id, storageKey: abandonedKey, storageProvider: 'local', status: 'PENDING', cleanupAfter: new Date(Date.now() - 1000), mimeType: 'image/png', byteSize: png.length, width: 1600, height: 900 } });
+    await objectRequest('PUT', abandonedKey, png);
+    await db.parentAnnouncementMedia.updateMany({ where: { schoolId: school.id, announcementId: imagePost.body.id }, data: { cleanupAfter: new Date(Date.now() - 1000) } });
+    assert.equal(await cleanupAnnouncementMedia(db), true);
+    assert.equal(await db.parentAnnouncementMedia.count({ where: { id: interrupted.id, schoolId: school.id } }), 0);
+    assert.equal(await db.parentAnnouncementMedia.count({ where: { schoolId: school.id, announcementId: imagePost.body.id, status: 'READY' } }), 1);
+    await assert.rejects(objectRequest('GET', abandonedKey), error => error.status === 404);
+    // Restart only the disposable test API; metadata and volume contents persist.
+    const stopped = new Promise(resolve => api.once('exit', resolve)); api.kill(); await stopped;
+    api = spawn(process.execPath, [path.resolve(__dirname, '../dist/main.js')], { env: process.env, stdio: 'pipe', windowsHide: true });
+    api.stdout.on('data', bytes => { logs += bytes; }); api.stderr.on('data', bytes => { logs += bytes; });
+    let restarted = false;
+    for (let attempt = 0; attempt < 120; attempt++) {
+      try { if ((await fetch(base + 'health/ready')).ok) { restarted = true; break; } } catch {}
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    assert.ok(restarted, 'Test API restarts successfully');
+    const persisted = await fetch(base + `parent/announcements/${imagePost.body.id}/media?variant=display`, { headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(persisted.status, 200);
+    assert.equal((await sharp(Buffer.from(await persisted.arrayBuffer())).metadata()).width, 1280);
     const announcement = await headCall('POST', `schools/${school.id}/parent-announcements`, { yearId: year.id, title: 'School notice', body: 'School notice body' }, headCsrf);
     assert.equal(announcement.status, 201);
     assert.equal((await mobile('GET', `parent/announcements/${announcement.body.id}`, undefined, token)).status, 200);
@@ -195,7 +304,20 @@ test('parent activation and school isolation', { timeout: 180000 }, async () => 
     assert.equal((await headCall('PATCH', `schools/${school.id}/parent-announcements/${draft.body.id}`, { title: 'Edited notice' }, headCsrf)).status, 200);
     assert.equal((await headCall('POST', `schools/${school.id}/parent-announcements/${draft.body.id}/publish`, {}, headCsrf)).status, 201);
     assert.equal((await mobile('GET', `parent/announcements/${draft.body.id}`, undefined, token)).body.title, 'Edited notice');
+    const scheduleAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const scheduled = await headCall('POST', `schools/${school.id}/parent-announcements`, { yearId: year.id, title: 'Scheduled notice', body: 'Scheduled notice body', scheduleAt }, headCsrf);
+    assert.equal(scheduled.status, 201, JSON.stringify(scheduled.body));
+    assert.equal(new Date(scheduled.body.publishedAt).toISOString(), scheduleAt);
+    assert.equal((await mobile('GET', `parent/announcements/${scheduled.body.id}`, undefined, token)).status, 404);
+    const scheduledDraft = await headCall('POST', `schools/${school.id}/parent-announcements`, { yearId: year.id, title: 'Scheduled draft', body: 'Scheduled draft body', draft: true }, headCsrf);
+    assert.equal(scheduledDraft.status, 201);
+    const draftSchedule = await headCall('POST', `schools/${school.id}/parent-announcements/${scheduledDraft.body.id}/publish`, { scheduleAt }, headCsrf);
+    assert.equal(draftSchedule.status, 201, JSON.stringify(draftSchedule.body));
+    assert.equal((await mobile('GET', `parent/announcements/${scheduledDraft.body.id}`, undefined, token)).status, 404);
+    const pastSchedule = await headCall('POST', `schools/${school.id}/parent-announcements`, { yearId: year.id, title: 'Invalid schedule', body: 'Invalid schedule body', scheduleAt: new Date(Date.now() - 60_000).toISOString() }, headCsrf);
+    assert.equal(pastSchedule.status, 400);
     assert.equal((await headCall('POST', `schools/${school.id}/parent-announcements/${draft.body.id}/unpublish`, {}, headCsrf)).status, 201);
+    assert.equal((await mobile('GET', `parent/children/${child.id}/home`, undefined, token)).body.announcements.some(item => item.id === draft.body.id), false);
     assert.equal((await mobile('GET', `parent/announcements/${draft.body.id}`, undefined, token)).status, 404);
     assert.equal((await mobile('GET', `parent/announcements/${draft.body.id}/media`, undefined, token)).status, 404);
     const batch = await staffCall('POST', `schools/${school.id}/parent-invitation-batches`, { yearId: year.id, studentIds: [child.id], channel: 'EMAIL' }, csrf);
@@ -217,6 +339,24 @@ test('parent activation and school isolation', { timeout: 180000 }, async () => 
     assert.ok(notice);
     assert.equal((await mobile('PATCH', `parent/notifications/${notice.id}/read`, {}, token)).body.updated, true);
     assert.ok((await mobile('GET', 'parent/notifications', undefined, token)).body.items.find(item => item.id === notice.id).readAt);
+    assert.equal((await mobile('POST', 'parent/notifications/read-all', {}, token)).status, 201);
+    assert.equal((await mobile('POST', 'parent/auth/change-password', { currentPassword: 'incorrect-password', password: `New-${randomUUID()}` }, token)).status, 400);
+    const changedPassword = `Changed-test-${randomUUID()}`;
+    assert.equal((await mobile('POST', 'parent/auth/change-password', { currentPassword: recoveredPassword, password: changedPassword }, token)).status, 201);
+    assert.equal((await mobile('GET', 'parent/auth/me', undefined, token)).status, 401);
+    recoveredPassword = changedPassword;
+    token = (await mobile('POST', 'parent/auth/login', { identifier: guardian.phone, password: recoveredPassword })).body.accessToken;
+    assert.equal((await mobile('POST', 'parent/auth/revoke-all', { password: 'incorrect-password' }, token)).status, 401);
+    assert.equal((await mobile('POST', 'parent/auth/revoke-all', { password: recoveredPassword }, token)).status, 201);
+    assert.equal((await mobile('GET', 'parent/auth/me', undefined, token)).status, 401);
+    token = (await mobile('POST', 'parent/auth/login', { identifier: guardian.phone, password: recoveredPassword })).body.accessToken;
+    await db.studentGuardian.updateMany({ where: { schoolId: school.id, studentId: child.id, guardianId: guardian.id }, data: { active: false } });
+    assert.equal((await mobile('GET', `parent/announcements/${imagePost.body.id}/media`, undefined, token)).status, 404);
+    await db.studentGuardian.updateMany({ where: { schoolId: school.id, studentId: child.id, guardianId: guardian.id }, data: { active: true } });
+    const accessRestored = await fetch(base + `parent/announcements/${imagePost.body.id}/media`, { headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(accessRestored.status, 200); await accessRestored.arrayBuffer();
+    assert.equal((await headCall('POST', `schools/${school.id}/parent-announcements/${imagePost.body.id}/unpublish`, {}, headCsrf)).status, 201);
+    assert.equal((await mobile('GET', `parent/announcements/${imagePost.body.id}/media`, undefined, token)).status, 404);
     await db.studentGuardian.updateMany({ where: { schoolId: school.id, studentId: child.id, guardianId: guardian.id }, data: { active: false } });
     assert.equal((await mobile('GET', `parent/children/${child.id}`, undefined, token)).status, 404);
     assert.equal((await mobile('GET', 'parent/children', undefined, token)).body.items.length, 1);
@@ -230,8 +370,10 @@ test('parent activation and school isolation', { timeout: 180000 }, async () => 
     console.error('Parent test API diagnostics:', logs.slice(-1500));
     throw error;
   } finally {
+    streamAbort?.abort();
     worker?.kill();
     api.kill();
     await db.$disconnect();
+    rmSync(mediaDirectory, { recursive: true, force: true });
   }
 });

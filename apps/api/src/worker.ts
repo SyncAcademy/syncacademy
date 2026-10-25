@@ -23,6 +23,7 @@ import { calculateSmsSegments } from './communication/communication.service';
 import { CommunicationService } from './communication/communication.service';
 import { Database } from './database/database.service';
 import { queueParentInvitation } from './parent-invitations';
+import { cleanupAnnouncementMedia } from './announcement-media-lifecycle';
 
 const db = new PrismaClient();
 const batchComms = new CommunicationService(db as unknown as Database);
@@ -472,7 +473,11 @@ async function main() {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      if (++cycles % 300 === 0) {
+      cycles++;
+      if (cycles % 30 === 0) {
+        for (let count = 0; count < 10 && await cleanupAnnouncementMedia(db); count++) { /* Bounded cleanup batch. */ }
+      }
+      if (cycles % 300 === 0) {
         await db.rateBucket.deleteMany({ where: { expiresAt: { lt: new Date() } } });
         await db.publicFormBlock.deleteMany({ where: { expiresAt: { lt: new Date() } } });
         const publicFormCutoff = new Date(Date.now() - config.PUBLIC_FORM_RETENTION_DAYS * 86400000);

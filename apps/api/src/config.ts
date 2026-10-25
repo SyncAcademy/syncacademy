@@ -37,12 +37,17 @@ const schema = z.object({
   EMAIL_PROVIDER: z.enum(['smtp', 'resend', 'mock']).default('smtp'),
   MOCK_PAYMENT_PROVIDER: z.enum(['true', 'false']).default('false'),
   COMMUNICATION_MOCK_DISPATCH: z.enum(['true', 'false']).default('false'),
-  ANNOUNCEMENT_MEDIA_ENDPOINT: z.string().url().optional(),
-  ANNOUNCEMENT_MEDIA_BUCKET: z.string().regex(/^[a-z0-9][a-z0-9.-]{2,62}$/).optional(),
-  ANNOUNCEMENT_MEDIA_ACCESS_KEY: z.string().min(1).optional(),
-  ANNOUNCEMENT_MEDIA_SECRET_KEY: z.string().min(1).optional(),
+  ANNOUNCEMENT_MEDIA_ENDPOINT: z.preprocess(value => value === '' ? undefined : value, z.string().url().optional()),
+  ANNOUNCEMENT_MEDIA_BUCKET: z.preprocess(value => value === '' ? undefined : value, z.string().regex(/^[a-z0-9][a-z0-9.-]{2,62}$/).optional()),
+  ANNOUNCEMENT_MEDIA_REGION: z.string().regex(/^[a-z0-9-]{2,32}$/).default('auto'),
+  ANNOUNCEMENT_MEDIA_ACCESS_KEY: z.preprocess(value => value === '' ? undefined : value, z.string().min(1).optional()),
+  ANNOUNCEMENT_MEDIA_SECRET_KEY: z.preprocess(value => value === '' ? undefined : value, z.string().min(1).optional()),
+  ANNOUNCEMENT_MEDIA_PROVIDER: z.enum(['local', 's3']).optional(),
+  ANNOUNCEMENT_MEDIA_DIRECTORY: z.string().min(1).optional(),
 });
-export const config = schema.parse(process.env);
+const parsed = schema.parse(process.env);
+export const config = parsed;
+if (config.NODE_ENV === 'production' && config.ANNOUNCEMENT_MEDIA_PROVIDER === 'local') throw new Error('Production announcement media requires S3-compatible storage.');
 if (config.NODE_ENV === 'production' && !config.APP_ORIGIN.startsWith('https://')) throw new Error('Production requires an HTTPS APP_ORIGIN');
 if (new URL(config.APP_ORIGIN).origin !== config.APP_ORIGIN) throw new Error('APP_ORIGIN must be an origin without a path or trailing slash');
 if (config.NODE_ENV === 'production' && config.MOCK_PAYMENT_PROVIDER === 'true') throw new Error('Mock payments are not permitted in production.');

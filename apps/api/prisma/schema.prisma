@@ -755,6 +755,13 @@ model ParentAnnouncementMedia {
   announcementId String @unique @db.Uuid
   schoolId String @db.Uuid
   storageKey String @unique
+  storageProvider String @default("s3")
+  status String @default("READY")
+  displayKey String?
+  thumbnailKey String?
+  displayByteSize Int?
+  thumbnailByteSize Int?
+  cleanupAfter DateTime?
   mimeType String
   byteSize Int
   width Int
@@ -763,6 +770,7 @@ model ParentAnnouncementMedia {
   announcement ParentAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
   school School @relation(fields: [schoolId], references: [id])
   @@index([schoolId, announcementId])
+  @@index([status, cleanupAfter])
 }
 
 model ContactVerification {

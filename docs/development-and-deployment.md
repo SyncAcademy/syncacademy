@@ -198,3 +198,11 @@ For the existing shared-network Docker deployment, run `scripts/deploy-lan.ps1` 
 Apply the additive public demo forms migration before deploying the API and worker. The contact and demo endpoints are `/api/v1/contact` and `/api/v1/demo-requests`; the site routes visitors to `/request-demo`. Configure `PUBLIC_FORM_EMAIL_LIMIT` (default 3 per form in 24 hours), `PUBLIC_FORM_IP_LIMIT` (default 10 in 24 hours), `PUBLIC_FORM_BURST_LIMIT` (default 5 in 15 minutes), `PUBLIC_FORM_BLOCK_HOURS` (default 24), and `PUBLIC_FORM_RETENTION_DAYS` (default 90). All are validated in API configuration. Set `TRUSTED_PROXY_CIDRS` to the comma-separated addresses or CIDR ranges of trusted reverse proxies before enabling proxy trust in production. The bundled Nginx configuration replaces incoming forwarded IP values with its observed remote address. Keep the API inaccessible directly from the public internet.
 
 The worker prunes expired restrictions and retained public form telemetry. Public form activity and manual IP restrictions are available to Super Admins at `/super-admin/public-form-security`. These controls do not affect browsing or authenticated school workflows. CAPTCHA is not configured in the current implementation; adding Cloudflare Turnstile requires provider keys and a production decision on verification outage behavior.
+
+## Announcement media deployment
+
+Private announcement storage, image variants, interrupted upload cleanup, and foreground parent updates are documented in [Parent mobile backend](parent-mobile-backend.md). API and worker share the persistent announcement-media Docker volume locally. Production uses private R2/S3 storage. Use `REALTIME_TRANSPORT=postgres` across replicas.
+
+Deploy migrations using `npm run migrate --workspace=apps/api`. The deployment helper applies the unchanged parent-table prerequisite before the historically earlier-named media migration on fresh databases, then applies the complete history. Existing migrations are preserved; no database reset is required.
+
+Browser requests use same-origin `/api/v1/*` paths through Nginx. Flutter uses `http://<LAN-IP>:<WEB_PORT>/api/v1` during local LAN testing. Production requires HTTPS.

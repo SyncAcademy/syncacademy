@@ -6,6 +6,7 @@ COPY apps/api/package.json apps/api/package.json
 RUN --mount=type=cache,target=/root/.npm npm ci --workspace=apps/api --include-workspace-root=false --fetch-retries=5
 COPY apps/api apps/api
 RUN npm run prisma:generate --workspace=apps/api && npm run build --workspace=apps/api
+RUN mkdir -p /var/lib/syncacademy/media && chown -R node:node /var/lib/syncacademy
 USER node
 WORKDIR /app/apps/api
 EXPOSE 3000

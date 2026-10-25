@@ -5,6 +5,7 @@ import { Request } from 'express';
 import { Server, Socket } from 'socket.io';
 import { RealtimeBus, Invalidation } from './realtime-bus';
 import { config } from './config';
+import { isAllowedBrowserOrigin } from './browser-origin';
 import { PlatformService } from './platform.service';
 
 export type SchoolChange = { area: 'academic' | 'school'; yearId?: string };
@@ -58,7 +59,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
   async handleConnection(client: Socket) {
     if (client.handshake.auth?.scope === 'platform') {
       const request = client.request as Request;
-      if (client.handshake.headers.origin !== config.APP_ORIGIN || config.NODE_ENV === 'production' && !request.secure) { this.rejected(client); return; }
+      if (!isAllowedBrowserOrigin(request, client.handshake.headers.origin) || config.NODE_ENV === 'production' && !request.secure) { this.rejected(client); return; }
       try {
         await this.platform.administrator(request);
         client.data.scope = 'platform';
@@ -73,7 +74,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
     }
     const schoolId = client.handshake.auth?.schoolId;
     const request = client.request as Request;
-    if (client.handshake.headers.origin !== config.APP_ORIGIN || config.NODE_ENV === 'production' && !request.secure || typeof schoolId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(schoolId)) {
+    if (!isAllowedBrowserOrigin(request, client.handshake.headers.origin) || config.NODE_ENV === 'production' && !request.secure || typeof schoolId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(schoolId)) {
       this.rejected(client); return;
     }
     try {
