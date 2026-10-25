@@ -15,6 +15,7 @@ import { WalletController } from './wallet.controller';
 import { ReconciliationController } from './reconciliation.controller';
 import { SecurityEventsController } from './security-events.controller';
 import { CommunicationService } from './communication/communication.service';
+import { ReportAccessVerificationService } from './report-access-verification.service';
 import { SubscriptionService } from './subscription.service';
 import { WalletService } from './wallet.service';
 import { ReconciliationService } from './reconciliation.service';
@@ -42,6 +43,7 @@ import { ParentController } from './parent.controller';
   ],
   providers: [
     CommunicationService,
+    ReportAccessVerificationService,
     SubscriptionService,
     WalletService,
     ReconciliationService,

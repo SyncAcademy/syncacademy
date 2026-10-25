@@ -1,8 +1,7 @@
-import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
-import { Prisma, CommunicationChannel, DeliveryStatus } from '@prisma/client';
-import { randomInt } from 'node:crypto';
+import { Injectable } from '@nestjs/common';
+import { Prisma, CommunicationChannel } from '@prisma/client';
 import { Database } from '../database/database.service';
-import { digest, encrypt } from '../security';
+import { encrypt } from '../security';
 import { config } from '../config';
 
 export function normalizePhoneNumber(raw: string): string {
@@ -40,8 +39,8 @@ export const WHATSAPP_COST_PER_TEMPLATE_TZS = 55; // 55 TZS per WhatsApp utility
 export class CommunicationService {
   constructor(private readonly db: Database) {}
 
-  public normalizePhone(phone: string): string {
-    return normalizePhoneNumber(phone);
+  public normalizePhone(phone: string | null | undefined): string {
+    return normalizePhoneNumber(phone || '');
   }
 
   public estimateCost(channel: CommunicationChannel, content: string): { unitCostTzs: number; segments: number } {
@@ -68,6 +67,7 @@ export class CommunicationService {
       studentId?: string;
       subject?: string;
       body: string;
+      html?: string;
       templateKey?: string;
       templateParams?: Record<string, string>;
       idempotencyKey?: string;
@@ -97,6 +97,7 @@ export class CommunicationService {
       recipient: params.recipient,
       subject: params.subject,
       body: params.body,
+      html: params.html,
       templateKey: params.templateKey,
       templateParams: params.templateParams,
       communicationLogId: log.id,
@@ -115,183 +116,4 @@ export class CommunicationService {
     return { outboxId: outbox.id, logId: log.id };
   }
 
-  /**
-   * Request contact verification OTP code (SMS, WhatsApp, or Email)
-   */
-  public async requestVerification(
-    schoolId: string,
-    guardianId: string,
-    channel: CommunicationChannel,
-    actorId: string,
-    invitation = false,
-  ): Promise<{ success: boolean; resendAfter: string; channel: CommunicationChannel; destination: string }> {
-    const guardian = await this.db.guardian.findFirst({
-      where: { id: guardianId, schoolId },
-    });
-
-    if (!guardian) {
-      throw new BadRequestException('Guardian not found in this school.');
-    }
-
-    let destination = '';
-    if (channel === 'SMS') {
-      destination = this.normalizePhone(guardian.phone);
-      if (!destination) throw new BadRequestException('Guardian does not have a valid phone number.');
-    } else if (channel === 'WHATSAPP') {
-      destination = this.normalizePhone(guardian.whatsappPhone || guardian.phone);
-      if (!destination) throw new BadRequestException('Guardian does not have a valid WhatsApp phone number.');
-    } else if (channel === 'EMAIL') {
-      destination = (guardian.email || '').trim().toLowerCase();
-      if (!destination || !destination.includes('@')) throw new BadRequestException('Guardian does not have a valid email address.');
-    }
-
-    // Check rate limit: recent active verification requests for this guardian & channel
-    const recent = await this.db.contactVerification.findFirst({
-      where: {
-        schoolId,
-        guardianId,
-        channel,
-        resendAfter: { gt: new Date() },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (recent) {
-      throw new ConflictException(`Please wait until ${recent.resendAfter.toISOString()} before requesting another code.`);
-    }
-
-    // Generate cryptographically secure 6-digit numeric OTP
-    const code = randomInt(100000, 999999).toString();
-    const codeHash = digest(code);
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-    const resendAfter = new Date(Date.now() + 60 * 1000); // 60 seconds cooldown
-
-    const verificationMessage = invitation
-      ? `SyncAcademy: Your school invites you to verify your guardian contact. Code: ${code}. Valid for 15 minutes. Give this code only to authorized school staff. Verification does not grant student-record access.`
-      : `SyncAcademy verification code: ${code}. Valid for 15 minutes. Do not share this code.`;
-
-    await this.db.$transaction(async tx => {
-      // Invalidate existing unverified codes for this guardian and channel
-      await tx.contactVerification.deleteMany({
-        where: { schoolId, guardianId, channel, verifiedAt: null },
-      });
-
-      await tx.contactVerification.create({
-        data: {
-          schoolId,
-          guardianId,
-          channel,
-          destination,
-          codeHash,
-          expiresAt,
-          resendAfter,
-        },
-      });
-
-      // Enqueue verification message into outbox
-      await this.enqueueMessage(tx, {
-        schoolId,
-        guardianId,
-        channel,
-        recipient: destination,
-        subject: 'SyncAcademy Verification Code',
-        body: verificationMessage,
-        templateKey: channel === 'WHATSAPP' ? 'verification_code' : undefined,
-        templateParams: { code, validity: '15 minutes' },
-      });
-
-      await tx.auditEvent.create({
-        data: {
-          schoolId,
-          actorId,
-          action: invitation ? `GUARDIAN_INVITATION_SENT_${channel}` : `CONTACT_VERIFICATION_REQUESTED_${channel}`,
-          target: guardianId,
-        },
-      });
-    });
-
-    return {
-      success: true,
-      resendAfter: resendAfter.toISOString(),
-      channel,
-      destination: channel === 'EMAIL' 
-        ? destination.replace(/(.{2})(.*)(@.*)/, '$1***$3')
-        : destination.slice(0, 4) + '****' + destination.slice(-3),
-    };
-  }
-
-  /**
-   * Confirm verification code
-   */
-  public async confirmVerification(
-    schoolId: string,
-    guardianId: string,
-    channel: CommunicationChannel,
-    code: string,
-    actorId: string
-  ): Promise<{ verified: boolean; message: string }> {
-    const codeHash = digest(code.trim());
-
-    const verification = await this.db.contactVerification.findFirst({
-      where: {
-        schoolId,
-        guardianId,
-        channel,
-        verifiedAt: null,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!verification) {
-      throw new BadRequestException('No pending verification request found. Request a new code.');
-    }
-
-    if (verification.expiresAt < new Date()) {
-      throw new BadRequestException('Verification code has expired. Please request a new code.');
-    }
-
-    if (verification.attempts >= 5) {
-      throw new BadRequestException('Too many failed attempts. Request a new code.');
-    }
-
-    if (verification.codeHash !== codeHash) {
-      await this.db.contactVerification.update({
-        where: { id: verification.id },
-        data: { attempts: { increment: 1 } },
-      });
-      throw new BadRequestException('Invalid verification code.');
-    }
-
-    const now = new Date();
-    await this.db.$transaction(async tx => {
-      await tx.contactVerification.update({
-        where: { id: verification.id },
-        data: { verifiedAt: now },
-      });
-
-      const updateData: Prisma.GuardianUpdateInput = {};
-      if (channel === 'SMS') updateData.phoneVerifiedAt = now;
-      if (channel === 'WHATSAPP') updateData.whatsappVerifiedAt = now;
-      if (channel === 'EMAIL') updateData.emailVerifiedAt = now;
-
-      await tx.guardian.update({
-        where: { id_schoolId: { id: guardianId, schoolId } },
-        data: updateData,
-      });
-
-      await tx.auditEvent.create({
-        data: {
-          schoolId,
-          actorId,
-          action: `CONTACT_VERIFIED_${channel}`,
-          target: guardianId,
-        },
-      });
-    });
-
-    return {
-      verified: true,
-      message: `${channel} contact method has been successfully verified.`,
-    };
-  }
 }

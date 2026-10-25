@@ -212,7 +212,7 @@ async function main() {
           if (job.idempotencyKey?.startsWith('parent-invitation:')) {
             const invitationId = job.idempotencyKey.slice('parent-invitation:'.length);
             const invitation = await db.parentInvitation.findFirst({ where: { id: invitationId, schoolId: job.schoolId ?? undefined }, include: { school: { select: { active: true } }, guardian: { select: { phone: true, whatsappPhone: true, email: true } } } });
-            const token = /[?&]token=([A-Za-z0-9_-]{40,100})/.exec(payload.body || '')?.[1];
+            const token = /[?&]token=([A-Za-z0-9_-]{32,100})/.exec(payload.body || '')?.[1];
             const destination = invitation?.channel === 'EMAIL' ? invitation.guardian.email : invitation?.channel === 'WHATSAPP' ? invitation.guardian.whatsappPhone : invitation?.guardian.phone;
             if (!invitation || !invitation.school.active || invitation.consumedAt || invitation.revokedAt || invitation.expiresAt <= new Date() || !token || digest(token) !== invitation.tokenHash || destination !== invitation.destination) {
               await db.outbox.updateMany({ where: { id: job.id, leaseId: lease }, data: { cancelledAt: new Date(), payload: '', leaseUntil: null } });

@@ -33,9 +33,9 @@ const phoneValidator = z.string().trim().min(7).max(25).transform(v => normalize
   message: 'Enter a valid phone number (e.g., 0712345678 or 255712345678).',
 });
 
-const guardianSchema = z.object({
+const guardianFields = z.object({
   name: z.string().trim().min(2).max(150),
-  phone: phoneValidator,
+  phone: z.union([phoneValidator, z.literal('')]).optional().nullable(),
   whatsappPhone: z.union([phoneValidator, z.literal('')]).optional().nullable(),
   email: z.string().trim().email().optional().nullable().or(z.literal('')),
   preferredChannel: z.enum(['SMS', 'WHATSAPP', 'EMAIL']).default('SMS'),
@@ -43,6 +43,7 @@ const guardianSchema = z.object({
   optOutSms: z.boolean().default(false),
   optOutWhatsapp: z.boolean().default(false),
 });
+const guardianSchema = guardianFields.refine(value => !!(value.phone || value.email), { message: 'Provide a phone number or email address.' });
 
 const linkGuardianSchema = z.object({
   guardianId: uuid.optional(),
@@ -70,61 +71,15 @@ const paging = {
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
   q: z.string().trim().max(150).default(''),
 };
-const invitationSchema = z.object({
-  yearId: uuid,
-  classId: uuid.optional(),
-  studentIds: z.array(uuid).min(1).max(100).optional(),
-  channel: z.enum(['SMS', 'WHATSAPP', 'EMAIL']).default('SMS'),
-}).strict();
 
 @Controller('api/v1/schools/:schoolId')
 export class GuardianController {
   constructor(
     private readonly svc: PlatformService,
-    private readonly comms: CommunicationService,
   ) {}
 
   private async access(req: Request, schoolId: string, write = false) {
     return this.svc.authorize(req, parse(uuid, schoolId), write ? writers : readers);
-  }
-
-  @Post('guardian-invitations')
-  async sendInvitations(@Req() req: Request, @Param('schoolId') schoolId: string, @Body() body: unknown) {
-    const { user } = await this.access(req, schoolId, true);
-    const b = parse(invitationSchema, body);
-    await this.svc.rate(`guardian-invitations:${user.id}`, 20, 3600);
-    const year = await this.svc.db.academicYear.findFirst({ where: { id: b.yearId, schoolId } });
-    if (!year) throw new NotFoundException('Academic year not found in this school.');
-    if (b.classId) {
-      const classroom = await this.svc.db.classroom.findFirst({ where: { id: b.classId, schoolId, yearId: b.yearId } });
-      if (!classroom) throw new NotFoundException('Class not found in this academic year.');
-    }
-    if (b.studentIds) {
-      const enrolled = await this.svc.db.enrollment.findMany({ where: { schoolId, classroom: { yearId: b.yearId }, status: 'active', ...(b.classId ? { classroomId: b.classId } : {}), studentId: { in: b.studentIds } }, select: { studentId: true } });
-      if (new Set(enrolled.map(row => row.studentId)).size !== new Set(b.studentIds).size) throw new BadRequestException('Every selected student must be actively enrolled in the selected scope.');
-    }
-    const links = await this.svc.db.studentGuardian.findMany({
-      where: { schoolId, active: true, ...(b.studentIds ? { studentId: { in: b.studentIds } } : {}), student: { schoolId, enrollments: { some: { schoolId, classroom: { yearId: b.yearId }, status: 'active', ...(b.classId ? { classroomId: b.classId } : {}) } } } },
-      include: { guardian: true },
-    });
-    const guardians = new Map(links.map(link => [link.guardianId, link.guardian]));
-    let sent = 0; let skipped = 0;
-    const recipients = [...guardians.values()];
-    for (let offset = 0; offset < recipients.length; offset += 8) {
-      const outcomes = await Promise.all(recipients.slice(offset, offset + 8).map(async guardian => {
-        if ((b.channel === 'SMS' && guardian.optOutSms) || (b.channel === 'WHATSAPP' && guardian.optOutWhatsapp) || (b.channel === 'EMAIL' && !guardian.email) || (b.channel === 'WHATSAPP' && !guardian.whatsappPhone)) return false;
-        try {
-          await this.comms.requestVerification(schoolId, guardian.id, b.channel as CommunicationChannel, user.id, true);
-          return true;
-        } catch (error) {
-          if (error instanceof ConflictException || error instanceof BadRequestException) return false;
-          throw error;
-        }
-      }));
-      sent += outcomes.filter(Boolean).length;
-      skipped += outcomes.filter(outcome => !outcome).length;
-    }
-    return { eligibleGuardians: guardians.size, sent, skipped, message: 'Contact verification invitations queued. Student-record access is not granted.' };
   }
 
   private async teacherClassrooms(req: Request, schoolId: string, memberships: { id: string }[]) {
@@ -247,9 +202,7 @@ export class GuardianController {
     const { user } = await this.access(req, schoolId, true);
     const b = parse(guardianSchema, body);
 
-    const existing = await this.svc.db.guardian.findFirst({
-      where: { schoolId, phone: b.phone },
-    });
+    const existing = b.phone ? await this.svc.db.guardian.findFirst({ where: { schoolId, phone: b.phone } }) : null;
 
     if (existing) {
       throw new ConflictException(`A guardian with phone number ${b.phone} already exists in this school.`);
@@ -259,7 +212,7 @@ export class GuardianController {
       data: {
         schoolId,
         name: b.name,
-        phone: b.phone,
+        phone: b.phone || null,
         whatsappPhone: b.whatsappPhone || undefined,
         email: b.email || undefined,
         preferredChannel: b.preferredChannel as CommunicationChannel,
@@ -365,7 +318,7 @@ export class GuardianController {
   ) {
     const { user } = await this.access(req, schoolId, true);
     parse(uuid, guardianId);
-    const b = parse(guardianSchema.partial(), body);
+    const b = parse(guardianFields.partial(), body);
 
     const existing = await this.svc.db.guardian.findFirst({
       where: { id: guardianId, schoolId },
@@ -374,6 +327,7 @@ export class GuardianController {
     if (!existing) {
       throw new NotFoundException('Guardian not found in this school.');
     }
+    if (!(b.phone === undefined ? existing.phone : b.phone) && !(b.email === undefined ? existing.email : b.email)) throw new BadRequestException('Provide a phone number or email address.');
 
     if (b.phone && b.phone !== existing.phone) {
       const duplicate = await this.svc.db.guardian.findFirst({
@@ -383,7 +337,7 @@ export class GuardianController {
     }
 
     const updated = await this.svc.atomic(async tx => {
-      if ((b.phone && b.phone !== existing.phone) || (b.whatsappPhone !== undefined && (b.whatsappPhone || null) !== existing.whatsappPhone) || (b.email !== undefined && (b.email || null) !== existing.email)) {
+      if ((b.phone !== undefined && (b.phone || null) !== existing.phone) || (b.whatsappPhone !== undefined && (b.whatsappPhone || null) !== existing.whatsappPhone) || (b.email !== undefined && (b.email || null) !== existing.email)) {
         const pending = await tx.parentInvitation.findMany({ where: { schoolId, guardianId, consumedAt: null, revokedAt: null }, select: { id: true } });
         await tx.parentInvitation.updateMany({ where: { schoolId, guardianId, consumedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
         if (pending.length) await tx.outbox.updateMany({ where: { idempotencyKey: { in: pending.map(invitation => `parent-invitation:${invitation.id}`) }, sentAt: null, cancelledAt: null }, data: { cancelledAt: new Date(), payload: '' } });
@@ -392,7 +346,7 @@ export class GuardianController {
         if (recovery.length) await tx.outbox.updateMany({ where: { idempotencyKey: { in: recovery.map(challenge => `parent-recovery:${challenge.id}`) }, sentAt: null, cancelledAt: null }, data: { cancelledAt: new Date(), payload: '' } });
       }
       // Invalidate outstanding verification challenges if contacts change
-      if (b.phone && b.phone !== existing.phone) {
+      if (b.phone !== undefined && (b.phone || null) !== existing.phone) {
         await tx.contactVerification.deleteMany({
           where: { schoolId, guardianId, channel: 'SMS' },
         });
@@ -412,7 +366,7 @@ export class GuardianController {
         where: { id_schoolId: { id: guardianId, schoolId } },
         data: {
           ...(b.name ? { name: b.name } : {}),
-          ...(b.phone ? { phone: b.phone, phoneVerifiedAt: b.phone === existing.phone ? existing.phoneVerifiedAt : null } : {}),
+          ...(b.phone !== undefined ? { phone: b.phone || null, phoneVerifiedAt: b.phone === existing.phone ? existing.phoneVerifiedAt : null } : {}),
           ...(b.whatsappPhone !== undefined ? { whatsappPhone: b.whatsappPhone || null, whatsappVerifiedAt: b.whatsappPhone === existing.whatsappPhone ? existing.whatsappVerifiedAt : null } : {}),
           ...(b.email !== undefined ? { email: b.email || null, emailVerifiedAt: b.email === existing.email ? existing.emailVerifiedAt : null } : {}),
           ...(b.preferredChannel ? { preferredChannel: b.preferredChannel as CommunicationChannel } : {}),
@@ -422,10 +376,10 @@ export class GuardianController {
         },
       });
 
-      if (b.name || b.phone) {
+      if (b.name || b.phone !== undefined) {
         await tx.student.updateMany({
           where: { schoolId, guardians: { some: { schoolId, guardianId, active: true, isPrimary: true } } },
-          data: { guardianName: res.name, guardianPhone: res.phone },
+          data: { guardianName: res.name, guardianPhone: res.phone || '' },
         });
       }
 
@@ -471,9 +425,7 @@ export class GuardianController {
 
       if (!guardianId && b.guardianData) {
         // Find existing guardian by phone or create new
-        const existing = await tx.guardian.findFirst({
-          where: { schoolId, phone: b.guardianData.phone },
-        });
+        const existing = await tx.guardian.findFirst({ where: { schoolId, ...(b.guardianData.phone ? { phone: b.guardianData.phone } : { email: b.guardianData.email || null }) } });
 
         if (existing) {
           guardianId = existing.id;
@@ -482,7 +434,7 @@ export class GuardianController {
             data: {
               schoolId,
               name: b.guardianData.name,
-              phone: b.guardianData.phone,
+              phone: b.guardianData.phone || null,
               whatsappPhone: b.guardianData.whatsappPhone || undefined,
               email: b.guardianData.email || undefined,
               preferredChannel: b.guardianData.preferredChannel as CommunicationChannel,
@@ -558,7 +510,7 @@ export class GuardianController {
           where: { id_schoolId: { id: studentId, schoolId } },
           data: {
             guardianName: link.guardian.name,
-            guardianPhone: link.guardian.phone,
+            guardianPhone: link.guardian.phone || '',
           },
         });
       }
@@ -629,7 +581,7 @@ export class GuardianController {
           where: { id_schoolId: { id: studentId, schoolId } },
           data: {
             guardianName: updated.guardian.name,
-            guardianPhone: updated.guardian.phone,
+            guardianPhone: updated.guardian.phone || '',
           },
         });
       }
@@ -685,43 +637,6 @@ export class GuardianController {
     });
 
     return { message: 'Guardian unlinked successfully (relationship archived).' };
-  }
-
-  /**
-   * Request contact verification code
-   */
-  @Post('guardians/:guardianId/verification/request')
-  async requestVerification(
-    @Req() req: Request,
-    @Param('schoolId') schoolId: string,
-    @Param('guardianId') guardianId: string,
-    @Body() body: unknown
-  ) {
-    const { user } = await this.access(req, schoolId, true);
-    parse(uuid, guardianId);
-    const b = parse(z.object({ channel: z.enum(['SMS', 'WHATSAPP', 'EMAIL']) }), body);
-
-    return this.comms.requestVerification(schoolId, guardianId, b.channel as CommunicationChannel, user.id);
-  }
-
-  /**
-   * Confirm verification code
-   */
-  @Post('guardians/:guardianId/verification/confirm')
-  async confirmVerification(
-    @Req() req: Request,
-    @Param('schoolId') schoolId: string,
-    @Param('guardianId') guardianId: string,
-    @Body() body: unknown
-  ) {
-    const { user } = await this.access(req, schoolId, true);
-    parse(uuid, guardianId);
-    const b = parse(z.object({
-      channel: z.enum(['SMS', 'WHATSAPP', 'EMAIL']),
-      code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit verification code.'),
-    }), body);
-
-    return this.comms.confirmVerification(schoolId, guardianId, b.channel as CommunicationChannel, b.code, user.id);
   }
 
   /**

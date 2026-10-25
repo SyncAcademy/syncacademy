@@ -266,7 +266,7 @@ Allows parents to view and download term report cards from an SMS, WhatsApp mess
 - Public mobile web route `/r/:token` (`apps/web/src/app/features/public/report-viewer.page.ts`) adhering to mobile-native polish (safe-area insets, responsive results table, NECTA-aligned grades, print styling).
 - School staff can publish report links with notifications in bulk (`POST /api/v1/schools/:schoolId/reports/publish-with-links`) and instantly revoke active links with reason tracking (`POST /api/v1/schools/:schoolId/reports/links/:linkId/revoke`).
 - Current implementation: Headmaster and Academic Master may publish only approved academic workspace reports for actively enrolled students, scoped to one class or all classes in an academic year. The Registrar is denied at the API boundary. `GET /api/v1/schools/:schoolId/reports/publish-options?yearId=...` lists available assessments.
-- Current implementation: Headmaster, Academic Master, and Registrar may send contact-verification invitations through `POST /api/v1/schools/:schoolId/guardian-invitations` for a student selection, class, or school year. Shared guardians are deduplicated. Invitations use existing OTP and outbox infrastructure and do not grant a parent login or student-record access.
+- Current implementation: Headmaster, Academic Master, and Registrar may queue parent-account invitations through the parent invitation endpoints for a guardian, student selection, class, or school year. Shared guardians are deduplicated. Invitations use the encrypted outbox and a hashed 32-character activation token; viewing a link does not consume it, and a separate activation OTP is not used. Invitation alone grants no student-record access.
 
 ---
 
@@ -293,11 +293,12 @@ Phase 3 introduces enterprise operational modules expanding administrative overs
    - Enforced in `apps/api/src/guardian.controller.ts` using `SELECT ... FOR UPDATE` row locks on the `Student` record within a PostgreSQL transaction.
    - Historical relationships and communication logs are permanently preserved: unlinking a parent sets `active: false` rather than deleting rows.
    - Cross-school isolation is strictly verified: both student and guardian records must belong to the caller's authorized `schoolId`.
-   - Multiple active guardians can be linked to one student, and one guardian can be linked to siblings. Parent sign-in remains planned; a contact-verification invitation never grants account access.
-2. **Independent Contact Verification Invalidation**:
+   - Multiple active guardians can be linked to one student, and one guardian can be linked to siblings. Parent sign-in is implemented in the mobile app. A parent invitation alone never grants account access; activation links the account only to the school guardian with an active student relationship.
+2. **Contact Change and Report Challenge Invalidation**:
    - Phone and email verification states are isolated.
-   - When a guardian's phone number changes, outstanding phone OTP challenges are deleted and `phoneVerifiedAt` is cleared.
+   - When a guardian's phone number changes, outstanding SMS challenges are deleted and `phoneVerifiedAt` is cleared.
    - When an email address changes, email verification challenges are invalidated while preserving unrelated phone verification.
+   - Parent activation uses its expiring invitation token; six-digit SMS codes are only used by the public report-viewer challenge.
 3. **OTP-Secured Report Access Sessions & Authorized PDF Downloads**:
    - Standalone `phone_last4` challenge is deprecated in favor of verified 6-digit OTP codes.
    - Successful challenge verification returns a cryptographically secure 32-byte session token (`sessionTokenHash` stored in database).

@@ -578,7 +578,7 @@ model Guardian {
   schoolId String @db.Uuid
   userId String? @db.Uuid
   name String
-  phone String
+  phone String?
   whatsappPhone String?
   email String?
   preferredChannel CommunicationChannel @default(SMS)

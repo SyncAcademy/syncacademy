@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { signal, ɵsetDocument } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { DOCUMENT } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { BrowserDynamicTestingModule, platformBrowserDynamicTesting } from '@angular/platform-browser-dynamic/testing';
 import { ActivatedRoute } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
@@ -34,6 +35,7 @@ const api = {
 ɵsetDocument({ head: { querySelectorAll: () => [] }, body: null, querySelectorAll: () => [] } as unknown as Document);
 TestBed.initTestEnvironment(BrowserDynamicTestingModule, platformBrowserDynamicTesting());
 TestBed.configureTestingModule({ providers: [RegistrarPage,
+  { provide: HttpClient, useValue: { post: () => { throw new Error('Unexpected HTTP request in this test'); } } },
   { provide: DOCUMENT, useValue: { body: null, querySelectorAll: () => [] } },
   { provide: SchoolApiService, useValue: api }, { provide: TeacherStore, useValue: {} },
   { provide: ActivatedRoute, useValue: { data: routeData, snapshot: { queryParamMap: { get: () => null } } } },

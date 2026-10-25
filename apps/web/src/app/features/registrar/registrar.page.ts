@@ -1,8 +1,10 @@
-import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, computed, effect, inject, Injector, signal, untracked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { HeadPageHeaderComponent } from '../headmaster/shared/head-page-header.component';
 import { DialogFocusDirective } from '../../shared/directives/dialog-focus.directive';
 import { RegistrarStore } from './registrar.store';
@@ -12,6 +14,7 @@ import { LoadingSkeletonComponent } from '../../shared/loading-skeleton.componen
 export class RegistrarPage {
   readonly store = inject(RegistrarStore);
   readonly api = this.store.api;
+  private readonly injector = inject(Injector);
   private readonly route = inject(ActivatedRoute);
   private readonly data = toSignal(this.route.data);
   readonly section = computed<string>(() => this.data()?.['section'] || 'page');
@@ -42,12 +45,14 @@ export class RegistrarPage {
   readonly publishOptions = signal<any[]>([]);
   readonly invitationSelection = signal<string[]>([]);
   readonly invitationPageSelected = computed(() => this.items().some(student => this.eligibleForInvitation(student)) && this.items().filter(student => this.eligibleForInvitation(student)).every(student => this.invitationSelection().includes(student.id)));
-  verificationCodes: Record<string, string> = {};
+  readonly invitationStatuses = signal<Record<string, any>>({});
+  readonly invitationGuardian = signal<any>(null);
+  readonly invitationChannel = signal<'EMAIL' | 'SMS'>('EMAIL');
   private readonly context = computed(() => `${this.api.schoolId()}|${this.store.year()?.id || ''}|${this.section()}`);
   private request = 0;
   private detailRequest = 0;
   constructor() {
-    effect(() => { this.context(); untracked(() => { this.detailRequest++; this.record.set(null); this.error.set(''); this.search.set(''); this.classFilter.set(this.route.snapshot.queryParamMap.get('class') || ''); this.statusFilter.set(''); this.page.set(1); this.selected.set([]); this.invitationSelection.set([]); this.verificationCodes = {}; this.targetYear.set(''); this.targetClass.set(''); this.dialog.set(''); this.notice.set(''); }); });
+    effect(() => { this.context(); untracked(() => { this.detailRequest++; this.record.set(null); this.error.set(''); this.search.set(''); this.classFilter.set(this.route.snapshot.queryParamMap.get('class') || ''); this.statusFilter.set(''); this.page.set(1); this.selected.set([]); this.invitationSelection.set([]); this.invitationStatuses.set({}); this.targetYear.set(''); this.targetClass.set(''); this.dialog.set(''); this.notice.set(''); }); });
     effect(onCleanup => {
       const context = { school: this.api.schoolId(), year: this.store.year()?.id, section: this.section(), q: this.search(), classId: this.classFilter(), status: this.statusFilter(), page: this.page() };
       this.api.data();
@@ -90,6 +95,7 @@ export class RegistrarPage {
       try { const result = await this.get('students/' + row.id); if (generation !== this.detailRequest || school !== this.api.schoolId()) return; row = result; this.record.set(row); }
       catch (e) { this.error.set(this.api.auth.error(e)); return; }
       finally { this.busy.set(false); }
+      if (mode === 'profile' && this.record()) void this.loadInvitationStatuses(this.record().guardians || []);
     }
     if (mode === 'student' || mode === 'admission') {
       this.form = { name: row?.name || '', admissionNumber: row?.admissionNumber || '', gender: row?.gender || '', dateOfBirth: row?.dateOfBirth?.slice(0, 10) || '', address: row?.address || '', admissionDate: row?.admissionDate?.slice(0,10) || '', ownPhone: row?.ownPhone || '', guardianName: row?.guardianName || '', guardianPhone: row?.guardianPhone || '', classroomId: this.classFilter() };
@@ -129,25 +135,59 @@ export class RegistrarPage {
   }
   toggleInvitation(id: string) { this.invitationSelection.update(ids => ids.includes(id) ? ids.filter(item => item !== id) : ids.length < 100 ? [...ids, id] : ids); }
   selectInvitationPage() { const ids = this.items().filter(student => this.eligibleForInvitation(student)).map(student => student.id); this.invitationSelection.update(current => ids.every(id => current.includes(id)) ? current.filter(id => !ids.includes(id)) : [...new Set([...current, ...ids])].slice(0, 100)); }
-  async sendInvitations(studentIds?: string[]) {
-    if (this.busy() || !this.store.year()?.id) return;
-    if (!window.confirm(studentIds?.length ? `Send contact verification invitations for ${studentIds.length} selected student(s)?` : `Send contact verification invitations to eligible guardians ${this.classFilter() ? 'in this class' : 'across this school'}?`)) return;
+  private async parentWrite<T>(path: string, body: unknown): Promise<T> {
+    const schoolId = this.api.schoolId();
+    const { csrfToken } = await this.api.auth.request<{ csrfToken: string }>('GET', `schools/${schoolId}/parent-actions/csrf`);
+    if (schoolId !== this.api.schoolId()) throw new Error('School changed. Please try again.');
+    return firstValueFrom(this.injector.get(HttpClient).post<T>(`/api/v1/schools/${schoolId}/${path}`, body, { withCredentials: true, headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken, 'X-Requested-With': 'SyncAcademy' } }));
+  }
+  async loadInvitationStatuses(links: any[]) {
+    const schoolId = this.api.schoolId();
+    const statuses = await Promise.allSettled(links.map((link: any) => this.api.auth.request('GET', `schools/${schoolId}/guardians/${link.guardianId}/parent-invitation`)));
+    if (schoolId !== this.api.schoolId()) return;
+    this.invitationStatuses.update(current => ({ ...current, ...Object.fromEntries(statuses.map((result, index) => [links[index].guardianId, result.status === 'fulfilled' ? result.value : { status: 'UNAVAILABLE' }])) }));
+  }
+  invitationStatus(guardianId: string): string { return ({ NOT_INVITED: 'Not Invited', PENDING: 'Pending', ACCEPTED: 'Accepted', EXPIRED: 'Expired', FAILED: 'Failed', REVOKED: 'Revoked' } as Record<string, string>)[this.invitationStatuses()[guardianId]?.status] || 'Loading'; }
+  openGuardianInvitation(link: any) {
+    this.error.set(''); this.invitationGuardian.set(link.guardian); this.invitationChannel.set(link.guardian.email ? 'EMAIL' : 'SMS'); this.dialog.set('parent-invitation');
+    void this.loadInvitationStatuses([link]);
+  }
+  async sendGuardianInvitation() {
+    const guardian = this.invitationGuardian(); if (!guardian || this.busy()) return;
+    const status = this.invitationStatuses()[guardian.id];
     this.busy.set(true); this.error.set('');
     try {
-      const result: any = await this.api.write('guardian-invitations', { yearId: this.store.year()!.id, ...(this.classFilter() ? { classId: this.classFilter() } : {}), ...(studentIds ? { studentIds } : {}), channel: 'SMS' });
-      this.notice.set(`${result.sent} guardian invitation(s) queued; ${result.skipped} skipped. Verification does not grant record access.`);
-      this.invitationSelection.set([]);
+      const path = status?.id && ['PENDING', 'FAILED', 'EXPIRED'].includes(status.status) && status.channel === this.invitationChannel()
+        ? `parent-invitations/${status.id}/resend` : 'parent-invitations';
+      if (status?.id && path === 'parent-invitations' && ['PENDING', 'FAILED', 'EXPIRED'].includes(status.status)) await this.parentWrite(`parent-invitations/${status.id}/revoke`, {});
+      await this.parentWrite(path, path === 'parent-invitations' ? { guardianId: guardian.id, channel: this.invitationChannel() } : {});
+      await this.loadInvitationStatuses([{ guardianId: guardian.id }]);
+      this.notice.set(`Parent invitation queued for ${this.invitationChannel() === 'EMAIL' ? guardian.email : guardian.phone}. Delivery status: ${this.invitationStatuses()[guardian.id]?.deliveryStatus || 'QUEUED'}.`);
+      this.dialog.set('profile');
     } catch (e) { this.error.set(this.api.auth.error(e)); }
     finally { this.busy.set(false); }
   }
-  async confirmGuardian(guardianId: string) {
-    const code = (this.verificationCodes[guardianId] || '').trim();
-    if (!/^\d{6}$/.test(code) || this.busy()) { this.error.set('Enter the six digit code received by the guardian.'); return; }
+  async revokeGuardianInvitation() {
+    const guardian = this.invitationGuardian(); const status = this.invitationStatuses()[guardian?.id]; if (!status?.id || this.busy()) return;
+    this.busy.set(true); this.error.set('');
+    try { await this.parentWrite(`parent-invitations/${status.id}/revoke`, {}); await this.loadInvitationStatuses([{ guardianId: guardian.id }]); this.notice.set('Parent invitation revoked.'); this.dialog.set('profile'); }
+    catch (e) { this.error.set(this.api.auth.error(e)); }
+    finally { this.busy.set(false); }
+  }
+  async sendInvitations(studentIds?: string[]) {
+    if (this.busy() || !this.store.year()?.id) return;
+    this.dialog.set('parent-batch');
+    this.invitationChannel.set('SMS');
+    this.form['invitationStudentIds'] = JSON.stringify(studentIds || []);
+  }
+  async confirmBatchInvitations() {
+    const studentIds = JSON.parse(this.form['invitationStudentIds'] || '[]') as string[];
     this.busy.set(true); this.error.set('');
     try {
-      await this.api.write(`guardians/${guardianId}/verification/confirm`, { channel: 'SMS', code });
-      if (this.record()) this.record.set(await this.get('students/' + this.record().id));
-      delete this.verificationCodes[guardianId]; this.notice.set('Guardian phone verified. Student-record access remains separate.');
+      const result: any = await this.parentWrite('parent-invitation-batches', { yearId: this.store.year()!.id, ...(this.classFilter() ? { classId: this.classFilter() } : {}), ...(studentIds.length ? { studentIds } : {}), channel: this.invitationChannel() });
+      this.notice.set(`Parent invitation batch ${result.status.toLowerCase()} (${result.jobId}). Check delivery status before assuming invitations were delivered.`);
+      this.invitationSelection.set([]);
+      this.dialog.set('');
     } catch (e) { this.error.set(this.api.auth.error(e)); }
     finally { this.busy.set(false); }
   }
@@ -178,7 +218,7 @@ export class RegistrarPage {
     const profile = { name: f['name'], gender: f['gender'] || null, dateOfBirth: f['dateOfBirth'] || null, address: f['address'] || '', admissionDate: f['admissionDate'] || null, ownPhone: f['ownPhone'] || '', guardianName: f['guardianName'] || '', guardianPhone: f['guardianPhone'] || '' };
     if (mode === 'student') {
       path = 'students' + (this.record() ? '/' + this.record().id : ''); method = this.record() ? 'PATCH' : 'POST';
-      payload = { ...profile, admissionNumber: f['admissionNumber'], ...(this.record() ? { version: this.record().version, yearId: this.store.year()?.id } : { classroomId: f['classroomId'], subjectIds: this.selectedSubjects, guardians: this.guardianRows.filter(row => row.name && row.phone) }) };
+      payload = { ...profile, admissionNumber: f['admissionNumber'], ...(this.record() ? { version: this.record().version, yearId: this.store.year()?.id } : { classroomId: f['classroomId'], subjectIds: this.selectedSubjects, guardians: this.guardianRows.filter(row => row.name && (row.phone || row.email)) }) };
     } else if (mode === 'admission') { path = 'admissions'; payload = { ...profile, requestedClassId: f['classroomId'] }; }
     else if (mode === 'review') { path = `admissions/${this.record().id}/decision`; payload = { decision: f['decision'], note: f['note'] || '', ...(f['decision'] === 'accepted' ? { classroomId: f['classroomId'], subjectIds: this.selectedSubjects, admissionNumber: f['admissionNumber'] } : {}) }; }
     else if (mode === 'enrol') { path = 'enrollments'; payload = { studentId: this.record().id, classroomId: f['classroomId'], subjectIds: this.selectedSubjects }; }

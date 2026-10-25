@@ -101,7 +101,7 @@ test('CommunicationService - SMS segment & cost calculation (30 TZS per segment)
   assert.equal(calculateSmsSegments(emojiText), 2);
 });
 
-test('ContactVerification - OTP generation, hashing, and challenge verification', () => {
+test('Public report OTP - hashed challenge rejects mismatched codes and expires', () => {
   // 1. Generate 6-digit OTP
   const rawOtp = '482910';
   const hashedOtp = digest(rawOtp);
@@ -123,7 +123,7 @@ test('ContactVerification - OTP generation, hashing, and challenge verification'
   assert.ok(expiredAt < new Date());
 });
 
-test('ReportAccessLink - 256-bit URL token issuance, hashing, and security checks', () => {
+test('ReportAccessLink - token hashing and access limit', () => {
   // 1. Generate token
   const token = randomToken();
   assert.ok(token.length >= 43); // 32 bytes base64url
@@ -132,17 +132,7 @@ test('ReportAccessLink - 256-bit URL token issuance, hashing, and security check
   const tokenHash = digest(token);
   assert.equal(tokenHash.length, 64);
 
-  // 3. Challenge verification: phone last 4 digits
-  const guardianPhone = '255712345678';
-  const expectedLast4 = guardianPhone.slice(-4); // "5678"
-
-  const userEnteredLast4 = '5678';
-  assert.equal(userEnteredLast4, expectedLast4);
-
-  const wrongLast4 = '1234';
-  assert.notEqual(wrongLast4, expectedLast4);
-
-  // 4. Access count limit
+  // 3. Access count limit
   let accessCount = 0;
   const maxAccess = 25;
   while (accessCount < maxAccess) {

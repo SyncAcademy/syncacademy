@@ -73,8 +73,8 @@ td .action-btn { white-space:nowrap; }
 .guardian-card { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:16px; border:1px solid #e2e8f0; border-radius:10px; }
 .guardian-card strong { margin-right:8px; }
 .guardian-card p { margin-bottom:0; overflow-wrap:anywhere; }
+.invitation-options { display:flex; gap:8px; }
 .guardian-verification { justify-content:flex-start; margin-top:10px; }
-.guardian-verification input { width:150px; }
 .registration-guardian { padding:14px 0; border-bottom:1px solid #e2e8f0; }
 .registration-guardian + .action-btn { margin-top:16px; }
 fieldset { min-width:0; border:1px solid #e2e8f0; border-radius:10px; padding:16px; }

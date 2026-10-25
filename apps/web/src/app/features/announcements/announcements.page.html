@@ -97,7 +97,7 @@
                     <button type="button" (click)="closeAnnouncementMenu(); openAnnouncement(item)">Preview</button>
                     @if (!item.publishedAt && !item.unpublishedAt) {
                       <button type="button" (click)="closeAnnouncementMenu(); editDraft(item)">Edit draft</button>
-                      <button type="button" (click)="toggleAnnouncementStatus(item)" [disabled]="busy()">Publish now</button>
+                      <button type="button" class="announcement-menu-publish" (click)="toggleAnnouncementStatus(item)" [disabled]="busy()">Publish now</button>
                     } @else if (item.publishedAt && !item.unpublishedAt) {
                       <button type="button" class="menu-danger" (click)="toggleAnnouncementStatus(item)" [disabled]="busy()">Unpublish</button>
                     }
@@ -283,8 +283,8 @@
               @if (!(selectedAnnouncement() && !editingDraft())) {
                 <fieldset class="schedule-options" [disabled]="busy()">
                   <legend class="field-label">Delivery</legend>
-                  <label><input type="radio" name="delivery" [ngModel]="scheduleForLater()" [ngModelOptions]="{standalone: true}" [value]="false" (ngModelChange)="scheduleForLater.set(false)"> Publish now</label>
-                  <label><input type="radio" name="delivery" [ngModel]="scheduleForLater()" [ngModelOptions]="{standalone: true}" [value]="true" (ngModelChange)="scheduleForLater.set(true)"> Schedule for later</label>
+                  <label class="delivery-option" [class.is-selected]="!scheduleForLater()"><input type="radio" name="delivery" [ngModel]="scheduleForLater()" [ngModelOptions]="{standalone: true}" [value]="false" (ngModelChange)="scheduleForLater.set(false)"> Publish now</label>
+                  <label class="delivery-option" [class.is-selected]="scheduleForLater()"><input type="radio" name="delivery" [ngModel]="scheduleForLater()" [ngModelOptions]="{standalone: true}" [value]="true" (ngModelChange)="scheduleForLater.set(true)"> Schedule for later</label>
                   @if (scheduleForLater()) {
                     <label class="schedule-date"><span class="visually-hidden">Schedule date and time</span><input type="datetime-local" name="scheduledAt" [ngModel]="scheduledAt()" (ngModelChange)="scheduledAt.set($event)" [min]="minimumScheduleDate()" required></label>
                   }

@@ -1798,6 +1798,12 @@
 
 .announcement-action-menu button:hover { background: #f7f4ef; }
 .announcement-action-menu button:disabled { opacity: .55; cursor: wait; }
+.announcement-action-menu .announcement-menu-publish {
+  background: #fff2e6;
+  color: #874411;
+  font-weight: 700;
+}
+.announcement-action-menu .announcement-menu-publish:hover { background: #ffe7d0; }
 .announcement-action-menu .menu-danger { color: #a34435; }
 
 .quick-tips {
@@ -1938,6 +1944,18 @@
 .schedule-options { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin: 18px 0 0; padding: 14px; border: 1px solid #eee9e2; border-radius: 10px; }
 .schedule-options legend { padding-inline: 5px; }
 .schedule-options > label { display: inline-flex; align-items: center; gap: 7px; color: #505761; font-size: .76rem; }
+.schedule-options > label.delivery-option {
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.schedule-options > label.delivery-option.is-selected {
+  border-color: #e8a36c;
+  background: #fff2e6;
+  color: #874411;
+  font-weight: 700;
+}
 .schedule-options input[type='radio'] { accent-color: #c96c25; }
 .schedule-options .schedule-date { flex-basis: 100%; }
 .schedule-date input { min-height: 39px; padding: 0 10px; border: 1px solid #e6e1d8; border-radius: 8px; color: $text-primary; font: inherit; font-size: .77rem; }

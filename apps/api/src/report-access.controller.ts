@@ -16,6 +16,7 @@ import { Prisma, Role, CommunicationChannel } from '@prisma/client';
 import { z } from 'zod';
 import { PlatformService } from './platform.service';
 import { CommunicationService } from './communication/communication.service';
+import { ReportAccessVerificationService } from './report-access-verification.service';
 import { digest, randomToken } from './security';
 import { config } from './config';
 
@@ -57,6 +58,7 @@ export class ReportAccessController {
   constructor(
     private readonly svc: PlatformService,
     private readonly comms: CommunicationService,
+    private readonly reportVerification: ReportAccessVerificationService,
   ) {}
 
   @Get('schools/:schoolId/reports/publish-options')
@@ -390,13 +392,14 @@ export class ReportAccessController {
       throw new ForbiddenException('Maximum view limit reached for this link. Please contact the school for an updated link.');
     }
 
+    if (!link.guardian.phone) throw new BadRequestException('Guardian phone is unavailable for this report link.');
     const last4 = link.guardian.phone.slice(-4);
     const code = b.code || b.challengeResponse;
 
     // If guardian requests an OTP challenge or hasn't provided code yet
     if (b.requestOtp || !code) {
       // Disallow phone-last-4 as standalone authorization; require verified OTP challenge
-      await this.comms.requestVerification(link.schoolId, link.guardianId, 'SMS', 'public-report-viewer');
+      await this.reportVerification.requestCode(link.schoolId, link.guardianId);
       return {
         status: 'CHALLENGE_REQUIRED',
         verificationType: 'otp',
@@ -407,7 +410,7 @@ export class ReportAccessController {
     }
 
     // Verify 6-digit OTP
-    await this.comms.confirmVerification(link.schoolId, link.guardianId, 'SMS', code, 'public-report-viewer');
+    await this.reportVerification.confirmCode(link.schoolId, link.guardianId, code);
 
     // Generate short-lived secure session token for subsequent viewing and PDF downloads
     const sessionToken = randomToken();

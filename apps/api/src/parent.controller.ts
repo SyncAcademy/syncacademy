@@ -9,7 +9,7 @@ import { PlatformService } from './platform.service';
 import { CommunicationService } from './communication/communication.service';
 import { digest, passwordHash, passwordMatches, randomToken } from './security';
 import { config } from './config';
-import { queueParentInvitation } from './parent-invitations';
+import { parentActivationToken, parentInvitationMessage, queueParentInvitation } from './parent-invitations';
 import { MediaProvider, mediaProvider, objectRequest, openObjectStream, validateAnnouncementPng } from './announcement-media';
 import { RealtimeBus } from './realtime-bus';
 
@@ -98,6 +98,12 @@ export class ParentController {
     const link = await this.svc.db.studentGuardian.findFirst({ where: { schoolId: invitation.schoolId, guardianId: invitation.guardianId, active: true }, select: { id: true } });
     if (!link) throw genericInvitationError();
     return invitation;
+  }
+
+  private async existingGuardianAccount(guardian: { userId: string | null; phone: string | null; email: string | null }) {
+    if (guardian.userId) return this.svc.db.user.findUnique({ where: { id: guardian.userId }, include: { parentAccount: true } });
+    const byPhone = guardian.phone ? await this.svc.db.user.findFirst({ where: { parentAccount: { loginPhone: guardian.phone } }, include: { parentAccount: true } }) : null;
+    return byPhone || (guardian.email ? this.svc.db.user.findUnique({ where: { email: guardian.email.toLowerCase() }, include: { parentAccount: true } }) : null);
   }
 
   private async issueInvitation(schoolId: string, guardianId: string, channel: CommunicationChannel, actorId: string) {
@@ -274,6 +280,19 @@ export class ParentController {
     return { items: items.slice(0, q.limit), nextCursor: items.length > q.limit ? items[q.limit - 1].id : null };
   }
 
+  @Get('schools/:schoolId/guardians/:guardianId/parent-invitation')
+  async guardianInvitationStatus(@Req() req: Request, @Param('schoolId') schoolId: string, @Param('guardianId') guardianId: string) {
+    await this.svc.authorize(req, parse(uuid, schoolId), ['HEADMASTER', 'ACADEMIC', 'REGISTRAR']);
+    parse(uuid, guardianId);
+    const guardian = await this.svc.db.guardian.findFirst({ where: { id: guardianId, schoolId }, select: { id: true } });
+    if (!guardian) throw new NotFoundException('Guardian unavailable.');
+    const invitation = await this.svc.db.parentInvitation.findFirst({ where: { schoolId, guardianId }, orderBy: { createdAt: 'desc' }, select: { id: true, channel: true, destination: true, createdAt: true, expiresAt: true, consumedAt: true, revokedAt: true } });
+    if (!invitation) return { status: 'NOT_INVITED' };
+    const delivery = await this.svc.db.outbox.findFirst({ where: { schoolId, idempotencyKey: `parent-invitation:${invitation.id}` }, orderBy: { createdAt: 'desc' }, select: { sentAt: true, failedAt: true } });
+    const status = invitation.consumedAt ? 'ACCEPTED' : invitation.revokedAt ? 'REVOKED' : invitation.expiresAt <= new Date() ? 'EXPIRED' : delivery?.failedAt ? 'FAILED' : 'PENDING';
+    return { ...invitation, status, deliveryStatus: delivery?.sentAt ? 'SUBMITTED' : delivery?.failedAt ? 'FAILED' : 'QUEUED' };
+  }
+
   @Post('schools/:schoolId/parent-invitations/:invitationId/revoke')
   async revoke(@Req() req: Request, @Param('schoolId') schoolId: string, @Param('invitationId') invitationId: string) {
     const { user } = await this.svc.authorize(req, parse(uuid, schoolId), ['HEADMASTER', 'ACADEMIC', 'REGISTRAR']);
@@ -298,67 +317,65 @@ export class ParentController {
       const current = await tx.parentInvitation.findFirst({ where: { id: invitationId, schoolId, consumedAt: null, revokedAt: null }, include: { guardian: { select: { phone: true, whatsappPhone: true, email: true, optOutSms: true, optOutWhatsapp: true } } } });
       if (!current) throw new NotFoundException('Pending invitation unavailable.');
       await tx.$queryRaw`SELECT id FROM "Guardian" WHERE id = ${current.guardianId}::uuid AND "schoolId" = ${schoolId}::uuid FOR UPDATE`;
+      const lastDispatch = await tx.outbox.findFirst({ where: { schoolId, idempotencyKey: `parent-invitation:${invitationId}` }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } });
+      if (lastDispatch && lastDispatch.createdAt.getTime() > Date.now() - 60000) throw new ConflictException('Wait one minute before resending this invitation.');
       const destination = current.channel === 'EMAIL' ? current.guardian.email : current.channel === 'WHATSAPP' ? current.guardian.whatsappPhone : current.guardian.phone;
       if (!destination || (current.channel === 'SMS' && current.guardian.optOutSms) || (current.channel === 'WHATSAPP' && current.guardian.optOutWhatsapp)) throw new BadRequestException('Guardian cannot receive the selected channel.');
-      const token = randomToken();
-      const code = randomBytes(16).toString('hex').toUpperCase();
-      const updated = await tx.parentInvitation.update({ where: { id: invitationId }, data: { tokenHash: digest(token), codeHash: digest(code), destination, expiresAt: new Date(Date.now() + 48 * 3600000), attempts: 0 } });
+      const school = await tx.school.findFirst({ where: { id: schoolId, active: true }, select: { name: true } });
+      if (!school) throw new BadRequestException('School is unavailable.');
+      const token = parentActivationToken();
+      const updated = await tx.parentInvitation.update({ where: { id: invitationId, schoolId }, data: { tokenHash: digest(token), codeHash: digest(token), destination, expiresAt: new Date(Date.now() + 48 * 3600000), attempts: 0 } });
       await tx.outbox.updateMany({ where: { idempotencyKey: `parent-invitation:${invitationId}`, sentAt: null, cancelledAt: null }, data: { cancelledAt: new Date(), payload: '' } });
-      await this.comms.enqueueMessage(tx, { schoolId, guardianId: current.guardianId, channel: current.channel, recipient: destination, subject: 'SyncAcademy parent invitation', body: `SyncAcademy parent invitation. Open the app and enter code ${code}, or use ${config.APP_ORIGIN}/parent/activate?token=${token}. This invitation expires in 48 hours. A separate verification code is required.`, idempotencyKey: `parent-invitation:${invitationId}` });
+      await this.comms.enqueueMessage(tx, { schoolId, guardianId: current.guardianId, channel: current.channel, recipient: destination, ...parentInvitationMessage(school.name, token, current.channel), idempotencyKey: `parent-invitation:${invitationId}` });
       await tx.auditEvent.create({ data: { schoolId, actorId: user.id, action: 'PARENT_INVITATION_RESENT', target: invitationId } });
       return { id: updated.id, expiresAt: updated.expiresAt };
     });
   }
 
-  @Post('parent/invitations/challenge')
-  async challenge(@Req() req: Request, @Body() body: unknown) {
+  @Post('parent/invitations/validate')
+  async validateInvitation(@Req() req: Request, @Body() body: unknown) {
     const b = parse(z.object({ credential }).strict(), body);
-    await this.svc.rate(`parent-challenge-ip:${req.ip}`, 20, 900);
+    await this.svc.rate(`parent-validate-ip:${req.ip}`, 20, 900);
     const invitation = await this.activeInvitation(b.credential);
-    await this.svc.rate(`parent-challenge:${invitation.id}`, 5, 900);
-    const result = await this.comms.requestVerification(invitation.schoolId, invitation.guardianId, invitation.channel, invitation.invitedBy);
-    return { challengeRequired: true, codeLength: 6, channel: result.channel, maskedDestination: result.destination, expiresAt: invitation.expiresAt };
+    await this.svc.rate(`parent-validate:${invitation.id}`, 10, 900);
+    const existing = await this.existingGuardianAccount(invitation.guardian);
+    return { valid: true, expiresAt: invitation.expiresAt, accountMode: existing ? 'EXISTING' : 'NEW', recoveryMode: existing && (!existing.parentAccount || existing.platformAdmin) ? 'WEB' : 'PARENT' };
   }
 
   @Post('parent/invitations/activate')
   async activate(@Req() req: Request, @Body() body: unknown) {
-    const b = parse(z.object({ credential, code: z.string().regex(/^\d{6}$/), password }).strict(), body);
+    const b = parse(z.object({ credential, password: z.string().min(1).max(128) }).strict(), body);
     await this.svc.rate(`parent-activate-ip:${req.ip}`, 20, 900);
     const invitation = await this.activeInvitation(b.credential);
-    const existingAccount = invitation.guardian.userId
-      ? await this.svc.db.user.findUnique({ where: { id: invitation.guardian.userId }, include: { parentAccount: true } })
-      : await this.svc.db.user.findFirst({ where: { parentAccount: { loginPhone: invitation.guardian.phone } }, include: { parentAccount: true } })
-        || (invitation.guardian.email ? await this.svc.db.user.findUnique({ where: { email: invitation.guardian.email.toLowerCase() }, include: { parentAccount: true } }) : null);
-    if (existingAccount && (!existingAccount.enabled || !existingAccount.parentAccount || !await passwordMatches(existingAccount.passwordHash, b.password))) throw new UnauthorizedException('Account verification failed.');
+    await this.svc.rate(`parent-activate:${invitation.id}`, 5, 900);
+    const existingAccount = await this.existingGuardianAccount(invitation.guardian);
+    if (existingAccount && !existingAccount.enabled) throw new UnauthorizedException('This account is disabled. Contact your school.');
+    if (existingAccount && !await passwordMatches(existingAccount.passwordHash, b.password)) throw new UnauthorizedException('Enter your existing SyncAcademy account password or recover it before activating this invitation.');
+    if (!existingAccount && b.password.length < 12) throw new BadRequestException('Create a password with at least 12 characters.');
     const hash = existingAccount ? null : await passwordHash(b.password);
     const account = await this.svc.atomic(async tx => {
       await tx.$queryRaw`SELECT id FROM "ParentInvitation" WHERE id = ${invitation.id}::uuid FOR UPDATE`;
       const fresh = await tx.parentInvitation.findFirst({ where: { id: invitation.id, schoolId: invitation.schoolId, consumedAt: null, revokedAt: null, expiresAt: { gt: new Date() }, attempts: { lt: 5 } } });
       if (!fresh) throw genericInvitationError();
-      const challenge = await tx.contactVerification.findFirst({ where: { schoolId: fresh.schoolId, guardianId: fresh.guardianId, channel: fresh.channel, destination: fresh.destination, verifiedAt: null }, orderBy: { createdAt: 'desc' } });
-      if (!challenge || challenge.expiresAt <= new Date() || challenge.attempts >= 5) throw new BadRequestException('Verification code expired or unavailable.');
-      if (challenge.codeHash !== digest(b.code)) {
-        await tx.contactVerification.update({ where: { id: challenge.id }, data: { attempts: { increment: 1 } } });
-        await tx.parentInvitation.update({ where: { id: fresh.id }, data: { attempts: { increment: 1 } } });
-        return null;
-      }
+      if (!await tx.school.findFirst({ where: { id: fresh.schoolId, active: true }, select: { id: true } })) throw genericInvitationError();
       const guardian = await tx.guardian.findFirst({ where: { id: fresh.guardianId, schoolId: fresh.schoolId }, select: { id: true, userId: true, name: true, phone: true, email: true, students: { where: { schoolId: fresh.schoolId, active: true }, take: 1, select: { id: true } } } });
-      if (!guardian || !guardian.students.length || guardian.userId && existingAccount?.id !== guardian.userId) throw genericInvitationError();
+      if (!guardian || !guardian.students.length || guardian.userId && existingAccount?.id !== guardian.userId || (fresh.channel === 'EMAIL' ? guardian.email : fresh.channel === 'SMS' ? guardian.phone : invitation.guardian.whatsappPhone) !== fresh.destination) throw genericInvitationError();
       let user: User;
       if (existingAccount) {
         user = existingAccount;
+        if (!existingAccount.parentAccount) {
+          await tx.parentAccount.create({ data: { userId: user.id, loginPhone: guardian.phone } });
+        }
       } else {
         const email = guardian.email?.toLowerCase() || `parent-${fresh.id}@accounts.invalid`;
         user = await tx.user.create({ data: { name: guardian.name, email, passwordHash: hash!, enabled: true, parentAccount: { create: { loginPhone: guardian.phone } } } });
       }
       await tx.guardian.update({ where: { id_schoolId: { id: guardian.id, schoolId: fresh.schoolId } }, data: { userId: user.id, ...(fresh.channel === 'EMAIL' ? { emailVerifiedAt: new Date() } : fresh.channel === 'SMS' ? { phoneVerifiedAt: new Date() } : { whatsappVerifiedAt: new Date() }) } });
       await tx.membership.upsert({ where: { userId_schoolId_role: { userId: user.id, schoolId: fresh.schoolId, role: 'PARENT' } }, create: { userId: user.id, schoolId: fresh.schoolId, role: 'PARENT', active: true }, update: { active: true } });
-      await tx.contactVerification.update({ where: { id: challenge.id }, data: { verifiedAt: new Date() } });
       await tx.parentInvitation.update({ where: { id: fresh.id }, data: { consumedAt: new Date() } });
       await tx.auditEvent.create({ data: { schoolId: fresh.schoolId, actorId: user.id, action: 'PARENT_INVITATION_ACTIVATED', target: fresh.id } });
       return user;
     });
-    if (!account) throw new BadRequestException('Verification code is invalid.');
     return { activated: true, signInRequired: true };
   }
 
@@ -387,7 +404,7 @@ export class ParentController {
     await this.svc.rate(`parent-recovery-ip:${req.ip}`, 10, 900);
     await this.svc.rate(`parent-recovery-account:${identifier}`, 3, 3600);
     const account = identifier.includes('@') ? await this.svc.db.user.findUnique({ where: { email: identifier }, include: { parentAccount: true } }) : await this.svc.db.user.findFirst({ where: { parentAccount: { loginPhone: identifier } }, include: { parentAccount: true } });
-    if (account?.enabled && account.parentAccount) {
+    if (account?.enabled && account.parentAccount && !account.platformAdmin) {
       const guardian = await this.svc.db.guardian.findFirst({ where: { userId: account.id, school: { active: true }, students: { some: { active: true } }, ...(identifier.includes('@') ? { email: identifier, emailVerifiedAt: { not: null } } : { phone: identifier, phoneVerifiedAt: { not: null } }) }, select: { id: true, schoolId: true } });
       if (guardian) {
         const channel: CommunicationChannel = identifier.includes('@') ? 'EMAIL' : 'SMS';
@@ -412,7 +429,7 @@ export class ParentController {
     await this.svc.rate(`parent-recovery-confirm-ip:${req.ip}`, 20, 900);
     await this.svc.rate(`parent-recovery-confirm-account:${identifier}`, 8, 900);
     const account = identifier.includes('@') ? await this.svc.db.user.findUnique({ where: { email: identifier }, include: { parentAccount: true } }) : await this.svc.db.user.findFirst({ where: { parentAccount: { loginPhone: identifier } }, include: { parentAccount: true } });
-    if (!account?.enabled || !account.parentAccount) throw new BadRequestException('Recovery code is invalid or expired.');
+    if (!account?.enabled || !account.parentAccount || account.platformAdmin) throw new BadRequestException('Recovery code is invalid or expired.');
     const hash = await passwordHash(b.password);
     const changed = await this.svc.atomic(async tx => {
       const challenge = await tx.parentRecoveryChallenge.findFirst({ where: { userId: account.id, destination: identifier, usedAt: null }, orderBy: { createdAt: 'desc' } });

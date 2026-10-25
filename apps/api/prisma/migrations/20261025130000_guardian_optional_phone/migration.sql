@@ -1,0 +1,1 @@
+ALTER TABLE "Guardian" ALTER COLUMN "phone" DROP NOT NULL;
