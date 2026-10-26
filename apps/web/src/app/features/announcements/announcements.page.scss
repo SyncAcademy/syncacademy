@@ -1075,6 +1075,7 @@
 
 .mobile-post {
   width: min(100%, 350px);
+  flex: 0 0 auto;
   overflow: hidden;
   border: 1px solid #e9e5de;
   border-radius: 15px;
@@ -2047,13 +2048,13 @@
 
 .preview-content {
   display: flex;
-  max-height: min(56dvh, 540px);
-  flex: 0 1 auto;
+  // Keep the post at its natural height; workflow-content owns vertical scrolling.
+  max-height: none;
+  flex: 0 0 auto;
+  align-items: flex-start;
   justify-content: center;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  overflow: visible;
+  overscroll-behavior: auto;
 }
 
 .mobile-preview-column {
@@ -2067,9 +2068,5 @@
   .search-field {
     width: 100%;
     flex: 0 0 auto;
-  }
-
-  .preview-content {
-    max-height: min(52dvh, 460px);
   }
 }

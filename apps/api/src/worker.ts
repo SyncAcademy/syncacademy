@@ -24,6 +24,7 @@ import { CommunicationService } from './communication/communication.service';
 import { Database } from './database/database.service';
 import { queueParentInvitation } from './parent-invitations';
 import { cleanupAnnouncementMedia } from './announcement-media-lifecycle';
+import { deliverParentPush, enqueueParentPush } from './parent-push';
 
 const db = new PrismaClient();
 const batchComms = new CommunicationService(db as unknown as Database);
@@ -79,7 +80,8 @@ async function processParentAnnouncement() {
         await tx.parentAnnouncement.update({ where: { id: announcement.id }, data: { notificationCompleteAt: new Date(), leaseId: null, leaseUntil: null } });
         return;
       }
-      await tx.parentNotification.upsert({ where: { dedupeKey: `announcement:${announcement.id}:${guardian.userId}` }, create: { userId: guardian.userId!, schoolId: announcement.schoolId, kind: 'ANNOUNCEMENT', title: announcement.title, body: 'A school announcement is available in the parent app.', targetId: announcement.id, dedupeKey: `announcement:${announcement.id}:${guardian.userId}` }, update: {} });
+      const notification = await tx.parentNotification.upsert({ where: { dedupeKey: `announcement:${announcement.id}:${guardian.userId}` }, create: { userId: guardian.userId!, schoolId: announcement.schoolId, kind: 'ANNOUNCEMENT', title: announcement.title, body: 'A school announcement is available in the parent app.', targetId: announcement.id, dedupeKey: `announcement:${announcement.id}:${guardian.userId}` }, update: {} });
+      await enqueueParentPush(tx, notification);
       await tx.parentAnnouncement.update({ where: { id: announcement.id }, data: { notificationCursor: guardian.id, leaseId: null, leaseUntil: null } });
     }, { isolationLevel: 'Serializable', timeout: 15000 });
   } catch {
@@ -209,6 +211,11 @@ async function main() {
 
           const rawPayload = decrypt(job.payload);
           const payload = JSON.parse(rawPayload);
+          if (job.channel === 'PUSH') {
+            const outcome = await deliverParentPush(db, payload.notificationId, payload.deviceId);
+            await db.outbox.updateMany({ where: { id: job.id, leaseId: lease }, data: outcome === 'SENT' ? { sentAt: new Date(), payload: '', leaseUntil: null } : { cancelledAt: new Date(), payload: '', leaseUntil: null } });
+            continue;
+          }
           if (job.idempotencyKey?.startsWith('parent-invitation:')) {
             const invitationId = job.idempotencyKey.slice('parent-invitation:'.length);
             const invitation = await db.parentInvitation.findFirst({ where: { id: invitationId, schoolId: job.schoolId ?? undefined }, include: { school: { select: { active: true } }, guardian: { select: { phone: true, whatsappPhone: true, email: true } } } });

@@ -2,7 +2,7 @@
 
 This document is the authoritative technical design specification for SyncAcademy across the **Frontend (`apps/web`)**, **Backend (`apps/api`)**, **Database (`apps/api/prisma`)**, **Multi-Tenancy**, **Security**, **Performance**, **Multi-Channel Communications**, and **Architecture Decision Records (ADRs)**.
 
-The current parent mobile API, invitation activation, bearer-session contract, tenant checks, worker leasing, and measured scaling limits are documented in [Parent mobile backend](parent-mobile-backend.md). Flutter push delivery and a general class lesson timetable remain planned integrations.
+The current parent mobile API, invitation activation, bearer-session contract, tenant checks, worker leasing, parent FCM device registration, push delivery, and measured scaling limits are documented in [Parent mobile backend](parent-mobile-backend.md). A general class lesson timetable remains a planned integration.
 
 ---
 
@@ -20,13 +20,15 @@ SyncAcademy is designed as a **modular, multi-tenant web platform** inside an np
 
 1. **Web Client (`apps/web`)**: Angular 18 + Ionic 8 single-page application serving role-based workspaces.
 2. **REST & Realtime API Server (`apps/api` — `src/main.ts`)**: NestJS 10 HTTP server exposing `/api/*` REST endpoints and a Server-Sent Events (SSE) stream at `/api/realtime/stream`.
-3. **Transactional Outbox Worker (`apps/api` — `src/worker.ts`)**: Background process polling the PostgreSQL `Outbox` table to dispatch emails, SMS, and WhatsApp messages reliably.
+3. **Transactional Outbox Worker (`apps/api` — `src/worker.ts`)**: Background process polling the PostgreSQL `Outbox` table to dispatch emails, SMS, WhatsApp, and parent push notifications reliably.
+4. **Parent Mobile App**: Flutter application for protected parent records, in-app Alerts, and Firebase Cloud Messaging notification registration and tap routing.
 
 ```mermaid
 flowchart LR
     subgraph Clients["Client Browsers (Desktop & Mobile Web)"]
         SPA["Angular 18 + Ionic 8 SPA<br/>(apps/web)"]
         GuardianLink["Guardian Mobile Browser<br/>(Expiring Report Link)"]
+        ParentApp["Flutter Parent App"]
     end
 
     subgraph Edge["Edge / Reverse Proxy"]
@@ -47,10 +49,12 @@ flowchart LR
         SMTP["SMTP / Transactional Email"]
         SMS["SMS Gateway<br/>(Beem Africa / NextSMS)"]
         WA["WhatsApp Business API"]
+        FCM["Firebase Cloud Messaging"]
     end
 
     SPA -->|HTTPS + Cookie + CSRF| CF
     GuardianLink -->|HTTPS Signed Token| CF
+    ParentApp -->|HTTPS + Parent Bearer Session| CF
     CF -->|/api/*| API
     API -->|Prisma ORM| PG
     API -->|Presigned URLs| R2
@@ -58,6 +62,8 @@ flowchart LR
     Worker -->|Dispatch Email| SMTP
     Worker -->|Dispatch SMS| SMS
     Worker -->|Dispatch WhatsApp| WA
+    Worker -->|Generic protected alert + notification ID| FCM
+    FCM -->|Android / APNs| ParentApp
 ```
 
 ---

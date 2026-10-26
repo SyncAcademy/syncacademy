@@ -251,7 +251,18 @@ export class AcademicController {
      if(!rows.length||rows.some((a:any)=>a.assessmentProgress.status!=='approved'))throw new BadRequestException('Approve all assigned subjects first.');
      const enrollments=await tx.enrollment.findMany({where:{schoolId,classroomId:rows[0].classId,status:'active'},include:{subjects:true}});
      if(enrollments.some(e=>e.subjects.some(subject=>!rows.some((a:any)=>a.subjectId===subject.subjectId&&a.entries.some((m:any)=>m.studentId===e.studentId)))))throw new BadRequestException('Some enrolled subjects have no approved marks. Assign and approve those subjects first.');
-     const students=new Map<string,any>();for(const a of rows)for(const m of a.entries){if(typeof m.marksValue!=='number'&&m.noMark!==true)throw new BadRequestException('Incomplete marks.');const r=students.get(m.studentId)??{id:`${p.assessmentId}:${a.classId}:${m.studentId}`,academicYearId:b.yearId,assessmentId:p.assessmentId,classId:a.classId,createdAt:now,student:m.fullName,studentNumber:m.studentNumber,className:a.className,period:`${year.name} / ${assessment(p.assessmentId).name}`,academicApproved:true,status:'approved',recipients:[],results:[],noMarks:[]};if(typeof m.marksValue==='number')r.results.push({subject:a.subjectName,mark:m.marksValue,grade:grade(m.marksValue,a.gradingPolicy)});else r.noMarks.push(a.subjectName);students.set(m.studentId,r);}
+     const students=new Map<string,any>();for(const a of rows)for(const m of a.entries){if(typeof m.marksValue!=='number'&&m.noMark!==true)throw new BadRequestException('Incomplete marks.');const r=students.get(m.studentId)??{id:`${p.assessmentId}:${a.classId}:${m.studentId}`,academicYearId:b.yearId,assessmentId:p.assessmentId,classId:a.classId,createdAt:now,student:m.fullName,studentNumber:m.studentNumber,className:a.className,period:`${year.name} / ${assessment(p.assessmentId).name}`,academicApproved:true,status:'approved',recipients:[],results:[],noMarks:[]};if(typeof m.marksValue==='number')r.results.push({subject:a.subjectName,mark:m.marksValue,maxMarks:100,grade:grade(m.marksValue,a.gradingPolicy)});else r.noMarks.push(a.subjectName);students.set(m.studentId,r);}
+     const completeClass=students.size===enrollments.length&&enrollments.every(e=>students.has(e.studentId));
+     const policyKeys=new Set(rows.map((a:any)=>JSON.stringify(a.gradingPolicy?.bands??null)));
+     for(const r of students.values()){
+      const marks=r.results.map((result:any)=>result.mark as number);
+      const average=marks.length?marks.reduce((sum:number,mark:number)=>sum+mark,0)/marks.length:null;
+      r.summary={average,overallGrade:average!==null&&policyKeys.size===1?grade(average,rows[0].gradingPolicy):null,position:null,classSize:null};
+     }
+     if(completeClass&&[...students.values()].every(r=>r.summary.average!==null)){
+      const ranked=[...students.values()].sort((a,b)=>b.summary.average-a.summary.average||a.student.localeCompare(b.student)||a.studentNumber.localeCompare(b.studentNumber));
+      ranked.forEach((r,index)=>{r.summary.position=index&&r.summary.average===ranked[index-1].summary.average?ranked[index-1].summary.position:index+1;r.summary.classSize=ranked.length;});
+     }
      for(const r of students.values()){const existing=s.reports.find((x:any)=>x.id===r.id);if(existing&&existing.status!=='generated')continue;s.reports=s.reports.filter((x:any)=>x.id!==r.id);s.reports.push(r);}break;
     }
     case 'attendance': {

@@ -490,3 +490,75 @@ export function buildDemoRequestAcknowledgementEmail(params: {
 
   return { subject, html, text };
 }
+
+export function buildParentResultEmail(params: {
+  guardianName: string;
+  studentName: string;
+  schoolName: string;
+  className: string;
+  period: string;
+  reportUrl: string;
+  expiresDays: number;
+}): { subject: string; html: string; text: string } {
+  const subject = `A new progress report for ${params.studentName}`.replace(/[\r\n\u2028\u2029]+/g, ' ').trim();
+  const linkExpiry = `${params.expiresDays} ${params.expiresDays === 1 ? 'day' : 'days'}`;
+  const text = [
+    `Hello ${params.guardianName || 'Parent or guardian'},`,
+    '',
+    `We’re pleased to let you know that ${params.studentName}’s progress report is ready to view.`,
+    '',
+    `School: ${params.schoolName}`,
+    `Class: ${params.className}`,
+    `Academic period: ${params.period}`,
+    '',
+    `View the secure report: ${params.reportUrl}`,
+    `This link is available for ${linkExpiry}. For your child’s privacy, the school’s identity verification may be required before viewing.`,
+    '',
+    'Thank you for supporting your child’s learning.',
+    `${params.schoolName} and SyncAcademy`,
+  ].join('\n');
+  const contentHtml = `
+    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #E87E24; margin-bottom: 6px;">
+      Student progress
+    </div>
+    <h1 style="margin: 0 0 16px 0; font-size: 22px; font-weight: 800; color: #0F172A; line-height: 1.3;">
+      A new progress report is ready
+    </h1>
+    <p style="margin: 0 0 16px 0; font-size: 15px; color: #475569; line-height: 1.6;">
+      Hello <strong>${escapeHtml(params.guardianName || 'Parent or guardian')}</strong>,
+    </p>
+    <p style="margin: 0 0 22px 0; font-size: 15px; color: #475569; line-height: 1.6;">
+      We’re pleased to share that <strong style="color: #0F172A;">${escapeHtml(params.studentName)}</strong>’s progress report is ready. Thank you for being part of your child’s learning journey.
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; margin-bottom: 24px;">
+      <tr><td style="padding: 16px 20px; font-size: 14px; color: #475569; line-height: 1.8;">
+        <strong style="color: #0F172A;">${escapeHtml(params.schoolName)}</strong><br>
+        ${escapeHtml(params.className)} &bull; ${escapeHtml(params.period)}
+      </td></tr>
+    </table>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto 22px auto;">
+      <tr><td align="center" style="border-radius: 8px; background-color: #E87E24;">
+        <a href="${escapeHtml(params.reportUrl)}" target="_blank" style="display: inline-block; padding: 14px 30px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; font-weight: 700; color: #FFFFFF; text-decoration: none; border-radius: 8px;">
+          View progress report &rarr;
+        </a>
+      </td></tr>
+    </table>
+    <div style="background-color: #FFF7ED; border-left: 3px solid #E87E24; padding: 12px 16px; border-radius: 0 6px 6px 0; margin-bottom: 20px; font-size: 13px; color: #475569; line-height: 1.6;">
+      For your child’s privacy, the school may ask you to verify your identity before opening the report. This secure link is available for <strong>${escapeHtml(linkExpiry)}</strong>.
+    </div>
+    <div style="padding-top: 14px; border-top: 1px solid #F1F5F9; font-size: 12px; color: #64748B; line-height: 1.6;">
+      <p style="margin: 0 0 6px 0;">If the button does not open, copy this secure link into your browser:</p>
+      <p style="margin: 0; overflow-wrap: anywhere;"><a href="${escapeHtml(params.reportUrl)}" style="color: #E87E24;">${escapeHtml(params.reportUrl)}</a></p>
+    </div>
+    <p style="margin: 22px 0 0 0; font-size: 14px; color: #475569; line-height: 1.6;">Warm regards,<br><strong>${escapeHtml(params.schoolName)} and SyncAcademy</strong></p>
+  `;
+  const html = renderEmailLayout({
+    title: subject,
+    previewText: `${params.studentName}’s progress report from ${params.schoolName} is ready to view.`,
+    badgeText: 'Student Progress',
+    badgeType: 'default',
+    logoSrc: `cid:${SYNCACADEMY_LOGO_CID}`,
+    contentHtml,
+  });
+  return { subject, html, text };
+}

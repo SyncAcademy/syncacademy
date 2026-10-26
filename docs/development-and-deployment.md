@@ -9,7 +9,7 @@ The parent mobile backend runs in the existing API and worker containers. Its ad
 ## 1. Local Development Setup
 
 ### 1.1 Prerequisites
-- **Node.js**: `>= 20.x` (Node `22.x` recommended, matches CI)
+- **Node.js**: `>= 22.x` (the Firebase Admin SDK used for parent push requires Node 22; matches CI and API containers)
 - **npm**: `>= 10.x` (npm workspaces monorepo)
 - **PostgreSQL**: `16.x` (via Docker Compose or local PostgreSQL instance)
 

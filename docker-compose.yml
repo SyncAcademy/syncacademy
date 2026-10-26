@@ -20,6 +20,8 @@ x-app: &app
     SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     MAIL_FROM: ${MAIL_FROM:-noreply@syncacademy.local}
     CONTACT_NOTIFICATION_EMAIL: ${CONTACT_NOTIFICATION_EMAIL:-}
+    FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+    GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/firebase/firebase-admin.json}
     TRUST_PROXY_HOPS: 1
     TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
     ANNOUNCEMENT_MEDIA_PROVIDER: ${ANNOUNCEMENT_MEDIA_PROVIDER:-local}
@@ -31,6 +33,7 @@ x-app: &app
     ANNOUNCEMENT_MEDIA_SECRET_KEY: ${ANNOUNCEMENT_MEDIA_SECRET_KEY:-}
   volumes:
     - announcement-media:/var/lib/syncacademy/media
+    - ./.runtime/firebase:/run/secrets/firebase:ro
   init: true
   restart: unless-stopped
 services:

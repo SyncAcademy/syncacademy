@@ -7,7 +7,7 @@
 ### Core Problems Solved
 1. **Fragmented School Operations**: Unifies Admissions (Registrar), Academics (Academic Master & Teachers), Finance (Bursar), and Executive Oversight (Headmaster) on a single real-time database with immutable audit logs.
 2. **Tanzanian Academic & NECTA Alignment**: Supports multi-term calendars (`Term 1`, `Term 2`, mid-term and annual assessments), NECTA-aligned grading scales (`A`–`F` divisions and points), and multi-stage marks approval (`DRAFT` -> `SUBMITTED` -> `ACADEMIC_APPROVED` -> `HEADMASTER_APPROVED` -> `PUBLISHED`).
-3. **Multi-Channel Guardian Connectivity**: Reaches parents via **SMS**, **WhatsApp**, **Email**, and **secure, expiring report-access links** without requiring complex portal onboarding, while laying the foundation for a cross-school Parent Portal.
+3. **Multi-Channel Guardian Connectivity**: Reaches parents through the Flutter parent app's protected Alerts and operating-system push notifications, plus **SMS**, **WhatsApp**, **Email**, and **secure, expiring report-access links**.
 
 ---
 
@@ -23,10 +23,10 @@
 | **Academic Reports & Report Cards** | Generate student term result summaries and printable/publishable report cards (`AcademicReportCardRecord`) once marks are approved. | **Implemented** (`/academic`, `/class-teacher`, `/headmaster`) |
 | **Daily Attendance** | Record and review daily student attendance (`PRESENT`, `ABSENT`, `LATE`, `EXCUSED`) by class and date (`AcademicAttendanceSession`, `AcademicAttendanceEntry`) with revision history. | **Implemented** (`/class-teacher`, `/academic`) |
 | **Bursar & Student Fee Workflows** | Define class/term fee structures (`FeeStructure`), issue student invoices (`Invoice`), record installment payments and sequential receipts (`Payment`), and process fee adjustments (`BursarAdjustmentRequest`). | **Implemented** (`/bursar`) |
-| **Parent Communication Engine** | PostgreSQL `Outbox` delivery for email, SMS and WhatsApp, guardian contact verification, and expiring OTP-protected report links (`ReportAccessLink`). Provider delivery requires configured credentials; parent account sign-in remains planned. | **Implemented with provider configuration** |
+| **Parent Communication Engine** | PostgreSQL `Outbox` delivery for email, SMS, WhatsApp and Firebase push, guardian contact verification, authenticated cross-school parent accounts, in-app Alerts, and expiring OTP-protected report links (`ReportAccessLink`). Push delivery requires Firebase project and server credentials. | **Implemented with provider configuration** |
 
 ### Explicitly Out of Scope for Initial MVP
-- Native iOS/Android mobile apps (the MVP is a responsive web application).
+- General class lesson timetables and online fee payments.
 - Complex general-ledger accounting, payroll, and HR management.
 - AI tutoring/content generation and full LMS video/quiz hosting.
 - Heavyweight external infrastructure (Kafka, RabbitMQ, or microservices).

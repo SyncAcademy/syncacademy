@@ -7,11 +7,14 @@ import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
 import { PlatformService } from './platform.service';
 import { CommunicationService } from './communication/communication.service';
-import { digest, passwordHash, passwordMatches, randomToken } from './security';
+import { digest, encrypt, passwordHash, passwordMatches, randomToken } from './security';
 import { config } from './config';
 import { parentActivationToken, parentInvitationMessage, queueParentInvitation } from './parent-invitations';
 import { MediaProvider, mediaProvider, objectRequest, openObjectStream, validateAnnouncementPng } from './announcement-media';
 import { RealtimeBus } from './realtime-bus';
+import { termsForYear } from './academic-terms';
+import { parentAssessmentCatalog } from './parent-results';
+import { renderReportPdf } from './report-pdf';
 
 const uuid = z.string().uuid();
 const credential = z.string().regex(/^[A-Za-z0-9_-]{20,64}$/);
@@ -27,6 +30,8 @@ const announcementInput = z.object({ yearId: uuid, classId: uuid.nullish(), titl
 const announcementSchedule = z.string().datetime({ offset: true }).refine(value => new Date(value).getTime() > Date.now(), 'must be in the future');
 const mediaSelect = { id: true, mimeType: true, byteSize: true, width: true, height: true, status: true } as const;
 const mediaStorageSelect = { storageKey: true, displayKey: true, thumbnailKey: true, storageProvider: true, status: true } as const;
+const installationIdInput = z.string().uuid();
+const pushFidInput = z.string().min(16).max(256).regex(/^[A-Za-z0-9_-]+$/);
 
 @Controller('api/v1')
 export class ParentController {
@@ -463,8 +468,11 @@ export class ParentController {
   @Post('parent/auth/logout')
   async logout(@Req() req: Request) {
     const { session, user } = await this.parent(req);
-    await this.svc.db.parentMobileSession.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
-    await this.svc.db.auditEvent.create({ data: { actorId: user.id, action: 'PARENT_MOBILE_LOGOUT', target: session.id } });
+    await this.svc.atomic(async tx => {
+      await tx.parentPushDevice.updateMany({ where: { sessionId: session.id, userId: user.id, revokedAt: null }, data: { revokedAt: new Date(), fidEncrypted: '' } });
+      await tx.parentMobileSession.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'PARENT_MOBILE_LOGOUT', target: session.id } });
+    });
     return { signedOut: true };
   }
 
@@ -488,6 +496,7 @@ export class ParentController {
     await this.svc.atomic(async tx => {
       await tx.user.update({ where: { id: user.id }, data: { sessionVersion: { increment: 1 } } });
       await tx.parentMobileSession.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.parentPushDevice.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date(), fidEncrypted: '' } });
       await tx.auditEvent.create({ data: { actorId: user.id, action: 'PARENT_SESSIONS_REVOKED', target: user.id } });
     });
     return { revoked: true, signInRequired: true };
@@ -544,23 +553,34 @@ export class ParentController {
       link.canReceiveFinanceAlert ? this.svc.db.studentCharge.aggregate({ where: { schoolId: link.schoolId, studentId }, _sum: { amount: true } }) : null,
       link.canReceiveFinanceAlert ? this.svc.db.payment.aggregate({ where: { schoolId: link.schoolId, studentId, voidAt: null }, _sum: { amount: true } }) : null,
       link.canReceiveFinanceAlert ? this.svc.db.adjustment.aggregate({ where: { schoolId: link.schoolId, studentId }, _sum: { amount: true } }) : null,
-      link.canReceiveReports ? this.svc.db.reportAccessLink.count({ where: { schoolId: link.schoolId, studentId, guardianId: link.guardianId, revokedAt: null, expiresAt: { gt: new Date() } } }) : 0,
+      link.canReceiveReports ? this.svc.db.parentResultPublication.count({ where: { schoolId: link.schoolId, studentId, withdrawnAt: null } }) : 0,
       this.svc.db.parentNotification.count({ where: { userId: user.id, readAt: null, ...await this.notificationScope(user.id) } }),
-      enrollment ? this.svc.db.parentAnnouncement.findMany({ where: { schoolId: link.schoolId, yearId: enrollment.classroom.yearId, OR: [{ classId: null }, { classId: enrollment.classroomId }], publishedAt: { lte: new Date() }, unpublishedAt: null, AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }] }, orderBy: { publishedAt: 'desc' }, take: 3, select: { id: true, title: true, publishedAt: true } }) : [],
+      enrollment ? this.svc.db.parentAnnouncement.findMany({ where: { schoolId: link.schoolId, yearId: enrollment.classroom.yearId, OR: [{ classId: null }, { classId: enrollment.classroomId }], publishedAt: { lte: new Date() }, unpublishedAt: null, AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }] }, orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }], take: 4, select: { id: true, title: true, publishedAt: true } }) : [],
     ]);
     const billed = charges?._sum.amount ?? 0;
     const paid = payments?._sum.amount ?? 0;
     const adjusted = adjustments?._sum.amount ?? 0;
     const attendance = enrollment && link.canReceiveAttendanceAlert ? await this.svc.db.$queryRaw<Array<{ date: string; status: string }>>`SELECT attendance->>'date' AS date, entry->>'status' AS status FROM "AcademicWorkspace" aw CROSS JOIN LATERAL jsonb_array_elements(COALESCE(aw.data->'attendance', '[]'::jsonb)) attendance CROSS JOIN LATERAL jsonb_array_elements(COALESCE(attendance->'entries', '[]'::jsonb)) entry WHERE aw."schoolId" = ${link.schoolId}::uuid AND aw."yearId" = ${enrollment.classroom.yearId}::uuid AND attendance->>'classId' = ${enrollment.classroomId} AND entry->>'studentId' = ${studentId} ORDER BY attendance->>'date' DESC, (attendance->>'revision')::int DESC LIMIT 1` : [];
-    return { child: { ...link.student, classroom: enrollment?.classroom ?? null }, results: { publishedCount: resultCount }, fees: link.canReceiveFinanceAlert ? { billed, paid, adjusted, balance: billed + adjusted - paid } : null, attendance: { latest: attendance[0] ?? null }, announcements, unreadNotificationCount: unread };
+    return { child: { ...link.student, classroom: enrollment?.classroom ?? null }, results: { publishedCount: resultCount }, fees: link.canReceiveFinanceAlert ? { billed, paid, adjusted, balance: billed + adjusted - paid } : null, attendance: { latest: attendance[0] ?? null }, announcements: announcements.slice(0, 3), hasMoreAnnouncements: announcements.length > 3, unreadNotificationCount: unread };
   }
 
   @Get('parent/children/:studentId/fees')
   async fees(@Req() req: Request, @Param('studentId') studentId: string, @Query() query: unknown) {
     const { link } = await this.child(req, studentId);
     if (!link.canReceiveFinanceAlert) throw new ForbiddenException('Fee access is unavailable.');
-    const q = parse(z.object({ yearId: uuid.optional(), chargeCursor: uuid.optional(), paymentCursor: uuid.optional(), adjustmentCursor: uuid.optional(), limit: z.coerce.number().int().min(1).max(50).default(25) }).strict(), query);
-    const where = { schoolId: link.schoolId, studentId, ...(q.yearId ? { yearId: q.yearId } : {}) };
+    const q = parse(z.object({ yearId: uuid.optional(), term: z.string().trim().min(1).max(80).optional(), chargeCursor: uuid.optional(), paymentCursor: uuid.optional(), adjustmentCursor: uuid.optional(), limit: z.coerce.number().int().min(1).max(50).default(25) }).strict(), query);
+    if (q.term && !q.yearId) throw new BadRequestException('Choose an academic year before filtering by term.');
+    let matchingTerms: string[] | undefined;
+    if (q.yearId) {
+      const enrollment = await this.svc.db.enrollment.findFirst({ where: { schoolId: link.schoolId, studentId, classroom: { yearId: q.yearId } }, select: { classroom: { select: { year: { select: { id: true, startsAt: true, endsAt: true, terms: true } } } } } });
+      if (!enrollment) throw new NotFoundException('Academic year unavailable.');
+      if (q.term) {
+        const configuredTerm = termsForYear(enrollment.classroom.year).find(item => item.key === q.term || item.name === q.term);
+        if (!configuredTerm && q.term !== 'Full year') throw new BadRequestException('Choose a configured term for this academic year.');
+        matchingTerms = configuredTerm ? [...new Set([configuredTerm.key, configuredTerm.name])] : ['Full year'];
+      }
+    }
+    const where = { schoolId: link.schoolId, studentId, ...(q.yearId ? { yearId: q.yearId } : {}), ...(matchingTerms ? { term: { in: matchingTerms } } : {}) };
     const [chargeTotals, paymentTotals, adjustmentTotals, charges, payments, adjustments] = await Promise.all([
       this.svc.db.studentCharge.aggregate({ where, _sum: { amount: true } }),
       this.svc.db.payment.aggregate({ where: { ...where, voidAt: null }, _sum: { amount: true } }),
@@ -575,13 +595,33 @@ export class ParentController {
     return { summary: { billed, paid, adjusted, balance: billed + adjusted - paid }, charges: charges.slice(0, q.limit), payments: payments.slice(0, q.limit), adjustments: adjustments.slice(0, q.limit), nextCursors: { charges: charges.length > q.limit ? charges[q.limit - 1].id : null, payments: payments.length > q.limit ? payments[q.limit - 1].id : null, adjustments: adjustments.length > q.limit ? adjustments[q.limit - 1].id : null } };
   }
 
+  @Get('parent/children/:studentId/fees/years')
+  async feeYears(@Req() req: Request, @Param('studentId') studentId: string, @Query() query: unknown) {
+    const { link } = await this.child(req, studentId);
+    if (!link.canReceiveFinanceAlert) throw new ForbiddenException('Fee access is unavailable.');
+    parse(z.object({}).strict(), query);
+    const enrollments = await this.svc.db.enrollment.findMany({
+      where: { schoolId: link.schoolId, studentId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { classroom: { select: { year: { select: { id: true, name: true, startsAt: true, endsAt: true, terms: true } } } } },
+    });
+    const seen = new Set<string>();
+    const items = enrollments.flatMap(({ classroom }) => {
+      const year = classroom.year;
+      if (seen.has(year.id)) return [];
+      seen.add(year.id);
+      return [{ id: year.id, name: year.name, terms: [...termsForYear(year), { key: 'Full year', name: 'Full year' }] }];
+    });
+    return { items };
+  }
+
   @Get('parent/children/:studentId/results')
   async results(@Req() req: Request, @Param('studentId') studentId: string, @Query() query: unknown) {
     const { link } = await this.child(req, studentId);
     if (!link.canReceiveReports) throw new ForbiddenException('Results are unavailable.');
     const q = parse(z.object({ cursor: uuid.optional(), limit: z.coerce.number().int().min(1).max(50).default(25) }).strict(), query);
-    const rows = await this.svc.db.reportAccessLink.findMany({ where: { schoolId: link.schoolId, studentId, guardianId: link.guardianId, revokedAt: null, expiresAt: { gt: new Date() } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: q.limit + 1, ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}), select: { id: true, reportCardId: true, createdAt: true } });
-    return { items: rows.slice(0, q.limit).map(row => ({ id: row.id, publishedAt: row.createdAt, assessmentId: row.reportCardId.split(':')[0] })), nextCursor: rows.length > q.limit ? rows[q.limit - 1].id : null };
+    const rows = await this.svc.db.parentResultPublication.findMany({ where: { schoolId: link.schoolId, studentId, withdrawnAt: null }, orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }], take: q.limit + 1, ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}), select: { id: true, reportCardId: true, yearId: true, classId: true, publishedAt: true } });
+    return { items: rows.slice(0, q.limit).map(row => ({ id: row.id, publishedAt: row.publishedAt, assessmentId: row.reportCardId.split(':')[0], yearId: row.yearId, classId: row.classId })), nextCursor: rows.length > q.limit ? rows[q.limit - 1].id : null };
   }
 
   @Get('parent/children/:studentId/results/:resultId')
@@ -589,15 +629,88 @@ export class ParentController {
     const { link } = await this.child(req, studentId);
     if (!link.canReceiveReports) throw new ForbiddenException('Results are unavailable.');
     parse(uuid, resultId);
-    const published = await this.svc.db.reportAccessLink.findFirst({ where: { id: resultId, schoolId: link.schoolId, studentId, guardianId: link.guardianId, revokedAt: null, expiresAt: { gt: new Date() } }, select: { reportCardId: true, createdAt: true } });
+    const published = await this.svc.db.parentResultPublication.findFirst({ where: { id: resultId, schoolId: link.schoolId, studentId, withdrawnAt: null }, select: { reportCardId: true, yearId: true, classId: true, publishedAt: true } });
     if (!published) throw new NotFoundException('Published result unavailable.');
-    const classId = published.reportCardId.split(':')[1];
-    const classroom = await this.svc.db.classroom.findFirst({ where: { id: classId, schoolId: link.schoolId }, select: { yearId: true, name: true, year: { select: { name: true } } } });
+    const classroom = await this.svc.db.classroom.findFirst({ where: { id: published.classId, schoolId: link.schoolId, yearId: published.yearId }, select: { yearId: true, name: true, year: { select: { name: true } } } });
     if (!classroom) throw new NotFoundException('Published result unavailable.');
     const rows = await this.svc.db.$queryRaw<Array<{ report: unknown }>>`SELECT item AS report FROM "AcademicWorkspace" aw CROSS JOIN LATERAL jsonb_array_elements(COALESCE(aw.data->'reports', '[]'::jsonb)) item WHERE aw."schoolId" = ${link.schoolId}::uuid AND aw."yearId" = ${classroom.yearId}::uuid AND item->>'id' = ${published.reportCardId} AND item->>'status' = 'approved' AND item->>'academicApproved' = 'true' LIMIT 1`;
     const report = rows[0]?.report as Record<string, unknown> | undefined;
     if (!report) throw new NotFoundException('Published result unavailable.');
-    return { id: resultId, publishedAt: published.createdAt, academicYear: classroom.year.name, className: classroom.name, period: report.period, results: report.results || [], noMarks: report.noMarks || [], summary: report.summary ?? null };
+    return { id: resultId, publishedAt: published.publishedAt, assessmentId: published.reportCardId.split(':')[0], academicYearId: published.yearId, academicYear: classroom.year.name, classId: published.classId, className: classroom.name, period: report.period, results: report.results || [], noMarks: report.noMarks || [], summary: report.summary ?? null };
+  }
+
+  @Get('parent/children/:studentId/results/:resultId/pdf')
+  async resultPdf(@Req() req: Request, @Param('studentId') studentId: string, @Param('resultId') resultId: string, @Query() query: unknown, @Res() res: Response) {
+    parse(z.object({}).strict(), query);
+    const { user, link } = await this.child(req, studentId);
+    const detail = await this.resultDetails(req, studentId, resultId);
+    await this.svc.rate(`parent-pdf:${user.id}`, 30, 3600);
+    const pdf = renderReportPdf({
+      school: link.student.school.name,
+      student: link.student.name,
+      admissionNumber: link.student.admissionNumber,
+      academicYear: detail.academicYear,
+      className: detail.className,
+      period: String(detail.period ?? ''),
+      publishedAt: detail.publishedAt.toISOString().slice(0, 10),
+      results: detail.results,
+      noMarks: detail.noMarks,
+      summary: detail.summary,
+    });
+    await this.svc.db.auditEvent.create({ data: { schoolId: link.schoolId, actorId: user.id, action: 'PARENT_REPORT_PDF_DOWNLOADED', target: resultId } });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="syncacademy-result-${resultId}.pdf"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(pdf);
+  }
+
+  @Get('parent/children/:studentId/academic-years')
+  async parentAcademicYears(@Req() req: Request, @Param('studentId') studentId: string) {
+    const { link } = await this.child(req, studentId);
+    if (!link.canReceiveReports) throw new ForbiddenException('Results are unavailable.');
+    const enrollments = await this.svc.db.enrollment.findMany({
+      where: { schoolId: link.schoolId, studentId, classroom: { year: { academicWorkspace: { isNot: null } } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { classroom: { select: { year: { select: { id: true, name: true, startsAt: true, endsAt: true } } } } },
+    });
+    const seen = new Set<string>();
+    const items = enrollments.flatMap(({ classroom }) => {
+      const year = classroom.year;
+      if (seen.has(year.id)) return [];
+      seen.add(year.id);
+      return [year];
+    });
+    return { items };
+  }
+
+  @Get('parent/children/:studentId/academic-years/:yearId/terms')
+  async parentTerms(@Req() req: Request, @Param('studentId') studentId: string, @Param('yearId') yearId: string) {
+    const { link } = await this.child(req, studentId);
+    if (!link.canReceiveReports) throw new ForbiddenException('Results are unavailable.');
+    parse(uuid, yearId);
+    const enrollment = await this.svc.db.enrollment.findFirst({
+      where: { schoolId: link.schoolId, studentId, classroom: { yearId, year: { academicWorkspace: { isNot: null } } } },
+      select: { classroom: { select: { year: { select: { id: true, name: true, startsAt: true, endsAt: true, terms: true } } } } },
+    });
+    if (!enrollment) throw new NotFoundException('Academic year unavailable.');
+    return { items: termsForYear(enrollment.classroom.year) };
+  }
+
+  @Get('parent/children/:studentId/academic-years/:yearId/terms/:termKey/assessments')
+  async parentAssessments(@Req() req: Request, @Param('studentId') studentId: string, @Param('yearId') yearId: string, @Param('termKey') termKey: string) {
+    const { link } = await this.child(req, studentId);
+    if (!link.canReceiveReports) throw new ForbiddenException('Results are unavailable.');
+    parse(uuid, yearId);
+    const key = parse(z.string().trim().min(1).max(80), termKey);
+    const [enrollment, workspace, publications] = await Promise.all([
+      this.svc.db.enrollment.findFirst({ where: { schoolId: link.schoolId, studentId, classroom: { yearId, year: { academicWorkspace: { isNot: null } } } }, select: { classroom: { select: { year: { select: { terms: true, startsAt: true, endsAt: true } } } } } }),
+      this.svc.db.academicWorkspace.findFirst({ where: { schoolId: link.schoolId, yearId }, select: { data: true } }),
+      this.svc.db.parentResultPublication.findMany({ where: { schoolId: link.schoolId, studentId, yearId, withdrawnAt: null }, select: { reportCardId: true } }),
+    ]);
+    if (!enrollment) throw new NotFoundException('Academic year unavailable.');
+    if (!termsForYear(enrollment.classroom.year).some(term => term.key === key)) throw new NotFoundException('Academic term unavailable.');
+    return parentAssessmentCatalog(workspace?.data, publications, studentId, yearId, key);
   }
 
   @Get('parent/children/:studentId/attendance')
@@ -733,6 +846,58 @@ export class ParentController {
     }
   }
 
+  @Post('parent/push/devices')
+  async registerPushDevice(@Req() req: Request, @Body() body: unknown) {
+    const { session, user } = await this.parent(req);
+    const b = parse(z.object({ installationId: installationIdInput, fid: pushFidInput, platform: z.enum(['android', 'ios']) }).strict(), body);
+    const fidHash = digest(b.fid);
+    const device = await this.svc.atomic(async tx => {
+      await tx.parentPushDevice.deleteMany({ where: { fidHash, installationId: { not: b.installationId } } });
+      const device = await tx.parentPushDevice.upsert({
+        where: { installationId: b.installationId },
+        create: { userId: user.id, sessionId: session.id, installationId: b.installationId, fidHash, fidEncrypted: encrypt(b.fid), platform: b.platform },
+        update: { userId: user.id, sessionId: session.id, fidHash, fidEncrypted: encrypt(b.fid), platform: b.platform, revokedAt: null, lastSeenAt: new Date() },
+        select: { id: true, enabled: true, sound: true, vibration: true },
+      });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'PARENT_PUSH_DEVICE_REGISTERED', target: device.id } });
+      return device;
+    });
+    return { registered: true, enabled: device.enabled, sound: device.sound, vibration: device.vibration };
+  }
+
+  @Post('parent/push/devices/unregister')
+  async unregisterPushDevice(@Req() req: Request, @Body() body: unknown) {
+    const { session, user } = await this.parent(req);
+    const b = parse(z.object({ installationId: installationIdInput }).strict(), body);
+    await this.svc.atomic(async tx => {
+      const changed = await tx.parentPushDevice.updateMany({ where: { installationId: b.installationId, userId: user.id, sessionId: session.id, revokedAt: null }, data: { revokedAt: new Date(), fidEncrypted: '' } });
+      if (changed.count) await tx.auditEvent.create({ data: { actorId: user.id, action: 'PARENT_PUSH_DEVICE_UNREGISTERED', target: b.installationId } });
+    });
+    return { unregistered: true };
+  }
+
+  @Get('parent/push/preferences')
+  async pushPreferences(@Req() req: Request, @Query() query: unknown) {
+    const { session, user } = await this.parent(req);
+    const q = parse(z.object({ installationId: installationIdInput }).strict(), query);
+    const device = await this.svc.db.parentPushDevice.findFirst({ where: { installationId: q.installationId, userId: user.id, sessionId: session.id, revokedAt: null }, select: { enabled: true, sound: true, vibration: true } });
+    if (!device) throw new NotFoundException('Push device unavailable.');
+    return device;
+  }
+
+  @Patch('parent/push/preferences')
+  async updatePushPreferences(@Req() req: Request, @Body() body: unknown) {
+    const { session, user } = await this.parent(req);
+    const b = parse(z.object({ installationId: installationIdInput, enabled: z.boolean(), sound: z.boolean(), vibration: z.boolean() }).strict(), body);
+    const changed = await this.svc.atomic(async tx => {
+      const changed = await tx.parentPushDevice.updateMany({ where: { installationId: b.installationId, userId: user.id, sessionId: session.id, revokedAt: null }, data: { enabled: b.enabled, sound: b.sound, vibration: b.vibration, lastSeenAt: new Date() } });
+      if (changed.count) await tx.auditEvent.create({ data: { actorId: user.id, action: 'PARENT_PUSH_PREFERENCES_UPDATED', target: b.installationId } });
+      return changed;
+    });
+    if (!changed.count) throw new NotFoundException('Push device unavailable.');
+    return { enabled: b.enabled, sound: b.sound, vibration: b.vibration };
+  }
+
   @Get('parent/notifications')
   async notifications(@Req() req: Request, @Query() query: unknown) {
     const { user } = await this.parent(req);
@@ -745,6 +910,37 @@ export class ParentController {
   async unreadCount(@Req() req: Request) {
     const { user } = await this.parent(req);
     return { count: await this.svc.db.parentNotification.count({ where: { userId: user.id, readAt: null, ...await this.notificationScope(user.id) } }) };
+  }
+
+  @Get('parent/notifications/:notificationId')
+  async notification(@Req() req: Request, @Param('notificationId') notificationId: string) {
+    const { user } = await this.parent(req);
+    parse(uuid, notificationId);
+    const item = await this.svc.db.parentNotification.findFirst({ where: { id: notificationId, userId: user.id, ...await this.notificationScope(user.id) }, select: { id: true, schoolId: true, studentId: true, kind: true, title: true, body: true, targetId: true, dedupeKey: true, createdAt: true, readAt: true } });
+    if (!item) throw new NotFoundException('Notification unavailable.');
+    if (item.kind === 'ANNOUNCEMENT') {
+      const source = await this.svc.db.parentAnnouncement.findFirst({ where: {
+        id: item.targetId || '', schoolId: item.schoolId,
+        publishedAt: { lte: new Date() }, unpublishedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        ...await this.announcementScope(user.id),
+      }, select: { id: true } });
+      if (!source) throw new NotFoundException('Notification unavailable.');
+    }
+    if (item.kind === 'RESULT' && item.studentId) {
+      const reportPermission = await this.svc.db.studentGuardian.findFirst({ where: {
+        schoolId: item.schoolId, studentId: item.studentId, active: true, canReceiveReports: true,
+        guardian: { userId: user.id },
+      }, select: { id: true } });
+      if (!reportPermission) throw new NotFoundException('Notification unavailable.');
+      const publication = await this.svc.db.parentResultPublication.findFirst({ where: {
+        schoolId: item.schoolId, studentId: item.studentId,
+        reportCardId: item.dedupeKey.split(':').slice(2, -1).join(':'), withdrawnAt: null,
+      }, select: { id: true } });
+      if (!publication) throw new NotFoundException('Notification unavailable.');
+    }
+    const { dedupeKey: _dedupeKey, ...visible } = item;
+    return visible;
   }
 
   @Patch('parent/notifications/:notificationId/read')

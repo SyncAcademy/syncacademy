@@ -1,5 +1,6 @@
 import { 
   BadRequestException, 
+  ConflictException,
   Body, 
   Controller, 
   ForbiddenException, 
@@ -9,9 +10,10 @@ import {
   Param, 
   Post, 
   Query, 
-  Req 
+  Req,
+  Res
 } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { Prisma, Role, CommunicationChannel } from '@prisma/client';
 import { z } from 'zod';
 import { PlatformService } from './platform.service';
@@ -19,6 +21,9 @@ import { CommunicationService } from './communication/communication.service';
 import { ReportAccessVerificationService } from './report-access-verification.service';
 import { digest, randomToken } from './security';
 import { config } from './config';
+import { renderReportPdf } from './report-pdf';
+import { enqueueParentPush } from './parent-push';
+import { buildParentResultEmail } from './communication/email/email-templates';
 
 const uuid = z.string().uuid();
 const tokenValidator = z.string().regex(/^[A-Za-z0-9_-]{32,64}$/, 'Invalid report link token format.');
@@ -47,6 +52,7 @@ const verifyPublicChallengeSchema = z.object({
 const revokeLinkSchema = z.object({
   reason: z.string().trim().min(3).max(300).default('Link revoked by school staff'),
 });
+const withdrawPublicationSchema = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
 
 const paging = {
   page: z.coerce.number().int().min(1).max(100000).default(1),
@@ -105,9 +111,13 @@ export class ReportAccessController {
       throw new BadRequestException('No approved reports found for this assessment and scope. Generate and approve reports first.');
     }
 
+    const school = await this.svc.db.school.findFirst({ where: { id: schoolId, active: true }, select: { name: true } });
+    if (!school) throw new BadRequestException('School not found.');
+
     const expiresAt = new Date(Date.now() + b.expiresDays * 86400000);
     const results: Array<{ studentName: string; guardianName: string; linkId: string; channel: string }> = [];
     const reportStudentIds = [...new Set(classReports.map(report => String(report.id).split(':')[2]).filter(Boolean))];
+    const publishedAt = new Date();
     const approvedClasses = new Set(classes.filter(classroom => {
       const submissions = (state?.submissions || []).filter((submission: any) => submission.assessmentId === b.assessmentId && submission.classId === classroom.id);
       return submissions.length > 0 && submissions.every((submission: any) => submission.assessmentProgress?.status === 'approved');
@@ -128,6 +138,12 @@ export class ReportAccessController {
         if (parts[0] !== b.assessmentId || parts[1] !== report.classId) continue;
 
         if (!approvedClasses.has(report.classId)) continue;
+
+        await tx.parentResultPublication.upsert({
+          where: { schoolId_reportCardId: { schoolId, reportCardId: report.id } },
+          create: { schoolId, studentId, yearId: b.yearId, classId: report.classId, reportCardId: report.id, publishedAt },
+          update: { studentId, yearId: b.yearId, classId: report.classId, publishedAt, withdrawnAt: null, withdrawnByUserId: null, withdrawalReason: null },
+        });
 
         const student = studentById.get(studentId);
 
@@ -176,29 +192,41 @@ export class ReportAccessController {
           // Format notification text in Swahili / English
           const messageText = `SyncAcademy: Taarifa ya maendeleo ya mwanafunzi ${student.name} (${className} - ${report.period || year.name}) ipo tayari. Bonyeza link kuona ripoti: ${reportUrl} (Inaisha siku ${b.expiresDays}).`;
 
+          const period = report.period || year.name;
+          const email = channel === 'EMAIL' ? buildParentResultEmail({
+            guardianName: guardian.name,
+            studentName: student.name,
+            schoolName: school.name,
+            className,
+            period,
+            reportUrl,
+            expiresDays: b.expiresDays,
+          }) : undefined;
           await this.comms.enqueueMessage(tx, {
             schoolId,
             guardianId: guardian.id,
             studentId,
             channel,
             recipient,
-            subject: `Ripoti ya Maendeleo - ${student.name}`,
-            body: messageText,
+            subject: email?.subject ?? `Ripoti ya Maendeleo - ${student.name}`,
+            body: email?.text ?? messageText,
+            ...(email ? { html: email.html } : {}),
             templateKey: channel === 'WHATSAPP' ? 'student_report_published' : undefined,
             templateParams: {
               student_name: student.name,
               class_name: className,
-              period: report.period || year.name,
+              period,
               report_url: reportUrl,
             },
           });
 
           if (guardian.userId) {
-            await tx.parentNotification.upsert({
+            const notification = await tx.parentNotification.upsert({
               where: { dedupeKey: `result:${schoolId}:${report.id}:${guardian.userId}` },
               create: { userId: guardian.userId, schoolId, studentId, kind: 'RESULT', title: 'New academic result', body: 'A published report is available in the parent app.', targetId: link.id, dedupeKey: `result:${schoolId}:${report.id}:${guardian.userId}` },
               update: { targetId: link.id, readAt: null },
             });
+            await enqueueParentPush(tx, notification);
           }
 
           results.push({
@@ -328,26 +356,47 @@ export class ReportAccessController {
     if (!link) throw new NotFoundException('Report access link not found.');
     if (link.revokedAt) throw new BadRequestException('This report link is already revoked.');
 
-    const updated = await this.svc.db.reportAccessLink.update({
-      where: { id: linkId },
-      data: {
-        revokedAt: new Date(),
-        revokedByUserId: user.id,
-        revokeReason: b.reason,
-        sessionTokenHash: null,
-      },
-    });
-
-    await this.svc.db.auditEvent.create({
-      data: {
-        schoolId,
-        actorId: user.id,
-        action: 'REPORT_ACCESS_LINK_REVOKED',
-        target: linkId,
-      },
+    const revokedAt = new Date();
+    const updated = await this.svc.atomic(async tx => {
+      const result = await tx.reportAccessLink.update({
+        where: { id: linkId },
+        data: { revokedAt, revokedByUserId: user.id, revokeReason: b.reason, sessionTokenHash: null },
+      });
+      await tx.auditEvent.create({
+        data: { schoolId, actorId: user.id, action: 'REPORT_ACCESS_LINK_REVOKED', target: linkId },
+      });
+      return result;
     });
 
     return { message: 'Report access link has been revoked.', revokedAt: updated.revokedAt };
+  }
+
+  @Post('schools/:schoolId/reports/publications/:publicationId/withdraw')
+  async withdrawResultPublication(
+    @Req() req: Request,
+    @Param('schoolId') schoolId: string,
+    @Param('publicationId') publicationId: string,
+    @Body() body: unknown,
+  ) {
+    const { user } = await this.svc.authorize(req, parse(uuid, schoolId), ['HEADMASTER', 'ACADEMIC']);
+    parse(uuid, publicationId);
+    if (!req.session.parentActionCsrf || req.get('x-csrf-token') !== req.session.parentActionCsrf) {
+      throw new ForbiddenException('CSRF token is required.');
+    }
+    const input = parse(withdrawPublicationSchema, body);
+    const publication = await this.svc.db.parentResultPublication.findFirst({ where: { id: publicationId, schoolId }, select: { id: true, withdrawnAt: true } });
+    if (!publication) throw new NotFoundException('Published result not found.');
+    if (publication.withdrawnAt) throw new ConflictException('This result publication is already withdrawn.');
+    const withdrawnAt = new Date();
+    await this.svc.atomic(async tx => {
+      const changed = await tx.parentResultPublication.updateMany({
+        where: { id: publicationId, schoolId, withdrawnAt: null },
+        data: { withdrawnAt, withdrawnByUserId: user.id, withdrawalReason: input.reason },
+      });
+      if (!changed.count) throw new ConflictException('This result publication has changed. Refresh and try again.');
+      await tx.auditEvent.create({ data: { schoolId, actorId: user.id, action: 'PARENT_RESULT_PUBLICATION_WITHDRAWN', target: publicationId } });
+    });
+    return { withdrawn: true, withdrawnAt };
   }
 
   /**
@@ -494,13 +543,16 @@ export class ReportAccessController {
   async downloadReportPdf(
     @Req() req: Request,
     @Param('token') token: string,
-    @Query('sessionToken') sessionTokenQuery?: string,
+    @Query() query: unknown,
+    @Res() res: Response,
   ) {
     parse(tokenValidator, token);
-    const sessionToken = sessionTokenQuery || (req.headers['x-report-session-token'] as string);
+    parse(z.object({}).strict(), query);
+    const sessionToken = req.get('x-report-session-token');
     if (!sessionToken) {
       throw new ForbiddenException('Active verified report session required for PDF download.');
     }
+    parse(tokenValidator, sessionToken);
 
     const tokenHash = digest(token);
     const sessionTokenHash = digest(sessionToken);
@@ -530,6 +582,7 @@ export class ReportAccessController {
     if (link.sessionTokenHash !== sessionTokenHash) {
       throw new ForbiddenException('Invalid or expired report viewing session. Please complete OTP verification.');
     }
+    await this.svc.rate(`guardian-report-pdf:${link.id}`, 30, 3600);
 
     const parts = link.reportCardId.split(':');
     const classId = parts[1];
@@ -548,7 +601,8 @@ export class ReportAccessController {
       reportCardData = reports.find(r => r.id === link.reportCardId);
     }
 
-    if (!reportCardData) {
+    const publication = await this.svc.db.parentResultPublication.findFirst({ where: { schoolId: link.schoolId, studentId: link.studentId, reportCardId: link.reportCardId, withdrawnAt: null }, select: { publishedAt: true } });
+    if (!reportCardData || reportCardData.status !== 'approved' || reportCardData.academicApproved !== true || !publication) {
       throw new NotFoundException('Report card not found.');
     }
 
@@ -561,14 +615,15 @@ export class ReportAccessController {
       },
     });
 
-    return {
-      status: 'VERIFIED',
-      school: link.school,
-      student: link.student,
-      academicYear: classroom?.year.name,
-      className: classroom?.name,
-      reportCard: reportCardData,
-      downloadedAt: new Date().toISOString(),
-    };
+    const pdf = renderReportPdf({ school: link.school.name, student: link.student.name,
+      admissionNumber: link.student.admissionNumber, academicYear: classroom?.year.name ?? '',
+      className: classroom?.name ?? '', period: String(reportCardData.period ?? ''),
+      publishedAt: publication.publishedAt.toISOString().slice(0, 10), results: reportCardData.results,
+      noMarks: reportCardData.noMarks, summary: reportCardData.summary });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="syncacademy-result.pdf"');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(pdf);
   }
 }

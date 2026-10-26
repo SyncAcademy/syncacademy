@@ -18,6 +18,7 @@ enum CommunicationChannel {
   SMS
   WHATSAPP
   EMAIL
+  PUSH
 }
 enum DeliveryStatus {
   PENDING
@@ -50,6 +51,7 @@ model User {
   guardians Guardian[]
   parentAccount ParentAccount?
   mobileSessions ParentMobileSession[]
+  pushDevices ParentPushDevice[]
   parentNotifications ParentNotification[]
   parentRecoveries ParentRecoveryChallenge[]
 }
@@ -686,6 +688,7 @@ model ParentMobileSession {
   revokedAt DateTime?
   createdAt DateTime @default(now())
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushDevices ParentPushDevice[]
   @@index([userId, revokedAt, expiresAt])
 }
 
@@ -725,6 +728,26 @@ model ParentNotification {
   @@index([userId, createdAt, id])
   @@index([userId, readAt])
   @@index([schoolId, studentId])
+}
+
+model ParentPushDevice {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  sessionId String @db.Uuid
+  installationId String @unique
+  fidHash String @unique
+  fidEncrypted String
+  platform String
+  enabled Boolean @default(true)
+  sound Boolean @default(true)
+  vibration Boolean @default(true)
+  lastSeenAt DateTime @default(now())
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session ParentMobileSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  @@index([userId, revokedAt, enabled])
+  @@index([sessionId, revokedAt])
 }
 
 model ParentAnnouncement {
@@ -871,6 +894,23 @@ model RosterConfirmation {
   @@unique([id, schoolId])
   @@index([schoolId, classroomId, status])
   @@index([schoolId, studentId])
+}
+
+model ParentResultPublication {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  studentId String @db.Uuid
+  yearId String @db.Uuid
+  classId String @db.Uuid
+  reportCardId String
+  publishedAt DateTime
+  source String @default("staff_report_link")
+  withdrawnAt DateTime?
+  withdrawnByUserId String? @db.Uuid
+  withdrawalReason String?
+  createdAt DateTime @default(now())
+  @@unique([schoolId, reportCardId])
+  @@index([schoolId, studentId, yearId, publishedAt, id])
 }
 
 model SubscriptionPlan {

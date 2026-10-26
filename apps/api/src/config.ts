@@ -11,6 +11,8 @@ const schema = z.object({
   APP_ORIGIN: z.string().url(),
   SESSION_SECRET: z.string().min(48),
   DATA_ENCRYPTION_KEY: z.string().regex(/^[a-f0-9]{64}$/i),
+  FIREBASE_PROJECT_ID: z.string().regex(/^[a-z0-9][a-z0-9-]{4,62}$/).optional(),
+  GOOGLE_APPLICATION_CREDENTIALS: z.string().min(1).optional(),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().min(1).default(3000),
   SMTP_HOST: z.string().min(1), SMTP_PORT: z.coerce.number().default(1025),
