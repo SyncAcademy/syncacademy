@@ -11,6 +11,7 @@
   "scripts": {
     "build": "npm run build --workspace=apps/api && npm run build --workspace=apps/web",
     "prisma:generate": "npm run prisma:generate --workspace=apps/api",
+    "prisma:migrate": "npm run migrate --workspace=apps/api",
     "test": "node --test apps/api/test/email-templates.test.cjs apps/api/test/platform-settings.test.cjs apps/api/test/communication-providers.test.cjs apps/api/test/phase2-guardian-communication.test.cjs apps/api/test/phase3-controlled-expansion.test.cjs",
     "test:all-workflows": "npm run test:registrar-workflow --workspace=apps/web && npm run test:academic-workflow --workspace=apps/web && npm run test:academic-years --workspace=apps/web && npm run test:bursar-workflow --workspace=apps/web && npm run test:head-oversight --workspace=apps/web && npm run test:class-teacher --workspace=apps/web && npm run test:school-setup --workspace=apps/web && npm run test:super-admin --workspace=apps/web && node apps/web/scripts/check-concurrent-drafts.mjs && node apps/web/scripts/check-school-sync.mjs && node apps/web/scripts/check-student-result-summary.mjs && node apps/web/scripts/check-teaching-responsibilities.mjs",
     "cap:sync:parent": "npm run cap:sync:parent --workspace=apps/web",
