@@ -54,7 +54,9 @@ async function main() {
     if (config.NODE_ENV === 'production' && (req.path.startsWith('/api/v1/auth/') || req.path.startsWith('/api/v1/parent/')) && !req.secure) {
       return res.status(403).json({ message: 'Secure transport is required.' });
     }
-    const mobileRequest = req.path.startsWith('/api/v1/parent/') && !req.get('Origin') && !req.get('Cookie') && (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.is('application/json'));
+    const origin = req.get('Origin');
+    const isCapacitorOrigin = origin && ['capacitor://localhost', 'http://localhost', 'https://localhost'].includes(origin);
+    const mobileRequest = req.path.startsWith('/api/v1/parent/') && (!origin || isCapacitorOrigin) && !req.get('Cookie') && (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.is('application/json'));
     const isExempt = req.path.startsWith('/api/v1/webhooks/') || req.path.startsWith('/api/v1/public/') || mobileRequest;
     const imageUpload = req.method === 'PUT' && /^\/api\/v1\/schools\/[0-9a-f-]{36}\/parent-announcements\/[0-9a-f-]{36}\/media$/.test(req.path) && !!req.is('image/png');
     if (!isExempt && !['GET','HEAD','OPTIONS'].includes(req.method) && (!isAllowedBrowserOrigin(req) || req.get('X-Requested-With') !== 'SyncAcademy' || (!req.is('application/json') && !imageUpload))) {

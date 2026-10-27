@@ -53,6 +53,13 @@ Thumbs.db
 # Local scratch directories
 scratch/
 
+# Native mobile build artifacts
+**/android/.gradle/
+**/android/app/build/
+**/android/build/
+**/ios/App/build/
+**/ios/App/Pods/
+
 # Agent governance instructions (maintained locally for agents, untracked in remote)
 AGENTS.md
 apps/**/AGENTS.md

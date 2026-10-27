@@ -10,6 +10,7 @@ export function isAllowedBrowserOrigin(req: Request, origin?: string): boolean {
   };
   origin ??= header('Origin');
   if (!origin) return false;
+  if (['capacitor://localhost', 'http://localhost', 'https://localhost'].includes(origin)) return true;
   if (origin === config.APP_ORIGIN) return true;
   if (config.NODE_ENV === 'production') return false;
   try {

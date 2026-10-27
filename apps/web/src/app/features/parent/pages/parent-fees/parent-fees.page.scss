@@ -1,0 +1,106 @@
+@use 'variables' as *;
+
+.fees-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fee-overview-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+
+  .fee-card {
+    background: #ffffff;
+    border: 1px solid #E5E7EB;
+    border-radius: $radius-md;
+    padding: 16px;
+
+    .card-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: $text-secondary;
+    }
+
+    .card-amount {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: $text-primary;
+      margin-top: 6px;
+    }
+
+    &.balance-alert .card-amount {
+      color: $error-red;
+    }
+
+    &.paid-success .card-amount {
+      color: $success-green;
+    }
+  }
+}
+
+.fee-transactions-section {
+  background: #ffffff;
+  border: 1px solid #E5E7EB;
+  border-radius: $radius-lg;
+  padding: 18px;
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 14px;
+    color: $text-primary;
+  }
+
+  .transaction-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid #F3F4F6;
+    }
+
+    th {
+      font-weight: 600;
+      color: $text-secondary;
+      background: #F9FAFB;
+    }
+
+    .num-col {
+      text-align: right;
+      font-weight: 600;
+    }
+
+    .type-pill {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+
+      &.charge {
+        background-color: #FEF2F2;
+        color: $error-red;
+      }
+      &.payment {
+        background-color: $success-green-bg;
+        color: $success-green;
+      }
+      &.adjustment {
+        background-color: #EFF6FF;
+        color: #2563EB;
+      }
+    }
+  }
+
+  .empty-tx {
+    text-align: center;
+    padding: 32px 12px;
+    color: $text-secondary;
+    font-size: 0.875rem;
+  }
+}

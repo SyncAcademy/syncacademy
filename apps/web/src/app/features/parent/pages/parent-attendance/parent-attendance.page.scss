@@ -1,0 +1,90 @@
+@use 'variables' as *;
+
+.attendance-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.attendance-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+
+  .stat-card {
+    background: #ffffff;
+    border: 1px solid #E5E7EB;
+    border-radius: $radius-md;
+    padding: 14px;
+    text-align: center;
+
+    .label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: $text-secondary;
+      text-transform: uppercase;
+    }
+
+    .value {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-top: 4px;
+    }
+
+    &.present .value { color: $success-green; }
+    &.absent .value { color: $error-red; }
+    &.late .value { color: $primary-orange; }
+  }
+}
+
+.records-card {
+  background: #ffffff;
+  border: 1px solid #E5E7EB;
+  border-radius: $radius-lg;
+  padding: 18px;
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 14px;
+    color: $text-primary;
+  }
+
+  .attendance-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid #F3F4F6;
+    }
+
+    th {
+      font-weight: 600;
+      color: $text-secondary;
+      background: #F9FAFB;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+
+      &.PRESENT { background-color: $success-green-bg; color: $success-green; }
+      &.ABSENT { background-color: #FEF2F2; color: $error-red; }
+      &.LATE { background-color: $primary-orange-light; color: $primary-orange; }
+      &.EXCUSED { background-color: #EFF6FF; color: #2563EB; }
+    }
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 36px 12px;
+    color: $text-secondary;
+    font-size: 0.875rem;
+  }
+}

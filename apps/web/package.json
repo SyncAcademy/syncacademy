@@ -19,7 +19,10 @@
     "test:super-admin": "node scripts/check-super-admin.mjs",
     "test:platform-admin-auth": "node scripts/check-platform-admin-auth.mjs",
     "test:preloader": "node scripts/check-preloader.mjs",
-    "test:monitoring": "node scripts/check-monitoring-browser.mjs"
+    "test:monitoring": "node scripts/check-monitoring-browser.mjs",
+    "cap": "cap",
+    "cap:sync:parent": "CAP_TARGET=parent cap sync",
+    "cap:sync:teacher": "CAP_TARGET=teacher cap sync"
   },
   "dependencies": {
     "@angular/animations": "20.3.32",
@@ -30,6 +33,15 @@
     "@angular/platform-browser": "20.3.32",
     "@angular/platform-browser-dynamic": "20.3.32",
     "@angular/router": "20.3.32",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
+    "@capacitor/keyboard": "^8.0.6",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/push-notifications": "^8.1.3",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4",
     "@ionic/angular": "^8.0.0",
     "exceljs": "4.4.0",
     "ionicons": "^7.2.1",
@@ -42,6 +54,7 @@
     "@angular-devkit/build-angular": "20.3.37",
     "@angular/cli": "20.3.37",
     "@angular/compiler-cli": "20.3.32",
+    "@capacitor/cli": "^8.5.3",
     "typescript": "5.9.3"
   }
 }

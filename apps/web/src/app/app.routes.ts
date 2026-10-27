@@ -1,14 +1,16 @@
 import { Routes } from '@angular/router';
 import { authGuard } from '@core/guards/auth.guard';
+import { rootAppGuard } from '@core/guards/root-app.guard';
 const auth=()=>import('./features/live/auth.page').then(m=>m.LiveAuthPage);
 export const routes:Routes=[
- {path:'',pathMatch:'full',loadComponent:()=>import('./features/landing/landing.page').then(m=>m.LandingPage)},
+ {path:'',pathMatch:'full',canActivate:[rootAppGuard],loadComponent:()=>import('./features/landing/landing.page').then(m=>m.LandingPage)},
  {path:'faq',loadComponent:()=>import('./features/faq/faq.page').then(m=>m.FaqPage)},
  {path:'request-demo',loadComponent:()=>import('./features/landing/demo-request.page').then(m=>m.DemoRequestPage)},
  {path:'privacy',loadComponent:()=>import('./features/legal/legal.page').then(m=>m.LegalPage),data:{document:'privacy'}},
  {path:'terms',loadComponent:()=>import('./features/legal/legal.page').then(m=>m.LegalPage),data:{document:'terms'}},
  {path:'r/:token',loadComponent:()=>import('./features/public/report-viewer.page').then(m=>m.ReportViewerPage)},
  {path:'parent/activate',loadComponent:()=>import('./features/public/parent-activation.page').then(m=>m.ParentActivationPage)},
+ {path:'parent',loadChildren:()=>import('./features/parent/parent.routes').then(m=>m.PARENT_ROUTES)},
  {path:'auth/login',loadComponent:()=>import('./features/auth/pages/login/login.page').then(m=>m.LoginPage)},
  {path:'auth/sign-in/:role',loadComponent:()=>import('./features/auth/pages/login/login.page').then(m=>m.LoginPage)},
  {path:'platform-access/login',loadComponent:()=>import('./features/platform-access/platform-admin-login.page').then(m=>m.PlatformAdminLoginPage)},

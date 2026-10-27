@@ -1,0 +1,126 @@
+@use 'variables' as *;
+
+.parent-login-container {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background-color: $body-bg;
+}
+
+.login-card {
+  width: min(100%, 420px);
+  background: #ffffff;
+  border: 1px solid #E5E7EB;
+  border-radius: $radius-lg;
+  padding: 32px 24px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+
+  .header-section {
+    text-align: center;
+    margin-bottom: 24px;
+
+    .brand-title {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: $text-primary;
+      margin: 8px 0 4px;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      color: $text-secondary;
+      font-size: 0.875rem;
+      margin: 0;
+    }
+  }
+
+  .alert-error {
+    background-color: #FEF2F2;
+    border: 1px solid #FCA5A5;
+    color: $error-red;
+    padding: 10px 14px;
+    border-radius: $radius-md;
+    font-size: 0.875rem;
+    margin-bottom: 18px;
+    line-height: 1.4;
+  }
+
+  .form-group {
+    margin-bottom: 16px;
+
+    label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: $text-primary;
+      margin-bottom: 6px;
+    }
+
+    input {
+      width: 100%;
+      height: 42px;
+      padding: 0 14px;
+      border-radius: $radius-md;
+      border: 1px solid $input-border;
+      background: #ffffff;
+      color: $text-primary;
+      font-size: 0.9375rem;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.15s ease;
+
+      &:focus {
+        border-color: $primary-orange;
+        box-shadow: 0 0 0 3px rgba(232, 126, 36, 0.15);
+      }
+    }
+  }
+
+  .submit-btn {
+    width: 100%;
+    height: 44px;
+    background-color: $primary-orange;
+    color: #ffffff;
+    border: none;
+    border-radius: $radius-md;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background-color 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background-color: $primary-orange-hover;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  .footer-links {
+    margin-top: 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-size: 0.8125rem;
+
+    a {
+      color: $primary-orange;
+      text-decoration: none;
+      font-weight: 600;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+
+    .divider {
+      color: #9CA3AF;
+      font-size: 0.75rem;
+    }
+  }
+}
