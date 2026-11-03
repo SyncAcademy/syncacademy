@@ -8,7 +8,32 @@ type Form = 'contact' | 'demo';
 
 @Injectable()
 export class PublicFormProtectionService {
+  private readonly readBuckets = new Map<string, { count: number; expiresAt: number }>();
   constructor(private readonly db: Database) {}
+
+  checkPublicReadRate(ip: string, scope = 'public-branding', max = 120, windowSeconds = 60): void {
+    const now = Date.now();
+    if (this.readBuckets.size >= 4096) {
+      for (const [bucketKey, entry] of this.readBuckets.entries()) {
+        if (entry.expiresAt <= now) this.readBuckets.delete(bucketKey);
+      }
+      if (this.readBuckets.size >= 4096) {
+        const oldest = this.readBuckets.keys().next().value;
+        if (oldest) this.readBuckets.delete(oldest);
+      }
+    }
+    const key = digest(`${scope}:${ip || 'unknown'}`);
+    const existing = this.readBuckets.get(key);
+    if (!existing || existing.expiresAt <= now) {
+      this.readBuckets.set(key, { count: 1, expiresAt: now + windowSeconds * 1000 });
+      return;
+    }
+    existing.count += 1;
+    if (existing.count > max) {
+      const retryAfter = Math.max(1, Math.ceil((existing.expiresAt - now) / 1000));
+      throw new HttpException({ message: 'Too many requests. Please try again later.', retryAfter }, 429);
+    }
+  }
 
   async submit<T>(form: Form, email: string, ip: string, work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     const emailHash = digest('public-form-email:' + email.toLowerCase());

@@ -1,0 +1,157 @@
+{
+  "description": "Shared secondary sidebar surface vectors. Backend and frontend resolvers must both match these values after alpha compositing.",
+  "vectors": [
+    {
+      "secondary": "#1E293B",
+      "valid": true,
+      "tone": "dark",
+      "mutedForeground": "#E2E8F0",
+      "compositedSurface": "#303A4B",
+      "compositedHover": "#394353"
+    },
+    {
+      "secondary": "#0F172A",
+      "valid": true,
+      "tone": "dark",
+      "mutedForeground": "#E2E8F0",
+      "compositedSurface": "#222A3B",
+      "compositedHover": "#2C3344"
+    },
+    {
+      "secondary": "#334155",
+      "valid": true,
+      "tone": "dark",
+      "mutedForeground": "#E2E8F0",
+      "compositedSurface": "#435063",
+      "compositedHover": "#4B5869"
+    },
+    {
+      "secondary": "#475569",
+      "valid": true,
+      "tone": "dark",
+      "mutedForeground": "#E2E8F0",
+      "compositedSurface": "#566375",
+      "compositedHover": "#5D697B"
+    },
+    {
+      "secondary": "#636363",
+      "valid": true,
+      "tone": "dark",
+      "mutedForeground": "#FFFFFF",
+      "compositedSurface": "#6F6F6F",
+      "compositedHover": "#767676"
+    },
+    {
+      "secondary": "#646464",
+      "valid": false,
+      "tone": "dark",
+      "mutedForeground": "#FFFFFF",
+      "compositedSurface": "#707070",
+      "compositedHover": "#777777"
+    },
+    {
+      "secondary": "#6B6B6B",
+      "valid": false,
+      "tone": "dark",
+      "mutedForeground": "#FFFFFF",
+      "compositedSurface": "#777777",
+      "compositedHover": "#7D7D7D"
+    },
+    {
+      "secondary": "#757575",
+      "valid": false,
+      "tone": "dark",
+      "mutedForeground": "#FFFFFF",
+      "compositedSurface": "#808080",
+      "compositedHover": "#868686"
+    },
+    {
+      "secondary": "#7A7A7A",
+      "valid": false,
+      "tone": "dark",
+      "mutedForeground": "#FFFFFF",
+      "compositedSurface": "#858585",
+      "compositedHover": "#8A8A8A"
+    },
+    {
+      "secondary": "#808080",
+      "valid": false,
+      "tone": "dark",
+      "mutedForeground": "#FFFFFF",
+      "compositedSurface": "#8A8A8A",
+      "compositedHover": "#8F8F8F"
+    },
+    {
+      "secondary": "#F8FAFC",
+      "valid": true,
+      "tone": "light",
+      "mutedForeground": "#475569",
+      "compositedSurface": "#EAECEF",
+      "compositedHover": "#E3E6E9"
+    },
+    {
+      "secondary": "#F1F5F9",
+      "valid": true,
+      "tone": "light",
+      "mutedForeground": "#475569",
+      "compositedSurface": "#E3E8ED",
+      "compositedHover": "#DDE1E6"
+    },
+    {
+      "secondary": "#E2E8F0",
+      "valid": false,
+      "tone": "dark",
+      "mutedForeground": "#FFFFFF",
+      "compositedSurface": "#E4EAF1",
+      "compositedHover": "#E5EBF2"
+    },
+    {
+      "secondary": "#CBD5E1",
+      "valid": false,
+      "tone": "dark",
+      "mutedForeground": "#FFFFFF",
+      "compositedSurface": "#CFD8E3",
+      "compositedHover": "#D1DAE5"
+    },
+    {
+      "secondary": "#94A3B8",
+      "valid": false,
+      "tone": "dark",
+      "mutedForeground": "#FFFFFF",
+      "compositedSurface": "#9DAABE",
+      "compositedHover": "#A1AEC1"
+    },
+    {
+      "secondary": "#B45309",
+      "valid": false,
+      "tone": "dark",
+      "mutedForeground": "#FFFFFF",
+      "compositedSurface": "#BA611D",
+      "compositedHover": "#BD6827"
+    },
+    {
+      "secondary": "#1E3A8A",
+      "valid": true,
+      "tone": "dark",
+      "mutedForeground": "#E2E8F0",
+      "compositedSurface": "#304A93",
+      "compositedHover": "#395298"
+    },
+    {
+      "secondary": "#FFFFFF",
+      "valid": true,
+      "tone": "light",
+      "mutedForeground": "#475569",
+      "compositedSurface": "#F1F1F2",
+      "compositedHover": "#E9EAEC"
+    },
+    {
+      "secondary": "#000000",
+      "valid": true,
+      "tone": "dark",
+      "mutedForeground": "#E2E8F0",
+      "compositedSurface": "#141414",
+      "compositedHover": "#1F1F1F"
+    }
+  ]
+}

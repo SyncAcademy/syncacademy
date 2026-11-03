@@ -7,16 +7,25 @@
       aria-label="SyncAcademy — go to landing page"
       (click)="$event.preventDefault(); navigateTo('/')"
      queryParamsHandling="preserve">
-      <div class="sidebar__logo-icon">
-        <svg
-          viewBox="0 0 24 24"
-          fill="white"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z"
+      <div class="sidebar__logo-icon" [class.sidebar__logo-icon--custom]="branding.activeLogoUrl() && !logoFailed()">
+        @if (branding.activeLogoUrl() && !logoFailed()) {
+          <img
+            class="sidebar__logo-img"
+            [src]="branding.activeLogoUrl()!"
+            [alt]="selectedCampus() + ' logo'"
+            (error)="logoFailed.set(true)"
           />
-        </svg>
+        } @else {
+          <svg
+            viewBox="0 0 24 24"
+            fill="white"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z"
+            />
+          </svg>
+        }
       </div>
       <span class="sidebar__logo-text">
         <span class="sidebar__logo-sync">Sync</span>
@@ -47,6 +56,9 @@
         <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
       </svg>
     </div>
+    @if (branding.activeWelcomeMessage()) {
+      <p class="sidebar__welcome" aria-label="School welcome message">{{ branding.activeWelcomeMessage() }}</p>
+    }
 
     <!-- Navigation Sections -->
     <div class="sidebar__nav">

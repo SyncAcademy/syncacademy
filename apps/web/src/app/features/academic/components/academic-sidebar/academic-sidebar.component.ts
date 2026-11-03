@@ -1,6 +1,7 @@
-import { inject } from '@angular/core';
+import { effect, inject } from '@angular/core';
 import { AuthService } from '../../../../core/services/auth.service';
 import { SchoolApiService } from '../../../../core/services/school-api.service';
+import { SchoolBrandingService } from '../../../../core/services/school-branding.service';
 import { Component, signal } from '@angular/core';
 import { NgFor } from '@angular/common';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
@@ -14,6 +15,8 @@ import { SidebarResizeHandleComponent } from '../../../../shared/components/side
 })
 export class AcademicSidebarComponent {
   selectedCampus = () => this.api.schoolName();
+  readonly branding = inject(SchoolBrandingService);
+  readonly logoFailed = signal(false);
   navSections = [
     { label: 'DASHBOARD', items: [{ title: 'Overview', route: '/academic/dashboard', icon: 'overview' }] },
     { label: 'ACADEMIC WORK', items: [
@@ -37,7 +40,12 @@ export class AcademicSidebarComponent {
     { label: 'COMMUNICATION', items: [{ title: 'Announcements', route: '/academic/announcements', icon: 'communication' }] },
     { label: 'SETTINGS', items: [{ title: 'Academic Years & Terms', route: '/academic/years', icon: 'calendar' }, { title: 'Academic Settings', route: '/academic/settings', icon: 'settings' }] },
   ];
-  constructor(private router:Router,private menuController:MenuController) {}
+  constructor(private router:Router,private menuController:MenuController) {
+    effect(() => {
+      this.branding.activeLogoUrl();
+      this.logoFailed.set(false);
+    });
+  }
   navigateTo(route: string): void { void this.router.navigate([route],{queryParamsHandling:'preserve'}).then(() => this.menuController.close('academic-menu')); }
   readonly auth=inject(AuthService); readonly api=inject(SchoolApiService); async logout():Promise<void>{try{await this.auth.logout();this.navigateTo('/auth/login');}catch(e){this.api.error.set(this.auth.error(e));}}
 }

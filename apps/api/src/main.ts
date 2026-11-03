@@ -58,7 +58,10 @@ async function main() {
     const isCapacitorOrigin = origin && ['capacitor://localhost', 'http://localhost', 'https://localhost'].includes(origin);
     const mobileRequest = req.path.startsWith('/api/v1/parent/') && (!origin || isCapacitorOrigin) && !req.get('Cookie') && (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.is('application/json'));
     const isExempt = req.path.startsWith('/api/v1/webhooks/') || req.path.startsWith('/api/v1/public/') || mobileRequest;
-    const imageUpload = req.method === 'PUT' && /^\/api\/v1\/schools\/[0-9a-f-]{36}\/parent-announcements\/[0-9a-f-]{36}\/media$/.test(req.path) && !!req.is('image/png');
+    const announcementMediaUpload = req.method === 'PUT' && /^\/api\/v1\/schools\/[0-9a-f-]{36}\/parent-announcements\/[0-9a-f-]{36}\/media$/.test(req.path) && !!req.is('image/png');
+    const schoolLogoAction = (req.method === 'PUT' || req.method === 'DELETE') && /^\/api\/v1\/schools\/[0-9a-f-]{36}\/branding\/logo$/.test(req.path);
+    const themeLifecycleAction = req.method === 'POST' && /^\/api\/v1\/schools\/[0-9a-f-]{36}\/(?:theme|branding)\/(?:publish|rollback|reset)$/.test(req.path);
+    const imageUpload = announcementMediaUpload || schoolLogoAction || themeLifecycleAction;
     if (!isExempt && !['GET','HEAD','OPTIONS'].includes(req.method) && (!isAllowedBrowserOrigin(req) || req.get('X-Requested-With') !== 'SyncAcademy' || (!req.is('application/json') && !imageUpload))) {
       return res.status(403).json({ message: 'Request origin or content type is not allowed.' });
     }
@@ -66,6 +69,13 @@ async function main() {
   });
   app.use('/api/v1/schools/:schoolId/registry/imports/preview', express.json({ limit: '8mb' }));
   app.use('/api/v1/schools/:schoolId/parent-announcements/:announcementId/media', express.raw({ type: 'image/png', limit: '5mb' }));
+  const logoRawUploadParser = express.raw({ type: () => true, limit: '2mb' });
+  app.use('/api/v1/schools/:schoolId/branding/logo', (req: Request, res: Response, next: NextFunction) => {
+    if (req.method === 'PUT') {
+      return logoRawUploadParser(req, res, next);
+    }
+    return next();
+  });
   app.use(express.json({
     limit: '32kb',
     verify: (req, _res, buffer) => {

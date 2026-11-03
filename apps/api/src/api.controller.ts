@@ -116,7 +116,14 @@ export class ApiController {
       if (!lead || lead.status !== 'won' || lead.convertedSchoolId) throw new ConflictException('Only an unconverted won lead can become a school.');
       if (await tx.school.findUnique({ where: { code: b.code } })) throw new ConflictException('School code is already in use.');
       if (await tx.school.findFirst({ where: { name: { equals: lead.schoolName, mode: 'insensitive' }, region: { equals: lead.region || lead.location, mode: 'insensitive' } } })) throw new ConflictException('A school with this name and region already exists. Review the school directory before converting.');
-      const school = await tx.school.create({ data: { name: lead.schoolName, code: b.code, region: lead.region || lead.location, schoolType: lead.schoolType || null, address: lead.location, website: lead.schoolWebsite || null, phone: lead.contactPhone, email: lead.contactEmail } });
+      const {
+        logoStorageKey: _logoStorageKey,
+        draftTheme: _draftTheme,
+        previousPublishedTheme: _previousPublishedTheme,
+        publishedTheme: _publishedTheme,
+        themeVersion: _themeVersion,
+        ...school
+      } = await tx.school.create({ data: { name: lead.schoolName, code: b.code, region: lead.region || lead.location, schoolType: lead.schoolType || null, address: lead.location, website: lead.schoolWebsite || null, phone: lead.contactPhone, email: lead.contactEmail } });
       const invitation = await this.svc.createInvitation(tx, actor.id, school.id, { name: lead.headmasterName || lead.contactName, email: lead.headmasterEmail || lead.contactEmail, role: 'HEADMASTER', expiresInMinutes: b.expiresInMinutes, welcomeSchool: true });
       await tx.platformLead.update({ where: { id: leadId }, data: { convertedSchoolId: school.id } });
       await tx.platformLeadActivity.create({ data: { leadId, actorId: actor.id, kind: 'converted', note: `School ${school.code} created` } });
@@ -247,14 +254,29 @@ export class ApiController {
     await this.svc.administrator(req);
     const q = parse(z.object({ page: listPage, pageSize: listSize, q: z.string().trim().max(200).default(''), status: z.enum(['active', 'suspended']).optional() }).strict(), query);
     const where: Prisma.SchoolWhereInput = { ...(q.status ? { active: q.status === 'active' } : {}), ...(q.q ? { OR: [{ name: { contains: q.q, mode: 'insensitive' } }, { code: { contains: q.q, mode: 'insensitive' } }, { region: { contains: q.q, mode: 'insensitive' } }, { email: { contains: q.q, mode: 'insensitive' } }, { phone: { contains: q.q, mode: 'insensitive' } }] } : {}) };
-    const [items, total] = await this.svc.db.$transaction([this.svc.db.school.findMany({ where, skip: (q.page - 1) * q.pageSize, take: q.pageSize, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], include: { _count: { select: { memberships: {where:{role:{notIn:['STUDENT','PARENT']}}}, students: true } } } }), this.svc.db.school.count({ where })]);
+    const [rawItems, total] = await this.svc.db.$transaction([this.svc.db.school.findMany({ where, skip: (q.page - 1) * q.pageSize, take: q.pageSize, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], include: { _count: { select: { memberships: {where:{role:{notIn:['STUDENT','PARENT']}}}, students: true } } } }), this.svc.db.school.count({ where })]);
+    const items = rawItems.map(({
+      logoStorageKey: _logoStorageKey,
+      draftTheme: _draftTheme,
+      previousPublishedTheme: _previousPublishedTheme,
+      publishedTheme: _publishedTheme,
+      themeVersion: _themeVersion,
+      ...item
+    }) => item);
     return { items, total, page: q.page, pageSize: q.pageSize };
   }
   @Post('schools') async createSchool(@Req() req: Request, @Body() body: unknown) {
     const actor = await this.svc.administrator(req);
     const b = parse(z.object({ name, code: z.string().trim().regex(/^[A-Za-z0-9-]{2,30}$/).transform(v => v.toUpperCase()), region: name, headmasterName: name, headmasterEmail: email, headmasterExpiresInMinutes: invitationExpiry.default(2880) }).strict(), body);
     return this.svc.idempotent(actor.id + ':school', key(req), b, async tx => {
-      const school = await tx.school.create({ data: { name: b.name, code: b.code, region: b.region } });
+      const {
+        logoStorageKey: _logoStorageKey,
+        draftTheme: _draftTheme,
+        previousPublishedTheme: _previousPublishedTheme,
+        publishedTheme: _publishedTheme,
+        themeVersion: _themeVersion,
+        ...school
+      } = await tx.school.create({ data: { name: b.name, code: b.code, region: b.region } });
       const invitation = await this.svc.createInvitation(tx, actor.id, school.id, { name: b.headmasterName, email: b.headmasterEmail, role: 'HEADMASTER', expiresInMinutes: b.headmasterExpiresInMinutes });
       await tx.auditEvent.create({ data: { actorId: actor.id, schoolId: school.id, action: 'SCHOOL_CREATED', target: school.id } });
       return { school, invitation };
@@ -263,7 +285,14 @@ export class ApiController {
   @Patch('schools/:id') async schoolStatus(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
     const actor = await this.svc.administrator(req); schoolId(id); const b = parse(z.object({ active: z.boolean(), reason: z.string().trim().min(5).max(500) }).strict(), body);
     return this.svc.atomic(async tx => {
-      const school = await tx.school.update({ where: { id }, data: { active: b.active } });
+      const {
+        logoStorageKey: _logoStorageKey,
+        draftTheme: _draftTheme,
+        previousPublishedTheme: _previousPublishedTheme,
+        publishedTheme: _publishedTheme,
+        themeVersion: _themeVersion,
+        ...school
+      } = await tx.school.update({ where: { id }, data: { active: b.active } });
       await tx.auditEvent.create({ data: { actorId: actor.id, schoolId: id, action: b.active ? 'SCHOOL_REACTIVATED' : 'SCHOOL_SUSPENDED', target: id + ': ' + b.reason } }); return school;
     });
   }
@@ -314,7 +343,7 @@ export class ApiController {
     })) }));
     const registryAdmissions = registrar ? await this.svc.db.admission.findMany({ where: { schoolId: id }, select: { id: true, yearId: true, status: true } }) : [];
     const registryIssues = registrar || academic ? await this.svc.db.rosterIssue.findMany({ where: { schoolId: id, status: 'open' }, select: { id: true, assignment: { select: { classroom: { select: { yearId: true } } } } } }) : [];
-    const auditEvents = staffManager ? await this.svc.db.auditEvent.findMany({ where: { schoolId: id }, orderBy: { createdAt: 'desc' }, take: 100 }) : [];
+    const auditEvents = staffManager ? await this.svc.db.auditEvent.findMany({ where: { schoolId: id, ...(user.platformAdmin ? {} : { action: { notIn: ['SCHOOL_SLUG_ASSIGNED', 'SCHOOL_SLUG_CHANGED'] } }) }, orderBy: { createdAt: 'desc' }, take: 100 }) : [];
     const auditActorIds = [...new Set(auditEvents.flatMap(event => event.actorId ? [event.actorId] : []))];
     const [auditActors, auditMemberships] = auditActorIds.length
       ? await Promise.all([
@@ -658,9 +687,8 @@ export class ApiController {
       periodDays: z.coerce.number().int().refine(value => [7, 30, 90, 365].includes(value)).default(30),
       schoolId: uuid.optional(),
     }).strict(), query);
-    if (q.schoolId) await this.svc.authorize(req, q.schoolId, managers);
-    else await this.svc.administrator(req);
-    return this.auditLog.summary(q.periodDays, q.schoolId);
+    const actor = q.schoolId ? (await this.svc.authorize(req, q.schoolId, managers)).user : await this.svc.administrator(req);
+    return this.auditLog.summary(q.periodDays, q.schoolId, actor.platformAdmin);
   }
   @Get('audit/filter-options') async auditFilterOptions(@Req() req: Request, @Query() query: unknown) {
     await this.svc.administrator(req);
@@ -673,7 +701,7 @@ export class ApiController {
   @Get('audit/export') async exportAudit(@Req() req: Request, @Query() query: unknown, @Res() res: Response) {
     const q = parse(auditQuerySchema, query);
     const actor = q.schoolId ? (await this.svc.authorize(req, q.schoolId, managers)).user : await this.svc.administrator(req);
-    const csv = await this.auditLog.export(q, actor.id);
+    const csv = await this.auditLog.export({ ...q, includePlatformSlugEvents: actor.platformAdmin }, actor.id);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="platform-audit.csv"');
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -689,17 +717,16 @@ export class ApiController {
     const q = parse(z.object({ schoolId: uuid.optional() }).strict(), query);
     const eventSource = parse(z.enum(['AUDIT', 'SECURITY']), source) as AuditSource;
     const id = parse(uuid, eventId);
-    if (q.schoolId) await this.svc.authorize(req, q.schoolId, managers);
-    else await this.svc.administrator(req);
-    return this.auditLog.detail(eventSource, id, q.schoolId);
+    const actor = q.schoolId ? (await this.svc.authorize(req, q.schoolId, managers)).user : await this.svc.administrator(req);
+    return this.auditLog.detail(eventSource, id, q.schoolId, actor.platformAdmin);
   }
   @Get('audit') async audit(@Req() req: Request, @Query() query: unknown) {
     const q = parse(auditQuerySchema, query);
-    if (q.schoolId) await this.svc.authorize(req, q.schoolId, managers);
-    else await this.svc.administrator(req);
+    const actor = q.schoolId ? (await this.svc.authorize(req, q.schoolId, managers)).user : await this.svc.administrator(req);
     return this.auditLog.list({
       ...q,
       category: q.category as AuditCategory | undefined,
+      includePlatformSlugEvents: actor.platformAdmin,
     });
   }
   @Post('contact') async contactForm(@Req() req: Request, @Body() body: unknown) {

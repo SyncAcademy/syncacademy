@@ -46,6 +46,7 @@ const schema = z.object({
   ANNOUNCEMENT_MEDIA_SECRET_KEY: z.preprocess(value => value === '' ? undefined : value, z.string().min(1).optional()),
   ANNOUNCEMENT_MEDIA_PROVIDER: z.enum(['local', 's3']).optional(),
   ANNOUNCEMENT_MEDIA_DIRECTORY: z.string().min(1).optional(),
+  SCHOOL_LOGO_STAGING_TTL_MINUTES: z.coerce.number().int().min(5).max(10080).default(1440),
 });
 const parsed = schema.parse(process.env);
 export const config = parsed;

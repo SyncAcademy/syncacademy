@@ -60,6 +60,13 @@ model School {
   id String @id @default(uuid()) @db.Uuid
   name String
   code String @unique
+  slug String? @unique
+  logoStorageKey String?
+  publishedTheme Json?
+  draftTheme Json?
+  previousPublishedTheme Json?
+  themeVersion Int @default(0)
+  logoObjects SchoolLogoObject[]
   region String
   schoolType String?
   address String?
@@ -1186,4 +1193,20 @@ model MonitorWorker {
   instance String @id
   at DateTime @db.Timestamptz
   data Json
+}
+
+/// Server-side lifecycle record for every school logo object written to storage.
+/// STAGED -> COMMITTED (published) or expired; RETIRED/CLEANING objects await deletion.
+model SchoolLogoObject {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  storageKey String @unique
+  status String @default("STAGED")
+  createdById String? @db.Uuid
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  committedAt DateTime?
+  @@index([status, expiresAt])
+  @@index([schoolId, status])
 }

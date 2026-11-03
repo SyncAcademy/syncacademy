@@ -31,6 +31,7 @@ export interface AuditQuery {
   severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   from?: string;
   to?: string;
+  includePlatformSlugEvents?: boolean;
 }
 
 interface AuditRow {
@@ -121,12 +122,16 @@ export class AuditLogService {
     };
   }
 
-  async detail(source: AuditSource, id: string, schoolId?: string) {
+  async detail(source: AuditSource, id: string, schoolId?: string, includePlatformSlugEvents = true) {
+    const slugRestriction = includePlatformSlugEvents
+      ? Prisma.empty
+      : Prisma.sql`AND action NOT IN ('SCHOOL_SLUG_ASSIGNED', 'SCHOOL_SLUG_CHANGED')`;
     const rows = await this.db.$queryRaw<AuditRow[]>(Prisma.sql`
       WITH audit_rows AS (${this.rows()})
       SELECT * FROM audit_rows
       WHERE source = ${source} AND id = ${id}
         AND (${schoolId ?? null}::text IS NULL OR "schoolId" = ${schoolId ?? null})
+        ${slugRestriction}
       LIMIT 1
     `);
     if (!rows[0]) throw new NotFoundException('Audit event not found.');
@@ -139,11 +144,14 @@ export class AuditLogService {
     };
   }
 
-  async summary(days: number, schoolId?: string) {
+  async summary(days: number, schoolId?: string, includePlatformSlugEvents = true) {
     const since = new Date(Date.now() - days * 86400000);
     const scope = schoolId ? { schoolId } : {};
+    const auditScope = includePlatformSlugEvents
+      ? scope
+      : { ...scope, action: { notIn: ['SCHOOL_SLUG_ASSIGNED', 'SCHOOL_SLUG_CHANGED'] } };
     const [auditEvents, securityEvents, failedAuthentication, highRiskEvents] = await this.db.$transaction([
-      this.db.auditEvent.count({ where: { ...scope, createdAt: { gte: since } } }),
+      this.db.auditEvent.count({ where: { ...auditScope, createdAt: { gte: since } } }),
       this.db.securityEvent.count({ where: { ...scope, createdAt: { gte: since } } }),
       this.db.securityEvent.count({
         where: {
@@ -274,6 +282,9 @@ export class AuditLogService {
 
   private where(query: AuditQuery) {
     const filters: Prisma.Sql[] = [];
+    if (query.includePlatformSlugEvents === false) {
+      filters.push(Prisma.sql`action NOT IN ('SCHOOL_SLUG_ASSIGNED', 'SCHOOL_SLUG_CHANGED')`);
+    }
     if (query.schoolId) filters.push(Prisma.sql`"schoolId" = ${query.schoolId}`);
     if (query.category) filters.push(Prisma.sql`category = ${query.category}`);
     if (query.action) filters.push(Prisma.sql`action ILIKE ${`%${query.action}%`}`);

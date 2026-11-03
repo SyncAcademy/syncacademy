@@ -1,7 +1,15 @@
 /* Shared interaction layer for the school portals. Keep the existing shell. */
-:is(app-headmaster-layout, app-teacher-layout, app-academic-layout, app-registrar-layout, app-bursar-layout, app-super-admin-layout).portal-shell {
+:is(app-headmaster-layout, app-teacher-layout, app-academic-layout, app-registrar-layout, app-bursar-layout).portal-shell {
+  --portal-accent: var(--school-primary, #b45309);
+  --portal-accent-hover: var(--school-primary-hover, #92400e);
+}
+
+app-super-admin-layout.portal-shell {
   --portal-accent: #b45309;
   --portal-accent-hover: #92400e;
+}
+
+:is(app-headmaster-layout, app-teacher-layout, app-academic-layout, app-registrar-layout, app-bursar-layout, app-super-admin-layout).portal-shell {
   --portal-ink: #172338;
   --portal-muted: #596579;
   color: var(--portal-ink);
@@ -21,11 +29,11 @@
     color: #172338;
     background-color: #fff;
     &::placeholder { color: #64748b; opacity: 1; }
-    &:focus-visible { outline: 2px solid #b45309; outline-offset: 2px; }
+    &:focus-visible { outline: 2px solid var(--portal-accent, #b45309); outline-offset: 2px; }
     &:disabled { background:#f1f5f9; color:#64748b; cursor:not-allowed; }
     &.ng-invalid.ng-touched { border-color:#b91c1c; }
   }
-  input:is([type=checkbox], [type=radio]) { min-height:20px; width:20px; accent-color:#b45309; flex-shrink:0; }
+  input:is([type=checkbox], [type=radio]) { min-height:20px; width:20px; accent-color:var(--portal-accent, #b45309); flex-shrink:0; }
   .sidebar__nav-icon { width:22px; height:22px; flex:0 0 22px; }
   .form-group { display:flex; flex-direction:column; gap:.5rem; margin-bottom:1rem; }
   .form-group > label { font-size:.875rem; font-weight:600; }
@@ -69,17 +77,17 @@
 
   :is(.action-btn--primary, .sa-btn--primary, .header-action-btn, .dialog-btn--save,
       .dialog__btn--primary, .btn-primary, .btn-modal--primary, .sa-btn-action, .error-state__retry-btn, .empty-btn) {
-    background: #b45309 !important;
-    border-color: #b45309 !important;
+    background: var(--portal-accent, #b45309) !important;
+    border-color: var(--portal-accent, #b45309) !important;
     color: #fff !important;
-    &:hover:not(:disabled) { background: #92400e !important; border-color: #92400e !important; }
+    &:hover:not(:disabled) { background: var(--portal-accent-hover, #92400e) !important; border-color: var(--portal-accent-hover, #92400e) !important; }
   }
 
   :is(.action-btn--outline, .action-btn--warning, .alert-btn--warning) {
-    color: #92400e;
+    color: var(--portal-accent-hover, #92400e);
     border-color: #d9a773;
     background: #fffaf5;
-    &:hover:not(:disabled) { background: #b45309; border-color: #b45309; color: #fff; }
+    &:hover:not(:disabled) { background: var(--portal-accent, #b45309); border-color: var(--portal-accent, #b45309); color: #fff; }
   }
 
   :is(.action-btn--danger, .row-btn--delete, .m-btn--delete, .dialog__btn--danger, .btn-icon-action--danger) {
@@ -92,16 +100,16 @@
   .empty-btn--secondary { background: #fff !important; border-color: #cbd5e1 !important; color: #334155 !important; }
   .empty-btn--secondary:hover:not(:disabled) { background: #334155 !important; border-color: #334155 !important; color: #fff !important; }
   .icon-btn { padding: .625rem; }
-  .back-link { min-height: 44px; align-items: center; color: #92400e; }
-  .back-link a { display: inline-flex; align-items: center; min-height: 44px; color: #92400e; }
+  .back-link { min-height: 44px; align-items: center; color: var(--portal-accent-hover, #92400e); }
+  .back-link a { display: inline-flex; align-items: center; min-height: 44px; color: var(--portal-accent-hover, #92400e); }
   :is(.head-header__breadcrumb, .teacher-header__breadcrumb, .academic-header__breadcrumb, .registrar-header__breadcrumb, .bursar-header__breadcrumb, .sa-header__breadcrumb) { font-size: .8125rem; color: #596579; }
   :is(.head-content-inner, .teacher-content-inner, .academic-content-inner, .registrar-content-inner, .bursar-content-inner, .sa-content-inner) { max-width: 1488px; margin-inline: auto; width: 100%; }
   :is(.head-content-inner, .teacher-content-inner, .academic-content-inner, .registrar-content-inner, .bursar-content-inner, .sa-content-inner) > router-outlet + * { animation: portal-enter 220ms ease-out; }
   :is(.stat-card, .assignment-card, .action-card) { transition: border-color 180ms ease, box-shadow 180ms ease; }
   .assignment-card:hover { border-color: #d5a16a; box-shadow: 0 3px 14px #0f172a0a; }
   .sidebar__nav-item { min-height: 44px; transition: background-color 180ms ease, color 180ms ease; }
-  .sidebar__nav-item:hover { background: #334155; color: #fff; }
-  .sidebar__nav-item--active { background: #b45309 !important; color: #fff !important; }
+  .sidebar__nav-item:hover { background: var(--school-secondary-hover, #334155); color: var(--school-secondary-foreground, #fff); }
+  .sidebar__nav-item--active { background: var(--portal-accent, #b45309) !important; color: #fff !important; border: 1.5px solid var(--school-active-nav-border, transparent); box-sizing: border-box; }
   .sidebar__campus-selector { cursor: default; }
   .sidebar__campus-selector .sidebar__chevron { display: none; }
   .table-scroll-wrapper { scrollbar-width: thin !important; scrollbar-color: #94a3b8 #f1f5f9; }
@@ -114,19 +122,19 @@
   .toolbar [filters] { flex: 1 1 400px; }
   .toolbar [filters] .sa-select { width: auto; flex: 1 1 140px; }
   .tab-btn { min-height: 44px; transition: background-color 180ms ease, color 180ms ease; }
-  .tab-btn:hover { background: #fff7ed; color: #92400e; }
-  .tab-btn.active { color: #92400e; border-color: #b45309; }
+  .tab-btn:hover { background: #fff7ed; color: var(--portal-accent-hover, #92400e); }
+  .tab-btn.active { color: var(--portal-accent-hover, #92400e); border-color: var(--portal-accent, #b45309); }
   .role-card { transition: background-color 180ms ease, border-color 180ms ease; }
-  .role-card:hover, .role-card.selected { background: #fff7ed; border-color: #b45309; }
+  .role-card:hover, .role-card.selected { background: #fff7ed; border-color: var(--portal-accent, #b45309); }
   .role-card:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
   .assignment-card__badge--approved, .quick-stat--success .quick-stat__value { color: #065f46; }
   .assignment-card__badge--returned { background: #fff7ed; color: #92400e; }
   .mark-card__grade--high { color: #065f46; }
   .confirmed-banner, .success-banner { color: #065f46; }
   .confirmed-banner { flex-wrap: wrap; gap: 12px; }
-  .scroll-to-top { background: #b45309; box-shadow: 0 4px 12px #0f172a1a; }
-  .scroll-to-top:hover { background: #92400e; }
-  .toolbar__search:focus-within { outline: 2px solid #b45309; outline-offset: 2px; }
+  .scroll-to-top { background: var(--portal-accent, #b45309); box-shadow: 0 4px 12px #0f172a1a; }
+  .scroll-to-top:hover { background: var(--portal-accent-hover, #92400e); }
+  .toolbar__search:focus-within { outline: 2px solid var(--portal-accent, #b45309); outline-offset: 2px; }
   .toolbar__search input { min-height: 40px; }
   :is(.dialog, .dialog-card, .modal-card) { max-height: calc(100dvh - 2rem); overflow-y: auto; animation: portal-enter 180ms ease-out; }
   :is(.dialog-overlay, .dialog-backdrop, .modal-overlay, .overlay) { overscroll-behavior: contain; }

@@ -24,6 +24,7 @@ import { CommunicationService } from './communication/communication.service';
 import { Database } from './database/database.service';
 import { queueParentInvitation } from './parent-invitations';
 import { cleanupAnnouncementMedia } from './announcement-media-lifecycle';
+import { cleanupSchoolLogos } from './school-logo-lifecycle';
 import { deliverParentPush, enqueueParentPush } from './parent-push';
 
 const db = new PrismaClient();
@@ -483,6 +484,7 @@ async function main() {
       cycles++;
       if (cycles % 30 === 0) {
         for (let count = 0; count < 10 && await cleanupAnnouncementMedia(db); count++) { /* Bounded cleanup batch. */ }
+        for (let count = 0; count < 10 && await cleanupSchoolLogos(db); count++) { /* Bounded school logo cleanup batch. */ }
       }
       if (cycles % 300 === 0) {
         await db.rateBucket.deleteMany({ where: { expiresAt: { lt: new Date() } } });

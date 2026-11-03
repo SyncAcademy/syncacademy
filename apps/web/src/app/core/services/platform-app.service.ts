@@ -15,14 +15,20 @@ export class PlatformAppService {
     void this.initialize();
   }
 
-  private async initialize(): Promise<void> {
-    if (typeof window === 'undefined') return;
+  private isWebStaffOrPlatformPath(pathname: string): boolean {
+    return (
+      pathname.startsWith('/head') ||
+      pathname.startsWith('/teacher') ||
+      pathname.startsWith('/academic') ||
+      pathname.startsWith('/register') ||
+      pathname.startsWith('/bursar') ||
+      pathname.startsWith('/super-admin') ||
+      pathname.startsWith('/platform-access')
+    );
+  }
 
-    // Check URL or storage override for testing/dev in browser
-    const params = new URLSearchParams(window.location.search);
-    const paramFlavor = params.get('appFlavor') as AppFlavor | null;
-    if (paramFlavor === 'parent' || paramFlavor === 'teacher') {
-      this.appFlavor.set(paramFlavor);
+  private async initialize(): Promise<void> {
+    if (typeof window === 'undefined') {
       this.isInitialized.set(true);
       return;
     }
@@ -40,13 +46,31 @@ export class PlatformAppService {
       } catch {
         this.appFlavor.set('web');
       }
+      this.isInitialized.set(true);
+      return;
+    }
+
+    const pathname = window.location?.pathname ?? '';
+    if (this.isWebStaffOrPlatformPath(pathname)) {
+      this.appFlavor.set('web');
+      this.isInitialized.set(true);
+      return;
+    }
+
+    // Check URL or storage override for mobile preview routes in browser
+    const params = new URLSearchParams(window.location.search);
+    const paramFlavor = params.get('appFlavor') as AppFlavor | null;
+    if (paramFlavor === 'parent' || paramFlavor === 'teacher') {
+      this.appFlavor.set(paramFlavor);
+      this.isInitialized.set(true);
+      return;
+    }
+
+    const stored = localStorage.getItem('syncacademy_app_flavor') as AppFlavor | null;
+    if ((stored === 'parent' && pathname.startsWith('/parent')) || stored === 'teacher') {
+      this.appFlavor.set(stored);
     } else {
-      const stored = localStorage.getItem('syncacademy_app_flavor') as AppFlavor | null;
-      if (stored === 'parent' || stored === 'teacher') {
-        this.appFlavor.set(stored);
-      } else {
-        this.appFlavor.set('web');
-      }
+      this.appFlavor.set('web');
     }
     this.isInitialized.set(true);
   }

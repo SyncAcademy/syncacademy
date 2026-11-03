@@ -22,11 +22,13 @@ import { ReconciliationService } from './reconciliation.service';
 import { SecurityEventsService } from './security-events.service';
 import { RealtimeGateway } from './realtime.gateway';
 import { ParentController } from './parent.controller';
+import { SchoolBrandingController } from './school-branding.controller';
 
 @Module({
   imports: [PlatformCoreModule, MonitoringModule],
   controllers: [
     ApiController,
+    SchoolBrandingController,
     RegistryController,
     RegistryWorkflowsController,
     BursarController,

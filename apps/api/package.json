@@ -14,6 +14,7 @@
     "test:parent-mobile": "node --test test/parent-mobile.test.cjs",
     "test:security-hardening": "node --test test/security-hardening.test.cjs",
     "test:audit-log": "node --test test/audit-log.test.cjs",
+    "test:school-branding": "node --test test/school-branding.test.cjs",
     "test": "npm run test:integration",
     "test:monitoring": "node --test test/monitoring.test.cjs"
   },

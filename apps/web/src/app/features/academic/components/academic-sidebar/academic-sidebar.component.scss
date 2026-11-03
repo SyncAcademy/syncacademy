@@ -14,12 +14,12 @@
   position: relative;
   height: 100%;
   min-height: 0;
-  background-color: $sidebar-bg;
+  background-color: var(--school-secondary, #{$sidebar-bg});
   border-right: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  color: $sidebar-text;
+  color: var(--school-secondary-foreground, #{$sidebar-text});
 
   &__logo-area {
     flex: 0 0 auto;
@@ -39,11 +39,19 @@
   &__logo-icon {
     width: 32px;
     height: 32px;
-    background-color: $primary-orange;
+    flex-shrink: 0;
+    background-color: var(--school-primary, #{$primary-orange});
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
+
+    &--custom {
+      background-color: rgba(255, 255, 255, 0.96);
+      padding: 3px;
+      box-sizing: border-box;
+    }
 
     svg {
       width: 20px;
@@ -52,20 +60,29 @@
     }
   }
 
+  &__logo-img {
+    width: 100%;
+    height: 100%;
+    max-width: 26px;
+    max-height: 26px;
+    object-fit: contain;
+    display: block;
+  }
+
   &__logo-text {
     font-size: 1.25rem;
     font-weight: 700;
-    color: $sidebar-text;
+    color: var(--school-secondary-foreground, #{$sidebar-text});
     display: flex;
     gap: 4px;
   }
 
   &__logo-sync {
-    color: $sidebar-text;
+    color: var(--school-secondary-foreground, #{$sidebar-text});
   }
 
   &__logo-academy {
-    color: #92400e;
+    color: var(--school-logo-accent, #92400e);
   }
 
   &__scrollable {
@@ -91,10 +108,10 @@
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
-    background: #334155;
-    border: 1px solid #475569;
+    background: var(--school-secondary-surface, #334155);
+    border: 1px solid var(--school-secondary-border, #475569);
     border-radius: $radius-md;
-    color: $sidebar-text;
+    color: var(--school-secondary-foreground, #{$sidebar-text});
     font-size: 0.875rem;
     font-weight: 500;
     font-family: inherit;
@@ -102,17 +119,29 @@
     margin-bottom: 32px;
     transition: background-color 0.2s;
 
-    &:hover { background: #3d4b60; }
+    &:hover { background: var(--school-secondary-hover, #3d4b60); }
   }
 
   &__campus-icon, &__chevron {
     width: 20px;
     height: 20px;
-    fill: $text-secondary;
+    fill: var(--school-secondary-muted, #{$text-secondary});
   }
 
   &__chevron {
     margin-left: auto;
+  }
+
+  &__welcome {
+    margin: -18px 0 24px;
+    padding: 10px 12px;
+    border-radius: $radius-md;
+    background: var(--school-secondary-surface, rgba(255, 255, 255, 0.07));
+    border: 1px solid var(--school-secondary-border, rgba(255, 255, 255, 0.12));
+    color: var(--school-secondary-muted, #E2E8F0);
+    font-size: 0.75rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
   }
 
   &__section {
@@ -123,7 +152,7 @@
     display: block;
     font-size: 0.8125rem;
     font-weight: 600;
-    color: $text-secondary;
+    color: var(--school-secondary-muted, #{$text-secondary});
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: 12px;
@@ -135,7 +164,7 @@
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
-    color: #CBD5E1;
+    color: var(--school-secondary-muted, #CBD5E1);
     text-decoration: none;
     font-size: 0.9375rem;
     font-weight: 500;
@@ -144,18 +173,25 @@
     margin-bottom: 4px;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.08);
-      color: $sidebar-text;
+      background: var(--school-secondary-hover, rgba(255, 255, 255, 0.08));
+      color: var(--school-secondary-foreground, #{$sidebar-text});
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--school-secondary-foreground, #{$sidebar-text});
+      outline-offset: 2px;
     }
 
     &--active {
-      background: $primary-orange;
+      background: var(--school-primary, #{$primary-orange});
       color: #FFFFFF;
       font-weight: 600;
+      border: 1.5px solid var(--school-active-nav-border, transparent);
+      box-sizing: border-box;
 
       .sidebar__nav-bullet {
-        border-color: $primary-orange;
-        background: $primary-orange;
+        border-color: var(--school-active-nav-indicator, var(--school-primary, #{$primary-orange}));
+        background: var(--school-active-nav-indicator, var(--school-primary, #{$primary-orange}));
       }
     }
   }
@@ -164,7 +200,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    border: 1.5px solid $text-muted;
+    border: 1.5px solid var(--school-secondary-muted, #{$text-muted});
     flex-shrink: 0;
   }
 
@@ -181,7 +217,7 @@
 
   &__bottom {
     flex: 0 0 auto;
-    border-top: 1px solid #334155;
+    border-top: 1px solid var(--school-secondary-border, #334155);
     padding: 16px 20px;
   }
 
@@ -195,7 +231,7 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background-color: $primary-orange;
+    background-color: var(--school-primary, #{$primary-orange});
     display: flex;
     align-items: center;
     justify-content: center;
@@ -212,12 +248,12 @@
   &__user-name {
     font-size: 0.8125rem;
     font-weight: 600;
-    color: $sidebar-text;
+    color: var(--school-secondary-foreground, #{$sidebar-text});
   }
 
   &__user-role {
     font-size: 0.75rem;
-    color: $text-secondary;
+    color: var(--school-secondary-muted, #{$text-secondary});
   }
 
   &__logout-btn {
@@ -228,13 +264,18 @@
     margin-top: 10px;
     padding: 8px 10px;
     background: transparent;
-    border: 1px solid #475569;
+    border: 1px solid var(--school-secondary-border, #475569);
     border-radius: $radius-md;
-    color: #CBD5E1;
+    color: var(--school-secondary-muted, #CBD5E1);
     font-size: 0.8125rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
+
+    &:focus-visible {
+      outline: 2px solid var(--school-secondary-foreground, #{$sidebar-text});
+      outline-offset: 2px;
+    }
 
     svg {
       width: 16px;

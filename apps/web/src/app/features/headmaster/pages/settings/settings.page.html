@@ -1,10 +1,318 @@
-<app-head-page-header title="School Settings" description="School profile, academic calendar and grading rules" />
+<app-head-page-header title="School Settings" description="School profile, branding, academic calendar and grading rules" />
 @if(api.error()){<p class="portal-notice portal-notice--error" role="alert">{{api.error()}}</p>}
 @if(remote.error()){<p class="portal-notice portal-notice--error" role="alert">{{remote.error()}}</p>}
 <div class="two-column">
   <section class="panel"><h3>School information</h3><p><strong>{{api.data()?.school?.name || 'School'}}</strong></p><p>Code: {{api.data()?.school?.code || 'Not assigned'}}</p><p>Region: {{api.data()?.school?.region || 'Not recorded'}}</p><p>Type: {{api.data()?.school?.schoolType || 'Not recorded'}}</p><p>Phone: {{api.data()?.school?.phone || 'Not recorded'}}</p><p>Email: {{api.data()?.school?.email || 'Not recorded'}}</p><div class="actions"><a class="action-btn" routerLink="/head/school-setup" queryParamsHandling="preserve">Edit profile and view setup</a></div></section>
   <section class="panel"><h3>Academic calendar</h3><p>Selected year: <strong>{{year()?.label || 'No year selected'}}</strong></p><p>Start: {{year()?.startDate || 'Not set'}} &nbsp; End: {{year()?.endDate || 'Not set'}}</p><p>Status: {{year()?.status || 'Not set'}}</p><div class="actions"><a class="action-btn" routerLink="/head/academic-years" queryParamsHandling="preserve">Manage academic years</a></div></section>
 </div>
+
+<section class="panel branding-panel" aria-labelledby="school-branding-heading">
+  <div class="panel-heading">
+    <div>
+      <h3 id="school-branding-heading">School Branding</h3>
+      <p>Customize your school logo, primary and secondary colors, and welcome message for the staff workspace and teacher application. The Parent application always retains original SyncAcademy branding.</p>
+    </div>
+    <span class="badge" [attr.data-status]="branding.state()?.hasPublishedTheme ? 'approved' : 'submitted'">
+      {{ branding.state()?.hasDraftTheme ? 'Draft pending publish' : branding.state()?.hasPublishedTheme ? 'Custom branding published' : 'Default SyncAcademy branding' }}
+    </span>
+  </div>
+
+  @if(brandingError()){<p class="portal-notice portal-notice--error" role="alert">{{brandingError()}}</p>}
+  @if(brandingNotice()){<p class="portal-notice" role="status">{{brandingNotice()}}</p>}
+
+  <div class="branding-grid">
+    <div class="branding-controls">
+      <!-- A. School Identity -->
+      <div class="branding-group">
+        <h4>A. School Identity</h4>
+        <p class="branding-group__desc">Official display name: <strong>{{ schoolDisplayName() }}</strong> (<a routerLink="/head/school-setup" queryParamsHandling="preserve">update in school profile</a>)</p>
+
+        <div class="branding-logo-row">
+          <div class="branding-logo-frame" aria-label="School logo preview">
+            @if (previewLogoUrl()) {
+              <img
+                class="branding-logo-frame__img"
+                [src]="previewLogoUrl()!"
+                [alt]="schoolDisplayName() + ' logo'"
+                (error)="logoLoadError.set(true)"
+              />
+            } @else {
+              <svg class="branding-logo-frame__fallback" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z" />
+              </svg>
+            }
+          </div>
+
+          <div class="branding-logo-actions">
+            <div class="actions branding-logo-buttons">
+              <label class="action-btn branding-file-label">
+                <span>{{ (branding.state()?.hasLogo || stagedLogoFile()) ? 'Replace logo file' : 'Choose logo file' }}</span>
+                <input
+                  type="file"
+                  class="sr-only-input"
+                  accept=".svg,image/svg+xml,image/png,image/webp"
+                  [disabled]="logoBusy() || brandingBusy()"
+                  (change)="onLogoFileSelected($event)"
+                  aria-label="Upload school logo file"
+                />
+              </label>
+              @if (stagedLogoFile()) {
+                <button
+                  type="button"
+                  class="action-btn action-btn--primary"
+                  [disabled]="logoBusy() || brandingBusy()"
+                  (click)="uploadStagedLogo()"
+                >
+                  {{ logoBusy() ? 'Uploading...' : 'Upload selected logo' }}
+                </button>
+                <button
+                  type="button"
+                  class="action-btn"
+                  [disabled]="logoBusy() || brandingBusy()"
+                  (click)="clearStagedLogo()"
+                >
+                  Cancel selection
+                </button>
+              }
+              @if (branding.state()?.hasLogo && !stagedLogoFile()) {
+                <button
+                  type="button"
+                  class="action-btn action-btn--danger"
+                  [disabled]="logoBusy() || brandingBusy()"
+                  (click)="removeSchoolLogo()"
+                >
+                  {{ logoBusy() ? 'Removing...' : 'Remove logo & restore default' }}
+                </button>
+              }
+            </div>
+            <small class="branding-hint">
+              Supported formats: SVG (up to 256 KB), PNG, or WebP (up to 2 MB). Aspect ratio and transparency are preserved automatically.
+            </small>
+            @if (stagedLogoFile(); as file) {
+              <small class="branding-staged-note">
+                Staged for preview: <strong>{{ file.name }}</strong> ({{ (file.size / 1024) | number:'1.0-1' }} KB). Click "Upload selected logo" or "Publish branding" to save.
+              </small>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- B. School Colors -->
+      <div class="branding-group">
+        <h4>B. School Colors</h4>
+        <p class="branding-group__desc">Configure accessible Primary and Secondary HEX colors. Primary must meet WCAG 2.2 AA contrast (minimum 4.5:1 against white text), and Secondary must provide at least 4.5:1 contrast for navigation text and muted labels.</p>
+
+        <div class="two-column branding-color-fields">
+          <div class="field">
+            <label for="branding-primary-hex">Primary brand color (buttons & active highlights)</label>
+            <div class="color-input-row">
+              <input
+                type="color"
+                class="color-swatch-input"
+                aria-label="Primary brand color swatch"
+                [value]="primaryValidation().valid ? primaryValidation().normalized : '#B45309'"
+                [disabled]="brandingBusy()"
+                (input)="onPrimarySwatchChange($any($event.target).value)"
+              />
+              <input
+                id="branding-primary-hex"
+                type="text"
+                name="primaryHex"
+                maxlength="7"
+                placeholder="#1B4D3E"
+                [ngModel]="primaryHex()"
+                (ngModelChange)="onPrimaryHexInput($event)"
+                [disabled]="brandingBusy()"
+                aria-describedby="primary-contrast-feedback"
+              />
+            </div>
+            <small
+              id="primary-contrast-feedback"
+              class="contrast-feedback"
+              [class.contrast-feedback--pass]="primaryValidation().valid"
+              [class.contrast-feedback--fail]="!primaryValidation().valid"
+            >
+              {{ primaryValidation().message }}
+            </small>
+          </div>
+
+          <div class="field">
+            <label for="branding-secondary-hex">Secondary brand color (sidebar navigation surface)</label>
+            <div class="color-input-row">
+              <input
+                type="color"
+                class="color-swatch-input"
+                aria-label="Secondary brand color swatch"
+                [value]="secondaryValidation().valid ? secondaryValidation().normalized : '#1E293B'"
+                [disabled]="brandingBusy()"
+                (input)="onSecondarySwatchChange($any($event.target).value)"
+              />
+              <input
+                id="branding-secondary-hex"
+                type="text"
+                name="secondaryHex"
+                maxlength="7"
+                placeholder="#0F172A"
+                [ngModel]="secondaryHex()"
+                (ngModelChange)="onSecondaryHexInput($event)"
+                [disabled]="brandingBusy()"
+                aria-describedby="secondary-contrast-feedback"
+              />
+            </div>
+            <small
+              id="secondary-contrast-feedback"
+              class="contrast-feedback"
+              [class.contrast-feedback--pass]="secondaryValidation().valid"
+              [class.contrast-feedback--fail]="!secondaryValidation().valid"
+            >
+              {{ secondaryValidation().message }}
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <!-- C. Welcome Message -->
+      <div class="branding-group">
+        <h4>C. Welcome Message</h4>
+        <div class="field">
+          <div class="welcome-label-row">
+            <label for="branding-welcome-input">School welcome message (plain text, optional)</label>
+            <small class="char-counter">{{ welcomeMessage().length }} / {{ maxWelcomeLength }}</small>
+          </div>
+          <input
+            id="branding-welcome-input"
+            type="text"
+            name="welcomeMessage"
+            [maxLength]="maxWelcomeLength"
+            placeholder="Welcome to our school staff workspace"
+            [ngModel]="welcomeMessage()"
+            (ngModelChange)="onWelcomeInput($event)"
+            [disabled]="brandingBusy()"
+          />
+          @if (!welcomeValidation().valid) {
+            <small class="contrast-feedback contrast-feedback--fail">{{ welcomeValidation().message }}</small>
+          } @else {
+            <small class="branding-hint">Rendered as escaped plain text in the school staff workspace. HTML tags and external links are not allowed.</small>
+          }
+        </div>
+      </div>
+
+      <!-- D. Draft, Publish, and Reset Actions -->
+      <div class="actions branding-submit-row">
+        <button
+          type="button"
+          class="action-btn action-btn--primary"
+          [disabled]="!canSubmitBranding()"
+          (click)="publishBranding()"
+        >
+          {{ brandingBusy() ? 'Publishing...' : 'Publish branding' }}
+        </button>
+        <button
+          type="button"
+          class="action-btn"
+          [disabled]="!canSubmitBranding()"
+          (click)="saveBrandingDraft()"
+        >
+          Save draft
+        </button>
+        <button
+          type="button"
+          class="action-btn"
+          [disabled]="brandingBusy() || logoBusy()"
+          (click)="restoreDefaultBranding()"
+        >
+          Restore default branding
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Preview -->
+    <div
+      class="branding-preview"
+      [style.--preview-primary]="previewPrimary()"
+      [style.--preview-primary-hover]="previewPrimaryHover()"
+      [style.--preview-secondary]="previewSecondary()"
+      [style.--preview-secondary-fg]="previewSecondarySurface().foregroundColor"
+      [style.--preview-secondary-muted]="previewSecondarySurface().mutedForegroundColor"
+      [style.--preview-logo-accent]="previewSecondarySurface().logoAccentColor"
+      [style.--preview-secondary-surface]="previewSecondarySurface().surfaceBg"
+      [style.--preview-secondary-border]="previewSecondarySurface().borderColor"
+      [style.--preview-active-border]="previewSecondarySurface().activeNavBorderColor"
+      [style.--preview-active-indicator]="previewSecondarySurface().activeNavIndicatorColor"
+      aria-label="Live branding preview"
+    >
+      <div class="branding-preview__header">
+        <span class="eyebrow">Live Preview</span>
+        <small class="muted">Isolated preview of staff workspace components</small>
+      </div>
+
+      <div class="branding-preview__shell">
+        <aside class="branding-preview__sidebar">
+          <div class="branding-preview__brand">
+            <div class="branding-preview__logo-box" [class.branding-preview__logo-box--custom]="previewLogoUrl()">
+              @if (previewLogoUrl()) {
+                <img
+                  class="branding-preview__logo-img"
+                  [src]="previewLogoUrl()!"
+                  [alt]="schoolDisplayName() + ' preview logo'"
+                  (error)="logoLoadError.set(true)"
+                />
+              } @else {
+                <svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z" />
+                </svg>
+              }
+            </div>
+            <span class="branding-preview__brand-title">
+              <span class="branding-preview__brand-sync">Sync</span><span class="branding-preview__brand-academy">Academy</span>
+            </span>
+          </div>
+
+          <div class="branding-preview__campus">{{ schoolDisplayName() }}</div>
+
+          @if (previewWelcome()) {
+            <p class="branding-preview__welcome">{{ previewWelcome() }}</p>
+          }
+
+          <div class="branding-preview__nav-item branding-preview__nav-item--active">
+            <span class="branding-preview__nav-bullet"></span>
+            <span>Overview</span>
+          </div>
+          <div class="branding-preview__nav-item">
+            <span class="branding-preview__nav-bullet"></span>
+            <span>Academic Results</span>
+          </div>
+          <div class="branding-preview__nav-item">
+            <span class="branding-preview__nav-bullet"></span>
+            <span>Student Directory</span>
+          </div>
+        </aside>
+
+        <div class="branding-preview__workspace">
+          <div class="branding-preview__workspace-head">
+            <strong>{{ schoolDisplayName() }}</strong>
+            <span class="badge" data-status="approved">Approved</span>
+          </div>
+          @if (previewWelcome()) {
+            <p class="branding-preview__banner">{{ previewWelcome() }}</p>
+          } @else {
+            <p class="branding-preview__banner branding-preview__banner--muted">No custom welcome message configured.</p>
+          }
+          <div class="branding-preview__controls">
+            <span class="branding-preview__btn branding-preview__btn--primary">Primary Action</span>
+            <span class="branding-preview__btn branding-preview__btn--outline">Secondary Action</span>
+          </div>
+          <div class="branding-preview__SemanticRow">
+            <span class="portal-pill portal-pill--success">Success</span>
+            <span class="portal-pill portal-pill--warning">Warning</span>
+            <span class="portal-pill portal-pill--danger">Danger</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="panel"><h3>Grading scheme for {{year()?.label || 'selected year'}}</h3><p>Revision {{policy().revision}}. Submitted marks keep the grading scheme captured when they were submitted.</p>
   @if(error()){<p class="portal-notice portal-notice--error" role="alert">{{error()}}</p>}
   @if(notice()){<p class="portal-notice" role="status">{{notice()}}</p>}
