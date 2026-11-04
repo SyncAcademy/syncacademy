@@ -1,6 +1,7 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { finalize } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 /** Small, shared indication of slow network work; page data stays visible during refreshes. */
 @Injectable({ providedIn: 'root' })
@@ -36,5 +37,11 @@ export class NetworkActivityService {
 
 export const networkActivityInterceptor: HttpInterceptorFn = (request, next) => {
   const finish = inject(NetworkActivityService).start();
-  return next(request).pipe(finalize(finish));
+  let modified = request;
+  if (request.url.startsWith('/api/v1') && environment.apiUrl !== '/api/v1') {
+    modified = request.clone({
+      url: request.url.replace('/api/v1', environment.apiUrl),
+    });
+  }
+  return next(modified).pipe(finalize(finish));
 };

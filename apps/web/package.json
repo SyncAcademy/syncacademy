@@ -20,6 +20,8 @@
     "test:platform-admin-auth": "node scripts/check-platform-admin-auth.mjs",
     "test:preloader": "node scripts/check-preloader.mjs",
     "test:monitoring": "node scripts/check-monitoring-browser.mjs",
+    "test:mobile-architecture": "node scripts/check-mobile-architecture.mjs",
+    "test:crypto-vault": "node --test scripts/test-mobile-crypto-vault.mjs",
     "cap": "cap",
     "cap:sync:parent": "CAP_TARGET=parent cap sync",
     "cap:sync:teacher": "CAP_TARGET=teacher cap sync"

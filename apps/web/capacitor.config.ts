@@ -9,8 +9,15 @@ const config: CapacitorConfig = {
   webDir: 'dist/syncacademy-web/browser',
   server: {
     androidScheme: 'https',
+    cleartext: true,
   },
   plugins: {
+    CapacitorHttp: {
+      enabled: true,
+    },
+    CapacitorCookies: {
+      enabled: true,
+    },
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
     },

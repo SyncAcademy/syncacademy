@@ -6,6 +6,8 @@ import { TransientMessagesDirective } from './shared/directives/transient-messag
 import { NetworkActivityService } from './core/services/network-activity.service';
 import { ChartRevealDirective } from './shared/directives/chart-reveal.directive';
 import { ActionLoadingDirective } from './shared/directives/action-loading.directive';
+import { NativeMobileService } from './core/services/native-mobile.service';
+import { NativePushService } from './core/services/native-push.service';
 
 @Component({
   selector: 'app-root',
@@ -19,6 +21,8 @@ export class AppComponent implements OnInit {
   readonly network = inject(NetworkActivityService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly nativeMobile = inject(NativeMobileService);
+  private readonly nativePush = inject(NativePushService);
   private finishNavigation?: () => void;
   private slowMessageTimer?: number;
   private initializationTimeout?: number;
@@ -29,6 +33,8 @@ export class AppComponent implements OnInit {
   private routeFinished = false;
 
   ngOnInit(): void {
+    void this.nativeMobile.initialize();
+    void this.nativePush.init();
     this.routeFinished = this.router.navigated;
     this.slowMessageTimer = window.setTimeout(() => {
       if (this.showPreloader && !this.routeFinished) this.entrySlow = true;

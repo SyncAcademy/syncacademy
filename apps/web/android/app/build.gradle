@@ -4,7 +4,6 @@ android {
     namespace = "tz.co.syncacademy.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "tz.co.syncacademy.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -14,6 +13,21 @@ android {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    flavorDimensions = ["app"]
+    productFlavors {
+        parent {
+            dimension "app"
+            applicationId "tz.co.syncacademy.parents"
+            resValue "string", "app_name", "SyncAcademy Parents"
+            resValue "string", "title_activity_main", "SyncAcademy Parents"
+        }
+        teacher {
+            dimension "app"
+            applicationId "tz.co.syncacademy.teachers"
+            resValue "string", "app_name", "SyncAcademy Teachers"
+            resValue "string", "title_activity_main", "SyncAcademy Teachers"
         }
     }
     buildTypes {

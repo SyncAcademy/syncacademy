@@ -8,6 +8,8 @@ import { NavigationEnd, NavigationError, Router } from '@angular/router';
 import { BrowserDynamicTestingModule, platformBrowserDynamicTesting } from '@angular/platform-browser-dynamic/testing';
 import { Subject } from 'rxjs';
 import { NetworkActivityService } from '../src/app/core/services/network-activity.service';
+import { NativeMobileService } from '../src/app/core/services/native-mobile.service';
+import { NativePushService } from '../src/app/core/services/native-push.service';
 import { AppComponent } from '../src/app/app.component';
 
 TestBed.initTestEnvironment(BrowserDynamicTestingModule, platformBrowserDynamicTesting());
@@ -41,6 +43,8 @@ function createComponent(navigated = false): {
       { provide: DOCUMENT, useValue: {} },
       { provide: Router, useValue: router },
       { provide: NetworkActivityService, useValue: network },
+      { provide: NativeMobileService, useValue: { initialize: () => Promise.resolve() } },
+      { provide: NativePushService, useValue: { init: () => Promise.resolve() } },
     ],
   });
   const component = TestBed.runInInjectionContext(() => new AppComponent());

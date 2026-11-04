@@ -1,13 +1,17 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, inject, signal, Injector } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { Router } from '@angular/router';
 import { requestErrorMessage } from './request-error';
+import { NativePushService } from './native-push.service';
+import { MobileOfflineStorageService } from './mobile-offline-storage.service';
+import { NativeKeyVaultService } from './native-key-vault.service';
 export interface Identity { id: string; name: string; email: string; selectedRole: string; platformAdmin: boolean; mustChangePassword: boolean; needsMfa: boolean; needsMfaSetup: boolean; mfaEnabled: boolean; memberships: { id: string; role: string; school: { id: string; name: string } }[]; }
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private http = inject(HttpClient);
   private router = inject(Router);
+  private injector = inject(Injector);
   private lastTrustedActivity = 0;
   readonly identity = signal<Identity | null>(null);
   readonly isLoggedIn = () => !!this.identity();
@@ -54,9 +58,44 @@ export class AuthService {
       }
     }
   }
-  async refresh(): Promise<Identity> { const me = await this.request<Identity>('GET', 'auth/me'); this.identity.set(me); return me; }
-  async login(email: string, password: string, role: string, rememberMe = false): Promise<Identity> { const me = await this.request<Identity>('POST', 'auth/login', { email, password, role, rememberMe }); this.identity.set(me); return me; }
-  async logout(): Promise<void> { await this.request('POST', 'auth/logout', {}); this.identity.set(null); }
+  async refresh(): Promise<Identity> {
+    const me = await this.request<Identity>('GET', 'auth/me');
+    this.identity.set(me);
+    try {
+      const keyVault = this.injector.get(NativeKeyVaultService, null);
+      if (keyVault) keyVault.setActiveUser(me.id, 'teacher_session_proof_' + me.id);
+    } catch {}
+    return me;
+  }
+  async login(email: string, password: string, role: string, rememberMe = false): Promise<Identity> {
+    const me = await this.request<Identity>('POST', 'auth/login', { email, password, role, rememberMe });
+    this.identity.set(me);
+    try {
+      const keyVault = this.injector.get(NativeKeyVaultService, null);
+      if (keyVault) keyVault.setActiveUser(me.id, 'teacher_session_proof_' + me.id);
+    } catch {}
+    try {
+      const push = this.injector.get(NativePushService, null);
+      if (push) void push.syncRegisteredToken();
+    } catch {}
+    return me;
+  }
+  async logout(): Promise<void> {
+    try {
+      const push = this.injector.get(NativePushService, null);
+      if (push) await push.unregisterToken();
+    } catch {}
+    try {
+      const storage = this.injector.get(MobileOfflineStorageService, null);
+      if (storage) await storage.lockVault();
+    } catch {}
+    try {
+      const keyVault = this.injector.get(NativeKeyVaultService, null);
+      if (keyVault) keyVault.setActiveUser(null);
+    } catch {}
+    await this.request('POST', 'auth/logout', {});
+    this.identity.set(null);
+  }
   landing(me = this.identity()): string {
     if (!me) return '/auth/login';
     if (me.mustChangePassword || me.needsMfa || me.needsMfaSetup) return '/auth/security';

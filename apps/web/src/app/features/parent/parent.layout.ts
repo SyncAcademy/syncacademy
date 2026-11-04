@@ -1,4 +1,4 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
@@ -11,6 +11,12 @@ import { NativePushService } from '@core/services/native-push.service';
   imports: [CommonModule, FormsModule, RouterOutlet, RouterLink, RouterLinkActive],
   template: `
     <div class="parent-shell">
+      @if (auth.isOfflineData()) {
+        <div class="offline-banner" role="status">
+          Offline mode: Displaying cached school records
+        </div>
+      }
+
       <header class="parent-header">
         <div class="header-content">
           <div class="brand-group">
@@ -28,6 +34,10 @@ import { NativePushService } from '@core/services/native-push.service';
                 </select>
               </div>
             }
+
+            <button type="button" class="account-btn" (click)="openAccountModal()">
+              Account
+            </button>
 
             <button type="button" class="logout-btn" (click)="onLogout()">
               Sign Out
@@ -66,6 +76,83 @@ import { NativePushService } from '@core/services/native-push.service';
           <span>Alerts</span>
         </a>
       </nav>
+
+      @if (showAccountModal()) {
+        <div class="modal-backdrop" (click)="closeAccountModal()">
+          <div class="account-modal-card" (click)="$event.stopPropagation()">
+            <div class="modal-header">
+              <h2>Parent Account & Privacy</h2>
+              <button type="button" class="btn-close" (click)="closeAccountModal()">&times;</button>
+            </div>
+
+            <div class="modal-body">
+              <div class="user-info-row">
+                <span class="label">Name:</span>
+                <span class="value">{{ auth.parentUser()?.name || 'Guardian' }}</span>
+              </div>
+              @if (auth.parentUser()?.phone) {
+                <div class="user-info-row">
+                  <span class="label">Mobile Phone:</span>
+                  <span class="value">{{ auth.parentUser()?.phone }}</span>
+                </div>
+              }
+              @if (auth.parentUser()?.email) {
+                <div class="user-info-row">
+                  <span class="label">Email:</span>
+                  <span class="value">{{ auth.parentUser()?.email }}</span>
+                </div>
+              }
+              <div class="user-info-row">
+                <span class="label">Linked Children:</span>
+                <span class="value">{{ auth.children().length }} registered</span>
+              </div>
+
+              <hr class="modal-divider" />
+
+              <div class="danger-zone">
+                <h3>Account Deletion</h3>
+                <p class="deletion-notice">
+                  Under App Store and Google Play privacy guidelines, you can request immediate deactivation and deletion of your parent mobile account.
+                  This revokes all mobile sessions, removes registered push tokens, and unlinks your contact credentials.
+                </p>
+
+                @if (!deleteConfirm()) {
+                  <button type="button" class="btn-danger-outline" (click)="deleteConfirm.set(true)">
+                    Delete Parent Account...
+                  </button>
+                } @else {
+                  <div class="confirmation-form">
+                    <label for="delete-password-input">Confirm your password to delete:</label>
+                    <input
+                      id="delete-password-input"
+                      type="password"
+                      [(ngModel)]="deletePassword"
+                      placeholder="Current account password"
+                      class="password-confirm-input"
+                    />
+
+                    @if (deleteError()) {
+                      <div class="error-msg">{{ deleteError() }}</div>
+                    }
+
+                    <div class="confirm-actions">
+                      <button type="button" class="btn-cancel" (click)="deleteConfirm.set(false)">Cancel</button>
+                      <button
+                        type="button"
+                        class="btn-danger-solid"
+                        [disabled]="isDeleting() || !deletePassword().trim()"
+                        (click)="confirmDeleteAccount()"
+                      >
+                        {{ isDeleting() ? 'Deactivating...' : 'Confirm Account Deletion' }}
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styleUrls: ['./parent.layout.scss']
@@ -74,6 +161,12 @@ export class ParentLayout implements OnInit {
   readonly auth = inject(ParentAuthService);
   private pushService = inject(NativePushService);
   private router = inject(Router);
+
+  showAccountModal = signal(false);
+  deleteConfirm = signal(false);
+  deletePassword = signal('');
+  deleteError = signal('');
+  isDeleting = signal(false);
 
   async ngOnInit(): Promise<void> {
     void this.pushService.init();
@@ -84,11 +177,41 @@ export class ParentLayout implements OnInit {
 
   async onChildChange(studentId: string): Promise<void> {
     await this.auth.selectChild(studentId);
-    // Reload current page state if needed
   }
 
   async onLogout(): Promise<void> {
     await this.auth.logout();
     void this.router.navigate(['/parent/login']);
+  }
+
+  openAccountModal(): void {
+    this.deleteConfirm.set(false);
+    this.deletePassword.set('');
+    this.deleteError.set('');
+    this.showAccountModal.set(true);
+  }
+
+  closeAccountModal(): void {
+    this.showAccountModal.set(false);
+  }
+
+  async confirmDeleteAccount(): Promise<void> {
+    const pwd = this.deletePassword().trim();
+    if (!pwd) return;
+
+    this.isDeleting.set(true);
+    this.deleteError.set('');
+
+    try {
+      await this.auth.deleteAccount(pwd);
+      this.showAccountModal.set(false);
+      void this.router.navigate(['/parent/login'], {
+        queryParams: { message: 'Your parent account has been successfully deleted.' }
+      });
+    } catch (err: unknown) {
+      this.deleteError.set(this.auth.errorMessage(err));
+    } finally {
+      this.isDeleting.set(false);
+    }
   }
 }

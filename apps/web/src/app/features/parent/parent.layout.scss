@@ -74,6 +74,24 @@
     }
   }
 
+  .account-btn {
+    height: 36px;
+    padding: 0 12px;
+    border-radius: $radius-md;
+    border: 1px solid #E5E7EB;
+    background: transparent;
+    color: $text-secondary;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+      background-color: #F3F4F6;
+      color: $text-primary;
+    }
+  }
+
   .logout-btn {
     height: 36px;
     padding: 0 12px;
@@ -89,6 +107,184 @@
     &:hover {
       background-color: #F3F4F6;
       color: $text-primary;
+    }
+  }
+}
+
+.offline-banner {
+  background-color: #FEF3C7;
+  color: #92400E;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-bottom: 1px solid #FDE68A;
+  z-index: 60;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+
+.account-modal-card {
+  background: #ffffff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #E5E7EB;
+
+    h2 {
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: #111827;
+      margin: 0;
+    }
+
+    .btn-close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      color: #6B7280;
+      cursor: pointer;
+      line-height: 1;
+    }
+  }
+
+  .modal-body {
+    padding: 20px;
+
+    .user-info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 0.875rem;
+
+      .label {
+        color: #6B7280;
+      }
+
+      .value {
+        font-weight: 600;
+        color: #111827;
+      }
+    }
+
+    .modal-divider {
+      border: 0;
+      border-top: 1px solid #E5E7EB;
+      margin: 16px 0;
+    }
+
+    .danger-zone {
+      h3 {
+        color: #DC2626;
+        font-size: 0.95rem;
+        font-weight: 700;
+        margin: 0 0 8px;
+      }
+
+      .deletion-notice {
+        font-size: 0.8125rem;
+        color: #4B5563;
+        line-height: 1.4;
+        margin: 0 0 14px;
+      }
+
+      .btn-danger-outline {
+        background: transparent;
+        border: 1px solid #DC2626;
+        color: #DC2626;
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          background: #FEE2E2;
+        }
+      }
+
+      .confirmation-form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+
+        label {
+          font-size: 0.8125rem;
+          font-weight: 600;
+          color: #374151;
+        }
+
+        .password-confirm-input {
+          height: 38px;
+          border: 1px solid #D1D5DB;
+          border-radius: 6px;
+          padding: 0 12px;
+          font-size: 0.875rem;
+          outline: none;
+
+          &:focus {
+            border-color: #DC2626;
+          }
+        }
+
+        .error-msg {
+          color: #DC2626;
+          font-size: 0.75rem;
+          font-weight: 500;
+        }
+
+        .confirm-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+          margin-top: 6px;
+
+          .btn-cancel {
+            background: #F3F4F6;
+            border: 1px solid #D1D5DB;
+            color: #374151;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            cursor: pointer;
+          }
+
+          .btn-danger-solid {
+            background: #DC2626;
+            border: 1px solid #DC2626;
+            color: #ffffff;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            cursor: pointer;
+
+            &:disabled {
+              opacity: 0.5;
+              cursor: not-allowed;
+            }
+          }
+        }
+      }
     }
   }
 }
@@ -156,6 +352,184 @@
       border-radius: 999px;
       font-weight: 700;
       line-height: 1.2;
+    }
+  }
+}
+
+.offline-banner {
+  background-color: #FEF3C7;
+  color: #92400E;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-bottom: 1px solid #FDE68A;
+  z-index: 60;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+
+.account-modal-card {
+  background: #ffffff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #E5E7EB;
+
+    h2 {
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: #111827;
+      margin: 0;
+    }
+
+    .btn-close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      color: #6B7280;
+      cursor: pointer;
+      line-height: 1;
+    }
+  }
+
+  .modal-body {
+    padding: 20px;
+
+    .user-info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 0.875rem;
+
+      .label {
+        color: #6B7280;
+      }
+
+      .value {
+        font-weight: 600;
+        color: #111827;
+      }
+    }
+
+    .modal-divider {
+      border: 0;
+      border-top: 1px solid #E5E7EB;
+      margin: 16px 0;
+    }
+
+    .danger-zone {
+      h3 {
+        color: #DC2626;
+        font-size: 0.95rem;
+        font-weight: 700;
+        margin: 0 0 8px;
+      }
+
+      .deletion-notice {
+        font-size: 0.8125rem;
+        color: #4B5563;
+        line-height: 1.4;
+        margin: 0 0 14px;
+      }
+
+      .btn-danger-outline {
+        background: transparent;
+        border: 1px solid #DC2626;
+        color: #DC2626;
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          background: #FEE2E2;
+        }
+      }
+
+      .confirmation-form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+
+        label {
+          font-size: 0.8125rem;
+          font-weight: 600;
+          color: #374151;
+        }
+
+        .password-confirm-input {
+          height: 38px;
+          border: 1px solid #D1D5DB;
+          border-radius: 6px;
+          padding: 0 12px;
+          font-size: 0.875rem;
+          outline: none;
+
+          &:focus {
+            border-color: #DC2626;
+          }
+        }
+
+        .error-msg {
+          color: #DC2626;
+          font-size: 0.75rem;
+          font-weight: 500;
+        }
+
+        .confirm-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+          margin-top: 6px;
+
+          .btn-cancel {
+            background: #F3F4F6;
+            border: 1px solid #D1D5DB;
+            color: #374151;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            cursor: pointer;
+          }
+
+          .btn-danger-solid {
+            background: #DC2626;
+            border: 1px solid #DC2626;
+            color: #ffffff;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            cursor: pointer;
+
+            &:disabled {
+              opacity: 0.5;
+              cursor: not-allowed;
+            }
+          }
+        }
+      }
     }
   }
 }
