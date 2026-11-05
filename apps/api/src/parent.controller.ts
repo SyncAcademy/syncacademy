@@ -530,6 +530,24 @@ export class ParentController {
     return { changed: true, signInRequired: true };
   }
 
+  @Post('parent/auth/delete-account')
+  async deleteAccount(@Req() req: Request, @Body() body: unknown) {
+    const { user } = await this.parent(req);
+    const b = parse(z.object({ password: z.string().min(1).max(128) }).strict(), body);
+    await this.svc.rate(`parent-delete:${user.id}`, 3, 900);
+    const current = await this.svc.db.user.findUniqueOrThrow({ where: { id: user.id } });
+    if (!await passwordMatches(current.passwordHash, b.password)) throw new UnauthorizedException('Account verification failed.');
+    await this.svc.atomic(async tx => {
+      await tx.parentPushDevice.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date(), fidEncrypted: '' } });
+      await tx.parentMobileSession.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.guardian.updateMany({ where: { userId: user.id }, data: { userId: null } });
+      await tx.parentAccount.deleteMany({ where: { userId: user.id } });
+      await tx.user.update({ where: { id: user.id }, data: { enabled: false, sessionVersion: { increment: 1 } } });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'PARENT_ACCOUNT_DELETED', target: user.id } });
+    });
+    return { deleted: true, message: 'Your parent account and device linkages have been deactivated.' };
+  }
+
   @Get('parent/children')
   async children(@Req() req: Request) {
     const { user } = await this.parent(req);
@@ -561,7 +579,8 @@ export class ParentController {
     const paid = payments?._sum.amount ?? 0;
     const adjusted = adjustments?._sum.amount ?? 0;
     const attendance = enrollment && link.canReceiveAttendanceAlert ? await this.svc.db.$queryRaw<Array<{ date: string; status: string }>>`SELECT attendance->>'date' AS date, entry->>'status' AS status FROM "AcademicWorkspace" aw CROSS JOIN LATERAL jsonb_array_elements(COALESCE(aw.data->'attendance', '[]'::jsonb)) attendance CROSS JOIN LATERAL jsonb_array_elements(COALESCE(attendance->'entries', '[]'::jsonb)) entry WHERE aw."schoolId" = ${link.schoolId}::uuid AND aw."yearId" = ${enrollment.classroom.yearId}::uuid AND attendance->>'classId' = ${enrollment.classroomId} AND entry->>'studentId' = ${studentId} ORDER BY attendance->>'date' DESC, (attendance->>'revision')::int DESC LIMIT 1` : [];
-    return { child: { ...link.student, classroom: enrollment?.classroom ?? null }, results: { publishedCount: resultCount }, fees: link.canReceiveFinanceAlert ? { billed, paid, adjusted, balance: billed + adjusted - paid } : null, attendance: { latest: attendance[0] ?? null }, announcements: announcements.slice(0, 3), hasMoreAnnouncements: announcements.length > 3, unreadNotificationCount: unread };
+    const childData = { ...link.student, classroom: enrollment?.classroom ?? null };
+    return { child: childData, student: childData, results: { publishedCount: resultCount }, resultsCount: resultCount, fees: link.canReceiveFinanceAlert ? { billed, paid, adjusted, balance: billed + adjusted - paid, totalInvoiced: billed, totalPaid: paid } : null, attendance: { latest: attendance[0] ?? null, latestStatus: attendance[0]?.status ?? null, latestDate: attendance[0]?.date ?? null }, announcements: announcements.slice(0, 3), hasMoreAnnouncements: announcements.length > 3, unreadNotificationCount: unread };
   }
 
   @Get('parent/children/:studentId/fees')

@@ -213,6 +213,38 @@ export class ApiController {
     });
   }
   @Post('auth/login') login(@Req() req: Request, @Body() body: unknown) { return this.svc.login(req, parse(z.object({ email, password: z.string().min(1).max(128), role: schoolRole, rememberMe: z.boolean().default(false) }).strict(), body)); }
+  @Post('teacher/push/devices')
+  async registerTeacherPushDevice(@Req() req: Request, @Body() body: unknown) {
+    const user = await this.svc.user(req);
+    const b = parse(z.object({
+      installationId: uuid,
+      fid: z.string().min(16).max(256).regex(/^[A-Za-z0-9_-]+$/),
+      platform: z.enum(['android', 'ios']),
+    }).strict(), body);
+    await this.svc.db.auditEvent.create({
+      data: {
+        actorId: user.id,
+        action: 'TEACHER_PUSH_DEVICE_REGISTERED',
+        target: b.installationId,
+      },
+    });
+    return { registered: true, installationId: b.installationId, platform: b.platform };
+  }
+  @Post('teacher/push/devices/unregister')
+  async unregisterTeacherPushDevice(@Req() req: Request, @Body() body: unknown) {
+    const user = await this.svc.user(req);
+    const b = parse(z.object({
+      installationId: uuid,
+    }).strict(), body);
+    await this.svc.db.auditEvent.create({
+      data: {
+        actorId: user.id,
+        action: 'TEACHER_PUSH_DEVICE_UNREGISTERED',
+        target: b.installationId,
+      },
+    });
+    return { unregistered: true };
+  }
   @Post('auth/platform/login') platformLogin(@Req() req: Request, @Body() body: unknown) {
     return this.svc.platformLogin(req, parse(z.object({ email, password: z.string().min(1).max(128) }).strict(), body));
   }

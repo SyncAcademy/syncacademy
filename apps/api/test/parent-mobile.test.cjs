@@ -462,10 +462,13 @@ test('complete parent journey, private media, live publication and school isolat
     assert.equal((await mobile('GET', `parent/children/${child.id}`, undefined, token)).status, 404);
     assert.equal((await mobile('GET', 'parent/children', undefined, token)).body.items.length, 2);
     assert.equal((await mobile('GET', `parent/children/${unrelated.id}`, undefined, token)).status, 200);
-    assert.equal((await mobile('POST', 'parent/auth/logout', {}, token)).status, 201);
+
+    // Self-service account deletion (Apple Guideline 5.1.1(v) & Google Play compliance)
+    assert.equal((await mobile('POST', 'parent/auth/delete-account', { password: 'incorrect-password' }, token)).status, 401);
+    const deleteRes = await mobile('POST', 'parent/auth/delete-account', { password: recoveredPassword }, token);
+    assert.equal(deleteRes.status, 201);
+    assert.equal(deleteRes.body.deleted, true);
     assert.equal((await mobile('GET', 'parent/auth/me', undefined, token)).status, 401);
-    const parentUser = await db.guardian.findFirstOrThrow({ where: { id: guardian.id, schoolId: school.id }, select: { userId: true } });
-    await db.user.update({ where: { id: parentUser.userId }, data: { enabled: false } });
     assert.equal((await mobile('POST', 'parent/auth/login', { identifier: guardian.phone, password: recoveredPassword })).status, 401);
   } catch (error) {
     console.error('Parent test API diagnostics:', logs.slice(-1500));

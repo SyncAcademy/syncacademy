@@ -56,7 +56,10 @@ async function main() {
     }
     const origin = req.get('Origin');
     const isCapacitorOrigin = origin && ['capacitor://localhost', 'http://localhost', 'https://localhost'].includes(origin);
-    const mobileRequest = req.path.startsWith('/api/v1/parent/') && (!origin || isCapacitorOrigin) && !req.get('Cookie') && (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.is('application/json'));
+    const mobileRequest = !req.path.startsWith('/api/v1/auth/platform') && (!origin || isCapacitorOrigin) && (
+      (req.path.startsWith('/api/v1/parent/') && !req.get('Cookie')) ||
+      (req.get('X-Requested-With') === 'SyncAcademy' && (req.path === '/api/v1/auth/login' || req.path.startsWith('/api/v1/schools/')))
+    ) && (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.is('application/json'));
     const isExempt = req.path.startsWith('/api/v1/webhooks/') || req.path.startsWith('/api/v1/public/') || mobileRequest;
     const announcementMediaUpload = req.method === 'PUT' && /^\/api\/v1\/schools\/[0-9a-f-]{36}\/parent-announcements\/[0-9a-f-]{36}\/media$/.test(req.path) && !!req.is('image/png');
     const schoolLogoAction = (req.method === 'PUT' || req.method === 'DELETE') && /^\/api\/v1\/schools\/[0-9a-f-]{36}\/branding\/logo$/.test(req.path);
