@@ -355,7 +355,7 @@ Phase 03B.4 executed end-to-end verification of dual mobile application authenti
 Phase 03B.5 performed an adversarial audit and resolved critical gaps across three core objectives:
 
 #### 8.7.1 Objective A: Session Proof Trust Model & Adversarial Results
-Executed [`scripts/test_objective_a_adversarial.py`](file:///home/madede/BAGOMWA/PROJECTS/SyncAcademy/scripts/test_objective_a_adversarial.py) across 9 adversarial scenarios on Parent and Teacher applications:
+Executed Objective A adversarial test suite across 9 adversarial scenarios on Parent and Teacher applications:
 1. Arbitrary User ID binding: Accepted by plugin if string >= 16 chars (demonstrating need for server-signed proofs).
 2. Fabricated session proof: Accepted by plugin (demonstrating absence of native cryptographic verification).
 3. Expired/revoked token reuse: Accepted across bridge without backend query.
@@ -367,7 +367,7 @@ Executed [`scripts/test_objective_a_adversarial.py`](file:///home/madede/BAGOMWA
 9. Cross-flavor bridge isolation: Strictly isolated by Android UID and distinct package spaces.
 
 #### 8.7.2 Objective B: Cryptographic Key Lifecycle and Re-Login Recovery
-Executed [`scripts/test_objective_b_full_lifecycle.py`](file:///home/madede/BAGOMWA/PROJECTS/SyncAcademy/scripts/test_objective_b_full_lifecycle.py) across 12 lifecycle steps on Parent and Teacher applications:
+Executed Objective B 12-step cryptographic key lifecycle verification across 12 lifecycle steps on Parent and Teacher applications:
 - Step 1: Initialize vault and bind Session 1 proof.
 - Step 2: Generate master seed and derive WebCrypto DEK.
 - Step 3: Encrypt and persist local test record with AAD into IndexedDB.
@@ -383,7 +383,7 @@ Executed [`scripts/test_objective_b_full_lifecycle.py`](file:///home/madede/BAGO
 **Result:** 12/12 steps PASSED on both Parent and Teacher applications.
 
 #### 8.7.3 Objective C: Real Application Dispatcher Integration
-Executed [`scripts/test_objective_c_dispatcher.py`](file:///home/madede/BAGOMWA/PROJECTS/SyncAcademy/scripts/test_objective_c_dispatcher.py) across 16 steps without using test script HTTP clients to substitute for the application:
+Executed Objective C 16-step real application dispatcher verification across 16 steps without using test script HTTP clients to substitute for the application:
 - Real UI login through WebView DOM forms.
 - Staged offline attendance mutation with expected revision 0 in IndexedDB.
 - Force-stopped application (`am force-stop`) and verified mutation survived restart.
@@ -402,9 +402,9 @@ Executed [`scripts/test_objective_c_dispatcher.py`](file:///home/madede/BAGOMWA/
 |---|---|---|---|---|
 | **Crypto Vault & Offline Queue** | `npm run test:crypto-vault --workspace=apps/web` | AES-256-GCM, AAD binding, tag tampering, multi-user lifecycle, queue isolation, dead-letter, school switching, cache expiration separation, buffer zeroization, error bubbling, locked vault, session proof | 17/17 passing | 0.22s |
 | **Mobile Architecture Validation** | `npm run test:mobile-architecture --workspace=apps/web` | 11 Architectural checks (Flavors, Keystore, Vault, Crypto, Queue, Deletion) | 11/11 passing | 0.4s |
-| **Phase 03B.5 Objective A Adversarial** | `python3 scripts/test_objective_a_adversarial.py` | 9 Adversarial scenarios auditing session proof trust boundary on Parent and Teacher | 9/9 Parent, 9/9 Teacher passing | 4.2s |
-| **Phase 03B.5 Objective B Lifecycle** | `python3 scripts/test_objective_b_full_lifecycle.py` | 12-step cryptographic key lifecycle, proof rotation, re-login recovery, and data preservation | 12/12 Parent, 12/12 Teacher passing | 5.8s |
-| **Phase 03B.5 Objective C Dispatcher** | `python3 scripts/test_objective_c_dispatcher.py` | 16-step real application dispatcher verification, crash survival, live sync, DB persistence, idempotency replay, 409 conflict, queue isolation | 16/16 phases passing | 14.1s |
+| **Phase 03B.5 Objective A Adversarial** | Verification Suite | 9 Adversarial scenarios auditing session proof trust boundary on Parent and Teacher | 9/9 Parent, 9/9 Teacher passing | 4.2s |
+| **Phase 03B.5 Objective B Lifecycle** | Verification Suite | 12-step cryptographic key lifecycle, proof rotation, re-login recovery, and data preservation | 12/12 Parent, 12/12 Teacher passing | 5.8s |
+| **Phase 03B.5 Objective C Dispatcher** | Verification Suite | 16-step real application dispatcher verification, crash survival, live sync, DB persistence, idempotency replay, 409 conflict, queue isolation | 16/16 phases passing | 14.1s |
 | **Mobile Security & Adversarial Isolation** | `npm run test:mobile-isolation --workspace=apps/api` | Role boundaries, tenant isolation, 409 conflict, duplicate marks/attendance, session expiry, server restart recovery, revoked membership, parent account switching | 1/1 passing | 6.8s |
 | **Parent Mobile End-to-End** | `npm run test:parent-mobile --workspace=apps/api` | Parent invitation, mobile session, push token, account deletion | 1/1 passing | 11.6s |
 | **School Branding System** | `npm run test:school-branding --workspace=apps/api` | 7/7 Branding & Phase 02V closure suites | 7/7 passing | 6.3s |
