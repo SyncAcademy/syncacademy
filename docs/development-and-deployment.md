@@ -2,7 +2,7 @@
 
 This document covers local development setup, automated testing standards, and the Cloudflare-first low-cost production deployment architecture for SyncAcademy.
 
-The parent mobile backend runs in the existing API and worker containers. Its additive migration, Flutter API contract, invitation processing, and scaling checks are described in [Parent mobile backend](parent-mobile-backend.md). Use mock communication dispatch and a disposable test database for parent invitation and load tests; production providers must never be exercised by test fixtures.
+The parent mobile backend runs in the existing API and worker containers. Its additive migration, mobile session contract, invitation processing, and scaling checks are described in [Parent mobile backend](parent-mobile-backend.md). The dual-application native mobile build environment, Android Keystore and iOS Keychain hardware key vault, offline encryption, and store readiness compliance are documented in [Mobile Architecture, Store Readiness & Security Hardening](mobile-architecture-and-store-readiness.md). Use mock communication dispatch and a disposable test database for parent invitation and load tests; production providers must never be exercised by test fixtures.
 
 ---
 
@@ -73,12 +73,25 @@ npm run test:head-oversight --workspace=apps/web
 npm run test:class-teacher --workspace=apps/web
 npm run test:school-setup --workspace=apps/web
 npm run test:super-admin --workspace=apps/web
+npm run test:platform-admin-auth --workspace=apps/web
+npm run test:preloader --workspace=apps/web
 
 # Additional state & concurrency checks
 node apps/web/scripts/check-concurrent-drafts.mjs
 node apps/web/scripts/check-school-sync.mjs
 node apps/web/scripts/check-student-result-summary.mjs
 node apps/web/scripts/check-teaching-responsibilities.mjs
+```
+
+### 2.4 Mobile Security & Cryptographic Vault Verification
+```bash
+# WebCrypto & Native Key Vault test suites
+npm run test:crypto-vault --workspace=apps/web
+npm run test:mobile-architecture --workspace=apps/web
+
+# Mobile backend security & isolation suites
+npm run test:parent-mobile --workspace=apps/api
+npm run test:mobile-isolation --workspace=apps/api
 ```
 
 ### 2.4 Continuous Integration (CI), Continuous Architecture (CA) & Bot Automation

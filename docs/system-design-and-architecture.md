@@ -2,7 +2,7 @@
 
 This document is the authoritative technical design specification for SyncAcademy across the **Frontend (`apps/web`)**, **Backend (`apps/api`)**, **Database (`apps/api/prisma`)**, **Multi-Tenancy**, **Security**, **Performance**, **Multi-Channel Communications**, and **Architecture Decision Records (ADRs)**.
 
-The current parent mobile API, invitation activation, bearer-session contract, tenant checks, worker leasing, parent FCM device registration, push delivery, and measured scaling limits are documented in [Parent mobile backend](parent-mobile-backend.md). A general class lesson timetable remains a planned integration.
+The current parent mobile API, invitation activation, bearer-session contract, tenant checks, worker leasing, parent FCM device registration, push delivery, and measured scaling limits are documented in [Parent mobile backend](parent-mobile-backend.md). The dual-application mobile architecture, native hardware key vault (Android Keystore and iOS Keychain), encrypted IndexedDB offline storage, and store readiness compliance are documented in [Mobile Architecture, Store Readiness & Security Hardening](mobile-architecture-and-store-readiness.md). A general class lesson timetable remains a planned integration.
 
 ---
 

@@ -1,12 +1,16 @@
 # SyncAcademy MVP
 
-SyncAcademy is a multi-tenant education management SaaS platform built initially for Tanzanian primary and secondary schools. It unites school administration, registrar admissions, teacher assignments, examination marks entry, NECTA-aligned grading, academic approvals, report cards, attendance, bursar fee workflows, and guardian communications in one connected web platform.
+SyncAcademy is a multi-tenant education management SaaS platform built initially for Tanzanian primary and secondary schools. It unites school administration, registrar admissions, teacher assignments, examination marks entry, NECTA-aligned grading, academic approvals, report cards, attendance, bursar fee workflows, guardian communications, and dedicated mobile applications in one connected platform.
 
 ---
 
 ## 1. Technology Stack
 
 - **Frontend (`apps/web`)**: Angular 18 + Ionic 8 + TypeScript + SCSS (`syncacademy-web`)
+- **Native Mobile Applications (`apps/web/android`, `apps/web/ios`)**:
+  - **SyncAcademy Teacher** (`tz.co.syncacademy.teachers`): School-branded mobile experience for attendance, marks recording, offline staging, and staff notifications.
+  - **SyncAcademy Parent** (`tz.co.syncacademy.parents`): Globally branded cross-school guardian portal supporting multiple enrolled students, encrypted records, and push notifications.
+  - **Native Security Layer**: Android Keystore (TEE/StrongBox) and iOS Keychain (`SecureKeyVaultPlugin`), non-extractable WebCrypto AES-256-GCM encrypted IndexedDB offline storage, and account-scoped offline mutation queues.
 - **Backend (`apps/api`)**: NestJS 10 + Express + TypeScript (`@syncacademy/api`)
 - **Database & ORM (`apps/api/prisma`)**: PostgreSQL 16 + Prisma 5 (`schema.prisma`, transactional `Outbox`)
 - **Shared Workspace Packages (`packages/*`)**: `@syncacademy/api-contracts`, `@syncacademy/shared-types`, `@syncacademy/shared-utils`
@@ -44,9 +48,32 @@ npm run docker:up
 
 ---
 
-## 3. Canonical Documentation Index (`docs/`)
+## 3. Mobile Synchronization and Native Builds
 
-The documentation is organized into 3 comprehensive specifications:
+SyncAcademy supports dual product flavors built from the single Angular and Capacitor codebase:
+
+```bash
+# Sync Capacitor assets for Parent application
+npm run cap:sync:parent --workspace=apps/web
+
+# Sync Capacitor assets for Teacher application
+npm run cap:sync:teacher --workspace=apps/web
+
+# Run native crypto vault and mobile architecture test suites
+npm run test:crypto-vault --workspace=apps/web
+npm run test:mobile-architecture --workspace=apps/web
+
+# Compile Android APKs / App Bundles via Gradle wrapper
+cd apps/web/android
+./gradlew assembleParentDebug assembleTeacherDebug
+./gradlew bundleParentRelease bundleTeacherRelease
+```
+
+---
+
+## 4. Canonical Documentation Index (`docs/`)
+
+The documentation is organized into 4 comprehensive specifications:
 
 1. **[Product Overview, MVP Scope & Portal Workflows](./docs/product-and-workflows.md)**
    - Product vision, Tanzanian school context, MVP scope matrix, user roles and capability matrix, end-to-end portal workflows (Super Admin, Headmaster, Registrar, Academic Master, Class & Subject Teachers, Bursar), and the multi-phase engineering roadmap.
@@ -57,4 +84,5 @@ The documentation is organized into 3 comprehensive specifications:
 3. **[Development, Testing & Cloud Deployment Guide](./docs/development-and-deployment.md)**
    - Local environment bootstrap, automated test suites (backend unit/integration tests and frontend workflow checks), and the hybrid Cloudflare-first low-cost production deployment architecture (Cloudflare Pages + Cloudflare R2 + Containerized NestJS API/Worker + Managed PostgreSQL 16).
 
-
+4. **[Mobile Architecture, Store Readiness & Security Hardening](./docs/mobile-architecture-and-store-readiness.md)**
+   - Dual-flavor mobile application architecture (`tz.co.syncacademy.teachers` and `tz.co.syncacademy.parents`), native Android Keystore and iOS Keychain hardware key vault (`SecureKeyVaultPlugin`), session proof trust model, decoupled AES-256-GCM master seed lifecycle, IndexedDB encrypted offline storage, account-scoped mutation dispatching, Apple App Store and Google Play compliance, and adversarial test suites.
